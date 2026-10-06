@@ -40,6 +40,20 @@ DeviceBrowser::DeviceBrowser (JidaiProcessor& p) : proc (p)
 
 DeviceBrowser::~DeviceBrowser() = default;
 
+void DeviceBrowser::setClosed (bool c)
+{
+    closed = c;
+    search.setVisible (! closed);
+    hover = pressed = -1;
+    toggleHover = false;
+    repaint();
+}
+
+juce::Rectangle<int> DeviceBrowser::toggleBounds() const
+{
+    return closed ? juce::Rectangle<int> (3, 10, kClosedWidth - 6, 26) : juce::Rectangle<int> (getWidth() - 40, 12, 28, 26);
+}
+
 void DeviceBrowser::setSearch (const juce::String& text)
 {
     search.setText (text, false);
@@ -103,9 +117,55 @@ void DeviceBrowser::resized()
     layoutRows();
 }
 
+namespace {
+
+// A chevron pointing left (close) or right (open), in a small rounded button.
+void paintToggle (juce::Graphics& g, juce::Rectangle<float> r, bool pointRight, bool lit)
+{
+    g.setColour (juce::Colour (lit ? 0xff34332f : 0xff222224));
+    g.fillRoundedRectangle (r, 4.0f);
+    g.setColour (juce::Colour (lit ? 0xff5a564c : 0xff38383c));
+    g.drawRoundedRectangle (r.reduced (0.5f), 4.0f, 1.0f);
+    const auto c = r.getCentre();
+    const float k = 4.5f;
+    juce::Path p;
+    for (float dx : { -3.5f, 3.5f })
+    {
+        const float x = c.x + dx;
+        if (pointRight) { p.startNewSubPath (x - k * 0.55f, c.y - k); p.lineTo (x + k * 0.55f, c.y); p.lineTo (x - k * 0.55f, c.y + k); }
+        else            { p.startNewSubPath (x + k * 0.55f, c.y - k); p.lineTo (x - k * 0.55f, c.y); p.lineTo (x + k * 0.55f, c.y + k); }
+    }
+    g.setColour (lit ? kInk : kInk.withAlpha (0.75f));
+    g.strokePath (p, juce::PathStrokeType (1.8f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+}
+
+}
+
 void DeviceBrowser::paint (juce::Graphics& g)
 {
     g.fillAll (juce::Colour (0xff151517));
+    if (closed)
+    {
+        paintToggle (g, toggleBounds().toFloat(), true, toggleHover || dropHover);
+        {
+            const auto area = getLocalBounds().toFloat().withTrimmedTop (48.0f).withHeight (200.0f);
+            juce::Graphics::ScopedSaveState state (g);
+            g.addTransform (juce::AffineTransform::rotation (-juce::MathConstants<float>::halfPi, area.getCentreX(), area.getCentreY()));
+            g.setColour (dropHover ? juce::Colour (0xffe0675e) : kDim);
+            g.setFont (juce::FontOptions (11.5f, juce::Font::bold).withKerningFactor (0.08f));
+            g.drawText (dropHover ? "DROP TO REMOVE" : "DEVICE BROWSER", juce::Rectangle<float> (area.getHeight(), area.getWidth()).withCentre (area.getCentre()),
+                        juce::Justification::centred);
+        }
+        if (dropHover)
+        {
+            g.setColour (juce::Colour (0xffc8322a));
+            g.drawRect (getLocalBounds().reduced (1), 2);
+        }
+        g.setColour (juce::Colour (0xff000000));
+        g.drawVerticalLine (getWidth() - 1, 0.0f, (float) getHeight());
+        return;
+    }
+    paintToggle (g, toggleBounds().toFloat(), false, toggleHover);
     g.setColour (kInk);
     g.setFont (juce::FontOptions (17.0f, juce::Font::bold));
     g.drawText ("JIDAI RACK", 14, 14, getWidth() - 28, 22, juce::Justification::centredLeft);
@@ -182,6 +242,18 @@ void DeviceBrowser::paint (juce::Graphics& g)
 
 void DeviceBrowser::mouseMove (const juce::MouseEvent& e)
 {
+    const bool onButton = closed || toggleBounds().contains (e.getPosition());
+    if (onButton != toggleHover)
+    {
+        toggleHover = onButton;
+        repaint();
+    }
+    if (onButton)
+    {
+        setMouseCursor (juce::MouseCursor::PointingHandCursor);
+        if (hover >= 0) { hover = -1; repaint(); }
+        return;
+    }
     const int at = rowAt (e.position);
     setMouseCursor (at >= 0 ? juce::MouseCursor::DraggingHandCursor : juce::MouseCursor::NormalCursor);
     if (at != hover)
@@ -194,11 +266,19 @@ void DeviceBrowser::mouseMove (const juce::MouseEvent& e)
 void DeviceBrowser::mouseExit (const juce::MouseEvent&)
 {
     hover = -1;
+    toggleHover = false;
     repaint();
 }
 
 void DeviceBrowser::mouseDown (const juce::MouseEvent& e)
 {
+    if (closed || toggleBounds().contains (e.getPosition()))
+    {
+        pressed = -1;
+        if (onToggle)
+            onToggle();
+        return;
+    }
     pressed = rowAt (e.position);
     dragged = false;
     repaint();

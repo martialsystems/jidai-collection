@@ -6,6 +6,7 @@
 // Sequencer (BUSHIDO), Voice (RONIN) and Effect (RONIN again: it processes audio at its EXT IN). Each row shows the
 // device's name, one short line, and how many are already on the rack. Drag a row onto the rack to add one there;
 // click a row to add one at the bottom. A device dragged back onto the browser is removed.
+// The button at its top right closes it to a thin strip down the left edge; a click on the strip opens it again.
 
 #include "JidaiProcessor.h"
 
@@ -27,6 +28,12 @@ public:
 
     std::function<void (jidai::DeviceKind)> onAdd;                     // a row was clicked
     std::function<void (const juce::String& description)> onRemoveDrop; // "move:<rack id>" dropped here
+    std::function<void()> onToggle;                                    // the close/open button (or the closed strip) was clicked
+
+    static constexpr int kClosedWidth = 30;                            // the closed browser: a strip down the left edge
+    void setClosed (bool);
+    bool isClosed() const { return closed; }
+    juce::Rectangle<int> toggleBounds() const;
 
     void setSearch (const juce::String&);
     juce::TextEditor& searchBox() { return search; }
@@ -60,7 +67,7 @@ private:
     std::vector<Header> headers;
     float listBottom = 0.0f;
     int hover = -1, pressed = -1;
-    bool dragged = false, dropHover = false;
+    bool dragged = false, dropHover = false, closed = false, toggleHover = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DeviceBrowser)
 };

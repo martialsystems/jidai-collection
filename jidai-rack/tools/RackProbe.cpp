@@ -117,6 +117,28 @@ int main (int argc, char** argv)
         expect (proc.rack().deviceCount() == 2, "back to one of each");
     }
 
+    // The browser's close/open button: closed, it is a thin strip and the rack takes the width; a click on the strip opens
+    // it again; the state is saved with the rack.
+    {
+        auto& b = editor->browser();
+        const int rackWidth = editor->viewport().getWidth();
+        click (b, b.toggleBounds().toFloat().getCentre());
+        pump();
+        expect (! proc.browserOpen && b.isClosed() && b.getWidth() == DeviceBrowser::kClosedWidth, "close button folds the browser to a strip");
+        expect (editor->viewport().getWidth() > rackWidth, "the rack takes the width");
+        snapshot (*editor, out.getChildFile ("0b_browser_closed.png"));
+        juce::MemoryBlock state;
+        proc.getStateInformation (state);
+        proc.browserOpen = true;
+        proc.setStateInformation (state.getData(), (int) state.getSize());
+        pump();
+        expect (! proc.browserOpen && b.isClosed() && b.getWidth() == DeviceBrowser::kClosedWidth, "a closed browser is saved with the rack");
+        click (b, { 15.0f, 300.0f });
+        pump();
+        expect (proc.browserOpen && ! b.isClosed() && b.getWidth() == JidaiEditor::kListWidth && editor->viewport().getWidth() == rackWidth,
+                "a click on the strip opens it again");
+    }
+
     // Drop a RONIN from the device list onto the bottom of the rack.
     juce::DragAndDropTarget::SourceDetails drop ("add:RONIN", &editor->deviceList(), { 10, rack.getHeight() - 5 });
     rack.itemDropped (drop);

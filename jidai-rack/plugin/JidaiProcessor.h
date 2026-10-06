@@ -47,6 +47,7 @@ public:
     void setCables (const std::vector<jidai::CableSpec>& cables);
     void loadRoninProgram (jidai::RoninDevice* ronin, int index);
     void resetToDefaultRack();       // one BUSHIDO above one RONIN
+    bool browserOpen = true;         // window only: the device browser is shown, or folded to a thin strip; saved with the rack
 
     // BUSHIDO patterns: two banks of up to 999. Bank A starts with the factory patterns; saved patterns go to the same
     // user file the BUSHIDO plugin uses, so both see them.
