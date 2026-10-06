@@ -21,6 +21,8 @@ JidaiEditor::JidaiEditor (JidaiProcessor& p)
         dropLanded = true;
         removeLater (description);
     };
+    list->onToggle = [this] { setBrowserOpen (! proc.browserOpen); };
+    list->setClosed (! proc.browserOpen);
     addAndMakeVisible (*list);
     view.setViewedComponent (&rack, false);
     view.setScrollBarsShown (true, false);
@@ -54,6 +56,13 @@ void JidaiEditor::removeLater (const juce::String& description)
     });
 }
 
+void JidaiEditor::setBrowserOpen (bool open)
+{
+    proc.browserOpen = open;
+    list->setClosed (! open);
+    resized();
+}
+
 void JidaiEditor::paint (juce::Graphics& g)
 {
     g.fillAll (juce::Colour (0xff0d0d0f));
@@ -62,7 +71,7 @@ void JidaiEditor::paint (juce::Graphics& g)
 void JidaiEditor::resized()
 {
     auto r = getLocalBounds();
-    list->setBounds (r.removeFromLeft (kListWidth));
+    list->setBounds (r.removeFromLeft (proc.browserOpen ? kListWidth : DeviceBrowser::kClosedWidth));
     view.setBounds (r);
     layoutRack();
 }
@@ -76,6 +85,8 @@ void JidaiEditor::layoutRack()
 void JidaiEditor::changeListenerCallback (juce::ChangeBroadcaster*)
 {
     rack.rebuild();         // a saved rack was loaded
+    list->setClosed (! proc.browserOpen);
+    resized();
 }
 
 void JidaiEditor::dragOperationStarted (const juce::DragAndDropTarget::SourceDetails&)

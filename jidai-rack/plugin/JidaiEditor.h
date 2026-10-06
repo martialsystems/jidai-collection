@@ -5,7 +5,7 @@
 // The JIDAI RACK window: the device browser on the left, the rack on the right.
 // Drag a row from the browser onto the rack to add one there, or click it to add one at the bottom. Grab a device by
 // its ear to move it, or drag it off the rack (onto the browser, or out of the window) to remove it; the x on its
-// ear removes it too.
+// ear removes it too. The button at the browser's top right closes it to a strip and opens it again.
 
 #include "JidaiProcessor.h"
 #include "DeviceBrowser.h"
@@ -26,6 +26,7 @@ public:
     juce::Viewport& viewport() { return view; }
     juce::Component& deviceList();
     DeviceBrowser& browser() { return *list; }
+    void setBrowserOpen (bool);      // the browser's close/open button
 
     static constexpr int kListWidth = 212;
 

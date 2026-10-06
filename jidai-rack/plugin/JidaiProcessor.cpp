@@ -230,6 +230,7 @@ void JidaiProcessor::getStateInformation (juce::MemoryBlock& dest)
 {
     juce::XmlElement xml ("JIDAIRACK");
     xml.setAttribute ("version", 1);
+    xml.setAttribute ("browser", browserOpen ? 1 : 0);
     for (int i = 0; i < rack_.deviceCount(); ++i)
     {
         Device* d = rack_.device (i);
@@ -287,6 +288,7 @@ void JidaiProcessor::restoreFromXml (const juce::XmlElement& xml)
 {
     rack_.clear();
     loaded_.clear();
+    browserOpen = xml.getIntAttribute ("browser", 1) != 0;
     for (auto* e : xml.getChildWithTagNameIterator ("DEVICE"))
     {
         const auto kind = e->getStringAttribute ("kind") == "RONIN" ? DeviceKind::Ronin : DeviceKind::Bushido;
