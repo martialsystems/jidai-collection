@@ -10,13 +10,13 @@ The Jidai Collection is a line of plugins built like a hardware rack: every piec
 **A 3 x 12 analog step sequencer with real patch cables.**
 Three rows of twelve steps send pitch CV, gates and a trigger per step. Row C is a third voltage or the gate length of each step. Loop 12 steps, chain A and B into 24, or swap rows each pass. Clock it internally or from any pulse in the rack, and drive any synth in your DAW over MIDI.
 
-[github.com/martialsystems/bushido](https://github.com/martialsystems/bushido)
+[github.com/martialsystems/bushido](https://github.com/martialsystems/Bushido)
 
 ### RONIN
 **A semi-modular synthesizer you patch as an effect.**
 A full rack in one plugin: VCO, a self-oscillating diode-bridge filter, two VCAs, two envelopes, an LFO, noise, a ring modulator, sample and hold, and more. Run your track through it, let it play itself, or blend it back in with one MIX knob.
 
-[github.com/martialsystems/MS50Modular](https://github.com/martialsystems/MS50Modular)
+[github.com/martialsystems/MS50Modular](https://github.com/martialsystems/Ronin)
 
 ## Better together
 
