@@ -18,6 +18,11 @@ A full rack in one plugin: VCO, a self-oscillating diode-bridge filter, two VCAs
 
 [github.com/martialsystems/Ronin](https://github.com/martialsystems/Ronin)
 
+## JIDAI RACK
+
+**BUSHIDO and RONIN in one rack, in one plugin.**
+A rack window in the style of a hardware cabinet: drag devices in from the browser, screw in as many of each as you like, and cable any jack to any other. Both engines are compiled into one VST3 (instrument) and one Standalone app. Source in [`jidai-rack/`](jidai-rack/).
+
 ## Better together
 
 Patch BUSHIDO into RONIN's Hz/V and trigger inputs and RONIN plays sequences. Patch RONIN's LFO back into BUSHIDO's clock and the rack clocks itself. Cables run both ways between the two, and feedback loops are allowed: the newest cable in a loop is delayed by one sample, the way a hardware rack behaves, so self-patching stays stable.
