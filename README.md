@@ -18,6 +18,11 @@ A full rack in one plugin: VCO, a self-oscillating diode-bridge filter, two VCAs
 
 [github.com/martialsystems/Ronin](https://github.com/martialsystems/Ronin)
 
+### SHOGUN
+**A Jidai Collection instrument, in its own repository.**
+
+[github.com/martialsystems/shogun](https://github.com/martialsystems/shogun)
+
 ## JIDAI RACK
 
 **BUSHIDO and RONIN in one rack, in one plugin.**
@@ -33,6 +38,6 @@ VST3 effects. RONIN runs on macOS (universal) and Linux; BUSHIDO builds as VST3,
 
 ## Legal
 
-Copyright © 2026 Martial Systems LLC. All rights reserved. BUSHIDO, RONIN and the Jidai Collection are products of Martial Systems LLC.
+Copyright © 2026 Martial Systems LLC. All rights reserved. BUSHIDO, RONIN, SHOGUN and the Jidai Collection are products of Martial Systems LLC.
 
 BUSHIDO is inspired by the Korg SQ-10, and RONIN is inspired by the Korg MS-50. Korg, SQ-10 and MS-50 are trademarks of their respective owners. Martial Systems is not affiliated with or endorsed by Korg.
