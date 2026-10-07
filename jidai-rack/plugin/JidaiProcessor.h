@@ -3,7 +3,7 @@
 #pragma once
 
 // JIDAI RACK: one plugin, one rack graph, BUSHIDO and RONIN compiled in.
-// VST3 instrument: MIDI in, stereo out; host audio (when the host sends any) feeds the first RONIN's EXT IN.
+// VST3 effect: stereo in, stereo out. Host audio feeds the first RONIN's EXT IN.
 
 #include "core/Rack.h"
 
@@ -27,7 +27,7 @@ public:
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
     const juce::String getName() const override { return "JIDAI RACK"; }
-    bool acceptsMidi() const override { return true; }
+    bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 0.0; }

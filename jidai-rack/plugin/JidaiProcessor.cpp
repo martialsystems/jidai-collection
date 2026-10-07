@@ -207,7 +207,7 @@ void JidaiProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 void JidaiProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
-    midi.clear();    // MIDI in is accepted; nothing in the rack listens to it yet
+    midi.clear();    // Effect: no plugin MIDI port. The rack does not read this buffer.
     const int n = buffer.getNumSamples();
     const int ins = getTotalNumInputChannels();
     const int outs = buffer.getNumChannels();

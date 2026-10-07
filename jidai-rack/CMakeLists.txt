@@ -81,7 +81,7 @@ set(JIDAI_UI_SOURCES
   ${BUSHIDO_DIR}/ui/CableLayer.cpp
   ${BUSHIDO_DIR}/ui/PatternScreen.cpp)
 
-# ---- the plugin: VST3 instrument and a Standalone that opens the default audio devices ----
+# ---- the plugin: VST3 effect and a Standalone that opens the default audio devices ----
 juce_add_plugin(JidaiRack
   COMPANY_NAME "Martial Systems"
   BUNDLE_ID com.martialsystems.jidairack
@@ -89,12 +89,12 @@ juce_add_plugin(JidaiRack
   PLUGIN_CODE Jdrk
   FORMATS VST3 Standalone
   PRODUCT_NAME "JIDAI RACK"
-  IS_SYNTH TRUE
-  NEEDS_MIDI_INPUT TRUE
+  IS_SYNTH FALSE
+  NEEDS_MIDI_INPUT FALSE
   NEEDS_MIDI_OUTPUT FALSE
   IS_MIDI_EFFECT FALSE
   EDITOR_WANTS_KEYBOARD_FOCUS TRUE
-  VST3_CATEGORIES Instrument Synth
+  VST3_CATEGORIES Fx
   COPY_PLUGIN_AFTER_BUILD FALSE)
 
 target_sources(JidaiRack PRIVATE ${JIDAI_UI_SOURCES} plugin/StandaloneApp.cpp)
