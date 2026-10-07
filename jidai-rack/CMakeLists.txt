@@ -15,11 +15,11 @@ FetchContent_Declare(JUCE
 # SOURCE_SUBDIR points at a folder with no CMakeLists.txt: fetch the sources, do not add their own projects.
 FetchContent_Declare(bushido
   GIT_REPOSITORY https://github.com/martialsystems/bushido.git
-  GIT_TAG 94869698843872d2338f5277eeb8b9c752e41076
+  GIT_TAG 4cd578d544024453fae2cd7ebdc673725383b397    # Bushido: plate without the mottling ellipses
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_Declare(ronin
   GIT_REPOSITORY https://github.com/martialsystems/Ronin.git
-  GIT_TAG edd19fc2bfd07e7b50707fe811c4002ae04200c8    # Ronin main: panel cut to 564 (PR #3)
+  GIT_TAG 54b2e7059bd7f37e839ab046b7a35946dc890623    # Ronin: plate without the mottling ellipses
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_MakeAvailable(JUCE bushido ronin)
 
