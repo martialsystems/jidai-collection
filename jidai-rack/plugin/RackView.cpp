@@ -376,18 +376,35 @@ struct RackView::Slot {
     float shown() const { return device->folded ? kFoldHeight : height; }
 };
 
+// Passes a child's pointer events to a component that watches them all. Wheel events are not passed: a component's
+// default mouseWheelMove hands the wheel to its parent, so a watching component would scroll the rack for every wheel
+// a child had already used (the preset list, a knob).
+struct RackView::PointerRelay final : public juce::MouseListener
+{
+    explicit PointerRelay (juce::Component& c) : to (c) {}
+    void mouseMove (const juce::MouseEvent& e) override        { to.mouseMove (e); }
+    void mouseEnter (const juce::MouseEvent& e) override       { to.mouseEnter (e); }
+    void mouseExit (const juce::MouseEvent& e) override        { to.mouseExit (e); }
+    void mouseDown (const juce::MouseEvent& e) override        { to.mouseDown (e); }
+    void mouseDrag (const juce::MouseEvent& e) override        { to.mouseDrag (e); }
+    void mouseUp (const juce::MouseEvent& e) override          { to.mouseUp (e); }
+    void mouseDoubleClick (const juce::MouseEvent& e) override { to.mouseDoubleClick (e); }
+    juce::Component& to;
+};
+
 RackView::RackView (JidaiProcessor& p) : proc (p)
 {
     setWantsKeyboardFocus (false);
-    addMouseListener (this, true);       // RONIN's meter follows the jack pressed, even under the cable layer
+    selfRelay = std::make_unique<PointerRelay> (*this);
+    addMouseListener (selfRelay.get(), true);       // RONIN's meter follows the jack pressed, even under the cable layer
     rebuild();
 }
 
 RackView::~RackView()
 {
-    if (cables != nullptr)
-        removeMouseListener (cables.get());
-    removeMouseListener (this);
+    if (cableRelay != nullptr)
+        removeMouseListener (cableRelay.get());
+    removeMouseListener (selfRelay.get());
 }
 
 int RackView::indexOfSlotFor (const Device& d) const
@@ -438,8 +455,9 @@ juce::Rectangle<int> RackView::foldButtonBounds (int index) const
 
 void RackView::rebuild()
 {
-    if (cables != nullptr)
-        removeMouseListener (cables.get());
+    if (cableRelay != nullptr)
+        removeMouseListener (cableRelay.get());
+    cableRelay.reset();
     cables.reset();
     slots.clear();
 
@@ -527,7 +545,8 @@ void RackView::rebuild()
         proc.setCables (patch);
     };
     addAndMakeVisible (*cables);
-    addMouseListener (cables.get(), true);     // cables see the pointer everywhere (hover push-away), as in BUSHIDO's editor
+    cableRelay = std::make_unique<PointerRelay> (*cables);
+    addMouseListener (cableRelay.get(), true);     // cables see the pointer everywhere (hover push-away), as in BUSHIDO's editor
 
     for (auto& s : slots)
         if (s->topLayer != nullptr)
