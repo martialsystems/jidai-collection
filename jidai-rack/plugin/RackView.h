@@ -66,6 +66,7 @@ private:
     class BushidoBinding;
     class Swatches;
     struct Slot;
+    struct PointerRelay;
 
     float devicesHeight() const;     // design units, devices only
     int insertionIndex (float localY) const;
@@ -73,6 +74,7 @@ private:
     JidaiProcessor& proc;
     std::vector<std::unique_ptr<Slot>> slots;
     std::unique_ptr<CableLayer> cables;
+    std::unique_ptr<PointerRelay> selfRelay, cableRelay;     // watch every child's pointer events, but not the wheel
     int colour = 0;
     int insertAt = -1;
 };

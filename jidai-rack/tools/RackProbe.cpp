@@ -3,9 +3,10 @@
 // Window probe (no host, no audio device): builds the JIDAI RACK editor offscreen, then drives it the way a user
 // would, with mouse events on the real components: drops a RONIN onto the rack, patches BUSHIDO CV A to a RONIN
 // HZ/V by dragging a cable, removes a device with its x, and checks the processor after each step.
-// Writes PNGs of the window. No window is put on screen (no peer), so it needs no display beyond what JUCE's
-// GUI init wants; on Linux run under xvfb-run:  xvfb-run -a JidaiRackProbe <out-dir>
+// Writes PNGs of the window. The window goes on screen only for the wheel step (wheel events need a peer); on Linux
+// run under xvfb-run:  xvfb-run -a JidaiRackProbe <out-dir>
 
+#define JUCE_GUI_BASICS_INCLUDE_XHEADERS 1      // the wheel step needs a window; see main()
 #include "plugin/JidaiEditor.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -47,9 +48,9 @@ void drag (juce::Component& c, juce::Point<float> from, juce::Point<float> to)
     c.mouseUp (mouse (c, to, from, true));
 }
 
-void snapshot (juce::Component& c, const juce::File& file)
+void snapshot (juce::Component& c, const juce::File& file, juce::Rectangle<int> area = {}, float scale = 1.0f)
 {
-    const auto image = c.createComponentSnapshot (c.getLocalBounds(), true, 1.0f);
+    const auto image = c.createComponentSnapshot (area.isEmpty() ? c.getLocalBounds() : area, true, scale);
     file.deleteFile();
     juce::FileOutputStream out (file);
     juce::PNGImageFormat().writeImageToStream (image, out);
@@ -69,6 +70,12 @@ bool hasCable (JidaiProcessor& p, const std::string& a, const std::string& b)
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI gui;
+   #if JUCE_LINUX
+    // A console app gets Xlib's default error handler, which exits on the first error. A bare X server (xvfb, no window
+    // manager) rejects a few window-manager properties JUCE sets on a new window, so ignore X errors as a JUCE app does.
+    juce::XWindowSystem::getInstance();                                       // loads the Xlib symbols
+    juce::X11Symbols::getInstance()->xSetErrorHandler ([] (::Display*, ::XErrorEvent*) { return 0; });
+   #endif
     const auto out = juce::File::getCurrentWorkingDirectory().getChildFile (argc > 1 ? argv[1] : "probe");
     out.createDirectory();
 
@@ -193,6 +200,60 @@ int main (int argc, char** argv)
                 drag (*rp, k, k - juce::Point<float> (0, 40));
             }
         expect (ronin->knob (cutoff) > before, "RONIN panel: dragging VCF CUTOFF up raises it");
+    }
+
+    // The wheel, through JUCE's real dispatch (a peer, so mouse listeners hear it too): over an open preset list it
+    // moves the list and leaves the rack where it is; over a panel's bare metal it still scrolls the rack.
+    {
+        editor->addToDesktop (0);
+        editor->setVisible (true);
+        pump();
+        auto* peer = editor->getPeer();
+        expect (peer != nullptr, "the probe window has a peer for wheel events");
+        PatternScreen* screen = nullptr;
+        const int ronin1 = rack.indexOfSlotFor (*proc.rack().findDevice ("MS-50#1"));
+        std::function<void (juce::Component&)> find = [&] (juce::Component& c)
+        {
+            for (auto* child : c.getChildren())
+            {
+                if (auto* ps = dynamic_cast<PatternScreen*> (child); ps != nullptr && ! ps->isOpen() && rack.slotBounds (ronin1).intersects (rack.getLocalArea (&c, ps->getBoundsInParent())))
+                    screen = ps;
+                find (*child);
+            }
+        };
+        find (rack);
+        juce::int64 t = juce::Time::currentTimeMillis();
+        auto wheelAt = [&] (juce::Point<int> inRack)
+        {
+            const auto p = editor->getLocalPoint (&rack, inRack).toFloat();
+            for (int i = 0; i < 6; ++i)
+                peer->handleMouseWheel (juce::MouseInputSource::InputSourceType::mouse, p, t += 50, { 0.0f, -0.25f, false, false, false });
+            pump (20);
+        };
+        if (peer != nullptr && screen != nullptr)
+        {
+            editor->viewport().setViewPosition (0, 0);
+            const auto closed = rack.getLocalArea (screen->getParentComponent(), screen->getBoundsInParent());
+            click (*screen, { 8.0f, (float) screen->getHeight() / 2 });
+            pump();
+            expect (screen->isOpen(), "clicking RONIN 1's PRESET screen opens its list");
+            const int y0 = editor->viewport().getViewPositionY();
+            wheelAt ({ closed.getX() + 40, closed.getBottom() + juce::roundToInt (60 * rack.scale()) });
+            expect (editor->viewport().getViewPositionY() == y0, "wheel over the open preset list leaves the rack where it is");
+            snapshot (*editor, out.getChildFile ("2a_preset_list_wheel.png"));
+            const auto list = editor->getLocalArea (&rack, closed.withHeight (juce::roundToInt (260 * rack.scale())).expanded (8));
+            snapshot (*editor, out.getChildFile ("2a_preset_list_2x.png"), list, 2.0f);   // as on a Retina screen
+            screen->keyPressed (juce::KeyPress (juce::KeyPress::escapeKey));
+            pump();
+            const auto metal = rack.slotBounds (ronin1);
+            wheelAt ({ metal.getX() + 6, metal.getCentreY() });
+            expect (editor->viewport().getViewPositionY() > y0, "wheel over a panel's bare metal still scrolls the rack");
+            editor->viewport().setViewPosition (0, 0);
+        }
+        else
+            expect (false, "found RONIN 1's PRESET screen");
+        editor->removeFromDesktop();
+        pump();
     }
 
     // Fold RONIN 2 with the arrow on its ear: it becomes a strip, its cables stay in the rack, and opening it shows them again.
