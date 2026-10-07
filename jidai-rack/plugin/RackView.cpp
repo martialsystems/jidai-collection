@@ -23,6 +23,23 @@ std::vector<::CableSpec> toLayer (const std::vector<jidai::CableSpec>& specs)
     return out;
 }
 
+// RONIN's layout has the glass, the LCD and the dropdown key, and no banks or SAVE.
+// Those sit on the same x and y as BUSHIDO's. 17 characters fits "A013 DELAY BOUNCE".
+PanelLayout::Screen roninScreen()
+{
+    PanelLayout::Screen s;
+    s.bezel = { kPresetBezelX, kPresetBezelY, kPresetBezelW, kPresetBezelH };
+    s.lcd = { kPresetLcdX, kPresetLcdY, kPresetLcdW, kPresetLcdH };
+    s.button = { kPresetKeyX, kPresetKeyY, kPresetKeyW, kPresetKeyH };
+    s.save = { 1032.0f, 15.0f, 26.0f, 24.0f };
+    s.chars = 17;
+    s.listRows = 10;
+    s.bankSize = 999;
+    s.banks.push_back ({ "A", 968.0f, 27.0f, 4.5f, { 958.0f, 15.0f, 30.0f, 24.0f } });
+    s.banks.push_back ({ "B", 1000.0f, 27.0f, 4.5f, { 990.0f, 15.0f, 30.0f, 24.0f } });
+    return s;
+}
+
 }
 
 // ---------------- rack hardware ----------------
@@ -351,7 +368,7 @@ struct RackView::Slot {
     std::unique_ptr<RackPanel> panel;
     std::unique_ptr<Shade> shade;
     std::unique_ptr<BushidoBinding> binding;
-    std::unique_ptr<juce::Component> topLayer;      // BUSHIDO: pattern screen and swatches, above the cables
+    std::unique_ptr<juce::Component> topLayer;      // pattern screen (and BUSHIDO's swatches), above the cables
     std::unique_ptr<PatternScreen> screen;
     std::unique_ptr<Swatches> swatches;
     float top = 0.0f;           // design units
@@ -421,7 +438,6 @@ juce::Rectangle<int> RackView::foldButtonBounds (int index) const
 
 void RackView::rebuild()
 {
-    closePrograms();
     if (cables != nullptr)
         removeMouseListener (cables.get());
     cables.reset();
@@ -441,10 +457,21 @@ void RackView::rebuild()
         {
             auto panel = std::make_unique<RoninPanel> (*r, [this] { return colour; },
                                                        [this] (int c) { colour = c; if (cables) cables->setColour (c); repaint(); });
-            auto* raw = panel.get();
-            panel->onOpenPrograms = [this, raw] { openPrograms (*raw); };
             slot->height = RoninPanel::kHeight;
             slot->panel = std::move (panel);
+
+            slot->topLayer = std::make_unique<juce::Component>();
+            slot->topLayer->setInterceptsMouseClicks (false, true);
+            slot->screen = std::make_unique<PatternScreen> (roninScreen(), RoninPanel::kWidth);
+            slot->screen->names = [this] (int bank) { return proc.roninPresetNames (bank); };
+            slot->screen->loaded = [this, r] { return proc.loadedPattern (r); };
+            slot->screen->choose = [this, r] (int bank, int index)
+            {
+                proc.loadRoninPreset (r, bank, index);
+                juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<RackView> (this)] { if (sp != nullptr) sp->reloadCables(); });
+            };
+            slot->screen->save = [this, r] (int bank, const juce::String& name) { return proc.saveRoninPreset (r, bank, name); };
+            slot->topLayer->addAndMakeVisible (*slot->screen);
         }
         else if (auto* b = dynamic_cast<BushidoDevice*> (d))
         {
@@ -519,6 +546,9 @@ void RackView::reloadCables()
 {
     if (cables != nullptr)
         cables->setPatch (toLayer (proc.rack().cables()));
+    for (auto& slot : slots)
+        if (slot->screen != nullptr)
+            slot->screen->repaint();
     repaint();
 }
 
@@ -553,7 +583,8 @@ void RackView::resized()
         {
             slot->topLayer->setBounds (panel);
             slot->screen->placeIn ({ 0, 0, panel.getWidth(), panel.getHeight() });
-            slot->swatches->setBounds (juce::Rectangle<float> (1450 * s, 12 * s, 136 * s, 30 * s).toNearestInt());
+            if (slot->swatches != nullptr)
+                slot->swatches->setBounds (juce::Rectangle<float> (1450 * s, 12 * s, 136 * s, 30 * s).toNearestInt());
         }
     }
     if (cables != nullptr)
@@ -562,8 +593,6 @@ void RackView::resized()
         cables->setDesignSize (kPanelWidth, h);                // cables can hang down into the empty rack
         cables->setBounds (juce::Rectangle<float> (kMargin * s, 0.0f, kPanelWidth * s, h * s).toNearestInt());
     }
-    if (programs != nullptr)
-        programs->setBounds (getLocalBounds());
 }
 
 void RackView::paint (juce::Graphics& g)
@@ -663,28 +692,6 @@ void RackView::mouseDown (const juce::MouseEvent& e)
             if (std::hypot (kPanelJacks[j].x - p.x, kPanelJacks[j].y - py) < 17.0f)
                 r->setMeterJack (j);
     }
-}
-
-void RackView::openPrograms (RoninPanel& panel)
-{
-    closePrograms();
-    auto* ronin = &panel.device();
-    programs = std::make_unique<RoninProgramList> (panel,
-        [this, ronin] (int index)
-        {
-            proc.loadRoninProgram (ronin, index);
-            juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<RackView> (this)]
-                                             { if (sp != nullptr) { sp->closePrograms(); sp->reloadCables(); } });
-        },
-        [this] { juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<RackView> (this)] { if (sp != nullptr) sp->closePrograms(); }); });
-    addAndMakeVisible (*programs);
-    programs->setBounds (getLocalBounds());
-    programs->grabKeyboardFocus();
-}
-
-void RackView::closePrograms()
-{
-    programs.reset();
 }
 
 // ---------------- drag and drop ----------------

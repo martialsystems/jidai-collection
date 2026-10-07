@@ -45,25 +45,68 @@ public:
     void removeDevice (jidai::Device* device);
     void moveDevice (jidai::Device* device, int position);
     void setCables (const std::vector<jidai::CableSpec>& cables);
-    void loadRoninProgram (jidai::RoninDevice* ronin, int index);
+    void loadRoninProgram (jidai::RoninDevice* ronin, int index);   // factory program on this RONIN only; the screen shows it on bank A
     void resetToDefaultRack();       // one BUSHIDO above one RONIN
     bool browserOpen = true;         // window only: the device browser is shown, or folded to a thin strip; saved with the rack
 
-    // BUSHIDO patterns: two banks of up to 999. Bank A starts with the factory patterns; saved patterns go to the same
-    // user file the BUSHIDO plugin uses, so both see them.
+    // Both screens: banks A and B, up to 999 entries. Bank A is that instrument's factory set.
+    // Bank B starts with the rack patches (LOOP BASS, RING SEED, and any later entries in rack_patches.json).
+    // A rack patch sets the device whose screen was used, the first device of the other kind, and the cables on those two.
+    // A BUSHIDO pattern sets that BUSHIDO only. A RONIN factory preset sets that RONIN only.
+    // Saved BUSHIDO patterns go to the BUSHIDO plugin's user file, after its factory patterns.
+    // Saved RONIN presets go to Application Support/RONIN/user_presets.json, after the factory entries.
     struct Pattern { juce::String name; std::vector<std::pair<juce::String, float>> params; std::vector<std::array<juce::String, 2>> cables; std::vector<int> colors; };
     static constexpr int kBankSize = 999;
     juce::StringArray patternNames (int bank) const;
-    std::pair<int, int> loadedPattern (const jidai::Device* bushido) const;
+    std::pair<int, int> loadedPattern (const jidai::Device* device) const;
     void loadPattern (jidai::BushidoDevice* bushido, int bank, int index);
     int savePattern (jidai::BushidoDevice* bushido, int bank, const juce::String& name);
 
+    juce::StringArray roninPresetNames (int bank) const;
+    void loadRoninPreset (jidai::RoninDevice* ronin, int bank, int index);
+    int saveRoninPreset (jidai::RoninDevice* ronin, int bank, const juce::String& name);
+
+    // Tests point user files here before constructing a processor. An empty file is Application Support.
+    static void setUserStoreRootForTest (const juce::File& root);
+
+#if JIDAI_PRESET_TEST
+    void testRestore (const juce::XmlElement& xml) { restoreFromXml (xml); }
+#endif
+
 private:
+    struct RackPatch
+    {
+        juce::String name;
+        int preset = 0;
+        bool power = true;
+        std::vector<std::pair<juce::String, float>> knobs;
+        std::vector<std::pair<juce::String, float>> params;
+        std::vector<std::array<juce::String, 2>> cables;
+    };
+    struct RoninStored
+    {
+        juce::String name;
+        int base = 0;
+        bool power = true;
+        std::vector<std::pair<juce::String, float>> knobs;
+        std::vector<std::array<juce::String, 2>> cables;
+        std::vector<int> colors;
+    };
+
     void writeUserPatterns() const;
+    void writeUserRonin() const;
+    void loadRackPatch (jidai::BushidoDevice* bushido, jidai::RoninDevice* ronin, int index);
+    static RoninStored roninFromVar (const juce::var&);
+    static juce::var roninToVar (const RoninStored&);
     void restoreFromXml (const juce::XmlElement& xml);
+    jidai::RoninDevice* firstRonin() const;
+    jidai::BushidoDevice* firstBushido() const;
 
     jidai::Rack rack_;
     std::vector<Pattern> banks_[2];
+    std::vector<RoninStored> roninUser_[2];
+    std::vector<RackPatch> rackPatches_;
+    std::vector<std::pair<juce::String, float>> bushidoDefaults_;
     int factoryCount_ = 0;
     std::map<const jidai::Device*, std::pair<int, int>> loaded_;
     juce::HeapBlock<float> silence_;

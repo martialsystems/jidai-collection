@@ -67,6 +67,7 @@ juce_add_binary_data(JidaiPanels
     ${BUSHIDO_DIR}/assets/sq10_panel_bg.svg
     ${BUSHIDO_DIR}/assets/sq10_layout.json
     ${BUSHIDO_DIR}/assets/sq10_patterns.json
+    ${BUSHIDO_DIR}/assets/rack_patches.json
     ${RONIN_DIR}/panel/assets/panel_bg.svg)
 
 set(JIDAI_UI_SOURCES
@@ -120,3 +121,14 @@ target_link_libraries(JidaiRackProbe PRIVATE
   JidaiPanels
   juce::juce_audio_utils
   juce::juce_recommended_config_flags)
+
+# Preset banks: factory lists, the compiled rack patches, and a temp user-file directory.
+juce_add_console_app(JidaiPresetTests PRODUCT_NAME "JidaiPresetTests")
+target_sources(JidaiPresetTests PRIVATE tests/PresetBankTests.cpp ${JIDAI_UI_SOURCES})
+target_compile_definitions(JidaiPresetTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JIDAI_NO_PLUGIN_ENTRY=1 JIDAI_PRESET_TEST=1)
+target_link_libraries(JidaiPresetTests PRIVATE
+  jidai_core
+  JidaiPanels
+  juce::juce_audio_utils
+  juce::juce_recommended_config_flags)
+add_test(NAME presets COMMAND JidaiPresetTests)

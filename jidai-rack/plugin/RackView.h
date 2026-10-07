@@ -69,13 +69,10 @@ private:
 
     float devicesHeight() const;     // design units, devices only
     int insertionIndex (float localY) const;
-    void openPrograms (RoninPanel&);
-    void closePrograms();
 
     JidaiProcessor& proc;
     std::vector<std::unique_ptr<Slot>> slots;
     std::unique_ptr<CableLayer> cables;
-    std::unique_ptr<RoninProgramList> programs;
     int colour = 0;
     int insertAt = -1;
 };

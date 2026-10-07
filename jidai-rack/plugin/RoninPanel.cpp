@@ -97,113 +97,6 @@ void paintEffectRocker (juce::Graphics& g, juce::Point<float> origin, float scal
     g.drawLine (x + half, y + scale, x + half, y + h - scale, 1.0f * scale);
 }
 
-const int* lcdRows (juce::juce_wchar ch)
-{
-    struct Glyph
-    {
-        char ch;
-        int row[7];
-    };
-    static constexpr int kBlank[7] = { 0, 0, 0, 0, 0, 0, 0 };
-    static constexpr Glyph kFont[] = {
-        { ' ', { 0, 0, 0, 0, 0, 0, 0 } },
-        { '0', { 14, 17, 19, 21, 25, 17, 14 } },
-        { '1', { 4, 12, 4, 4, 4, 4, 14 } },
-        { '2', { 14, 17, 1, 2, 4, 8, 31 } },
-        { '3', { 31, 2, 4, 2, 1, 17, 14 } },
-        { '4', { 2, 6, 10, 18, 31, 2, 2 } },
-        { '5', { 31, 16, 30, 1, 1, 17, 14 } },
-        { '6', { 6, 8, 16, 30, 17, 17, 14 } },
-        { '7', { 31, 1, 2, 4, 8, 8, 8 } },
-        { '8', { 14, 17, 17, 14, 17, 17, 14 } },
-        { '9', { 14, 17, 17, 15, 1, 2, 12 } },
-        { 'A', { 14, 17, 17, 17, 31, 17, 17 } },
-        { 'B', { 30, 17, 17, 30, 17, 17, 30 } },
-        { 'C', { 14, 17, 16, 16, 16, 17, 14 } },
-        { 'D', { 28, 18, 17, 17, 17, 18, 28 } },
-        { 'E', { 31, 16, 16, 30, 16, 16, 31 } },
-        { 'F', { 31, 16, 16, 30, 16, 16, 16 } },
-        { 'G', { 14, 17, 16, 23, 17, 17, 15 } },
-        { 'H', { 17, 17, 17, 31, 17, 17, 17 } },
-        { 'I', { 14, 4, 4, 4, 4, 4, 14 } },
-        { 'J', { 7, 2, 2, 2, 2, 18, 12 } },
-        { 'K', { 17, 18, 20, 24, 20, 18, 17 } },
-        { 'L', { 16, 16, 16, 16, 16, 16, 31 } },
-        { 'M', { 17, 27, 21, 21, 17, 17, 17 } },
-        { 'N', { 17, 17, 25, 21, 19, 17, 17 } },
-        { 'O', { 14, 17, 17, 17, 17, 17, 14 } },
-        { 'P', { 30, 17, 17, 30, 16, 16, 16 } },
-        { 'Q', { 14, 17, 17, 17, 21, 18, 13 } },
-        { 'R', { 30, 17, 17, 30, 20, 18, 17 } },
-        { 'S', { 15, 16, 16, 14, 1, 1, 30 } },
-        { 'T', { 31, 4, 4, 4, 4, 4, 4 } },
-        { 'U', { 17, 17, 17, 17, 17, 17, 14 } },
-        { 'V', { 17, 17, 17, 17, 17, 10, 4 } },
-        { 'W', { 17, 17, 17, 21, 21, 21, 10 } },
-        { 'X', { 17, 17, 10, 4, 10, 17, 17 } },
-        { 'Y', { 17, 17, 17, 10, 4, 4, 4 } },
-        { 'Z', { 31, 1, 2, 4, 8, 16, 31 } },
-        { '&', { 12, 18, 20, 8, 21, 18, 13 } },
-        { '-', { 0, 0, 0, 31, 0, 0, 0 } },
-        { '+', { 0, 4, 4, 31, 4, 4, 0 } },
-        { '/', { 0, 1, 2, 4, 8, 16, 0 } },
-        { '.', { 0, 0, 0, 0, 0, 12, 12 } },
-        { '>', { 8, 4, 2, 1, 2, 4, 8 } },
-    };
-
-    const char ascii = (ch >= 32 && ch < 127) ? static_cast<char> (ch) : ' ';
-    for (const auto& glyph : kFont)
-        if (glyph.ch == ascii)
-            return glyph.row;
-    return kBlank;
-}
-
-juce::String presetScreenLine (int index, const juce::String& hostName)
-{
-    static const char* kShort[] = {
-        "DRY", "NOISE MIXER", "VOICE", "RING", "S&H", "FEEDBACK", "HOLD",
-        "FILTER LOOP", "MG FILTER", "STEP CUTOFF", "RING DRONE", "DELAY BOUNCE", "SELF RING"
-    };
-    const int shorts = static_cast<int> (sizeof (kShort) / sizeof (kShort[0]));
-    const juce::String name = (index >= 0 && index < shorts) ? juce::String (kShort[index]) : hostName.toUpperCase();
-    return (juce::String (index + 1).paddedLeft ('0', 2) + " " + name).substring (0, kPresetChars);
-}
-
-void paintLcdDots (juce::Graphics& g, juce::Rectangle<float> area, const juce::String& text,
-                   juce::Colour ink, float ghostAlpha)
-{
-    const float pitch = juce::jmin (area.getWidth() / (static_cast<float> (kPresetChars) * 6.0f),
-                                     area.getHeight() / 8.0f);
-    const float dot = pitch * 0.86f;
-    const float ox = area.getX() + (area.getWidth() - static_cast<float> (kPresetChars) * 6.0f * pitch) * 0.5f
-                     + pitch * 0.5f;
-    const float oy = area.getY() + (area.getHeight() - 7.0f * pitch) * 0.5f;
-    for (int column = 0; column < kPresetChars; ++column)
-    {
-        const juce::juce_wchar ch = column < text.length() ? text[column] : static_cast<juce::juce_wchar> (' ');
-        const int* rows = lcdRows (ch);
-        for (int row = 0; row < 7; ++row)
-        {
-            for (int bit = 0; bit < 5; ++bit)
-            {
-                const bool on = ((rows[row] >> (4 - bit)) & 1) != 0;
-                g.setColour (ink.withAlpha (on ? 0.9f : ghostAlpha));
-                g.fillRect (ox + (static_cast<float> (column) * 6.0f + static_cast<float> (bit)) * pitch,
-                            oy + static_cast<float> (row) * pitch,
-                            dot, dot);
-            }
-        }
-    }
-}
-
-juce::Rectangle<float> presetMenuDesign (int count)
-{
-    return { kPresetBezelX,
-             kPresetBezelY + kPresetBezelH + 3.0f,
-             (kPresetKeyX + kPresetKeyW) - kPresetBezelX,
-             10.0f + static_cast<float> (count) * 21.0f - 3.0f };
-}
-
 void paintKnobCap (juce::Graphics& g, juce::Point<float> centre, float radius, float scale, bool isSwitch, float value)
 {
     // Ticks stay on the plate. The cap, its shadow, and the pointer turn as one piece.
@@ -366,19 +259,41 @@ RoninPanel::RoninPanel (jidai::RoninDevice& d, std::function<int()> getColour, s
 
 RoninPanel::~RoninPanel() = default;
 
-void RoninPanel::paintLcd (juce::Graphics& g, juce::Rectangle<float> area, const juce::String& text, juce::Colour ink, float ghostAlpha)
+// RONIN's plate has the PRESET glass and its dropdown key, and no bank lamps or SAVE key.
+// These sit where BUSHIDO's do: both screens share one x and y on their own panel.
+// PatternScreen, above this panel, paints the lamp bulbs and the LCD text.
+static void paintBankFurniture (juce::Graphics& g, float s)
 {
-    paintLcdDots (g, area, text, ink, ghostAlpha);
-}
+    auto socket = [&] (float cx, float cy)
+    {
+        const float r = 6.5f * s;
+        const float x = (cx - 6.5f) * s;
+        const float y = (cy - 6.5f) * s;
+        g.setColour (juce::Colour (0xff050505));
+        g.fillEllipse (x, y, r * 2.0f, r * 2.0f);
+        g.setColour (juce::Colour (0xff2a2a2c));
+        g.drawEllipse (x, y, r * 2.0f, r * 2.0f, juce::jmax (0.6f, s));
+    };
+    socket (968.0f, 27.0f);
+    socket (1000.0f, 27.0f);
 
-juce::String RoninPanel::programLine (int index)
-{
-    return presetScreenLine (index, factoryPresetName (index));
-}
+    g.setColour (juce::Colour (0xffdcd6c2));
+    g.setFont (juce::Font (juce::FontOptions (8.0f * s)));
+    g.drawText ("A", juce::Rectangle<float> (976.0f * s, 22.0f * s, 10.0f * s, 10.0f * s), juce::Justification::centred, false);
+    g.drawText ("B", juce::Rectangle<float> (1008.0f * s, 22.0f * s, 10.0f * s, 10.0f * s), juce::Justification::centred, false);
+    g.drawText ("SAVE", juce::Rectangle<float> (1062.0f * s, 19.0f * s, 40.0f * s, 12.0f * s), juce::Justification::centredLeft, false);
 
-juce::Rectangle<float> RoninPanel::programMenuDesign (int count)
-{
-    return presetMenuDesign (count);
+    const float x = 1032.0f * s, y = 15.0f * s, w = 26.0f * s, h = 24.0f * s;
+    juce::ColourGradient shell (juce::Colour (0xfff4eedc), x, y, juce::Colour (0xffa9a18a), x + w, y + h, false);
+    g.setGradientFill (shell);
+    g.fillRoundedRectangle (x, y, w, h, 3.0f * s);
+    g.setColour (juce::Colour (0xff6f6a5a));
+    g.drawRoundedRectangle (x, y, w, h, 3.0f * s, 0.9f * s);
+    g.setColour (juce::Colour (0xff7e7764).withAlpha (0.55f));
+    g.fillRoundedRectangle (x, y + 20.0f * s, w, 4.0f * s, 2.0f * s);
+    g.setColour (juce::Colour (0xff2a2620));
+    g.fillRect (1044.0f * s, 21.0f * s, 2.0f * s, 10.0f * s);
+    g.fillRect (1040.0f * s, 25.0f * s, 10.0f * s, 2.0f * s);
 }
 
 // RONIN's PatchBayView::paint, without the cables (the rack's cable layer draws those).
@@ -442,9 +357,7 @@ void RoninPanel::paint (juce::Graphics& g)
     }
 
     paintEffectRocker (g, origin, s, ronin.effectOn());
-    const int program = ronin.program();
-    const auto lcd = juce::Rectangle<float> ((kPresetLcdX + 2.0f) * s, (kPresetLcdY + 1.0f) * s, (kPresetLcdW - 4.0f) * s, (kPresetLcdH - 2.0f) * s);
-    paintLcdDots (g, lcd, presetScreenLine (program, factoryPresetName (program)), juce::Colour (0xff1e2419), 0.09f);
+    paintBankFurniture (g, s);
 
     if (readout.isNotEmpty())
     {
@@ -480,7 +393,8 @@ void RoninPanel::setKnobValue (int index, float value)
     repaint();
 }
 
-// RONIN's PatchBayView mouse rules for the controls: swatches, PRESET screen, EFFECT rocker, HOLD key, knobs.
+// RONIN's PatchBayView mouse rules for the controls: swatches, EFFECT rocker, HOLD key, knobs.
+// The PRESET screen, its key, the bank lamps and SAVE belong to the PatternScreen above this panel.
 void RoninPanel::mouseDown (const juce::MouseEvent& e)
 {
     const auto p = design (e.position);
@@ -493,17 +407,6 @@ void RoninPanel::mouseDown (const juce::MouseEvent& e)
             repaint();
             return;
         }
-    }
-
-    const float left = std::min (kPresetBezelX, kPresetKeyX) - 6.0f;
-    const float top = std::min (kPresetBezelY, kPresetKeyY) - 6.0f;
-    const float right = std::max (kPresetBezelX + kPresetBezelW, kPresetKeyX + kPresetKeyW) + 6.0f;
-    const float bottom = std::max (kPresetBezelY + kPresetBezelH, kPresetKeyY + kPresetKeyH) + 8.0f;
-    if (p.x >= left && p.x <= right && p.y >= top && p.y <= bottom)
-    {
-        if (onOpenPrograms)
-            onOpenPrograms();
-        return;
     }
 
     const float pad = 8.0f;
@@ -583,95 +486,4 @@ void RoninPanel::mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWhe
         return;
     }
     setKnobValue (index, panelKnobFromWheel (ronin.knob (index), wheel.deltaY, wheel.isReversed, e.mods.isShiftDown(), kPanelKnobs[index].kind == 1));
-}
-
-// ---------------- PRESET list ----------------
-
-RoninProgramList::RoninProgramList (RoninPanel& p, std::function<void (int)> c, std::function<void()> x)
-    : panel (p), choose (std::move (c)), close (std::move (x))
-{
-    hi = panel.device().program();
-    setWantsKeyboardFocus (true);
-}
-
-juce::Rectangle<float> RoninProgramList::menuBounds() const
-{
-    // Design units of the panel, placed where the panel sits inside this component's parent.
-    const float s = (float) panel.getWidth() / RoninPanel::kWidth;
-    const auto box = RoninPanel::programMenuDesign (kFactoryPresetCount);
-    const auto origin = panel.getBounds().getPosition().toFloat() - getPosition().toFloat();
-    return { origin.x + box.getX() * s, origin.y + box.getY() * s, box.getWidth() * s, box.getHeight() * s };
-}
-
-int RoninProgramList::rowAt (juce::Point<float> p) const
-{
-    const auto m = menuBounds();
-    if (! m.contains (p))
-        return -1;
-    const float s = (float) panel.getWidth() / RoninPanel::kWidth;
-    const int row = (int) std::floor ((p.y - m.getY() - 5.0f * s) / (21.0f * s));
-    return row >= 0 && row < kFactoryPresetCount ? row : -1;
-}
-
-void RoninProgramList::paint (juce::Graphics& g)
-{
-    const float s = (float) panel.getWidth() / RoninPanel::kWidth;
-    const auto menu = menuBounds();
-    g.setColour (juce::Colour (0xff0a0a0b));
-    g.fillRoundedRectangle (menu, 4.0f * s);
-    g.setColour (juce::Colour (0xffc29f4c));
-    g.drawRoundedRectangle (menu, 4.0f * s, 1.2f * s);
-    const int current = panel.device().program();
-    for (int row = 0; row < kFactoryPresetCount; ++row)
-    {
-        const bool isHi = row == hi;
-        const auto rowRect = juce::Rectangle<float> (menu.getX() + 5.0f * s, menu.getY() + (5.0f + (float) row * 21.0f) * s, menu.getWidth() - 10.0f * s, 18.0f * s);
-        if (isHi)
-        {
-            g.setColour (juce::Colour (0xff1e2419));
-            g.fillRoundedRectangle (rowRect, 1.5f * s);
-        }
-        else
-        {
-            juce::ColourGradient glass (juce::Colour (0xff8f9a7c), rowRect.getX(), rowRect.getY(), juce::Colour (0xff94a083), rowRect.getX(), rowRect.getBottom(), false);
-            glass.addColour (0.5, juce::Colour (0xffa6b192));
-            g.setGradientFill (glass);
-            g.fillRoundedRectangle (rowRect, 1.5f * s);
-        }
-        const juce::String shown = (juce::String (row == current ? ">" : " ") + RoninPanel::programLine (row)).substring (0, kPresetChars);
-        RoninPanel::paintLcd (g, rowRect.reduced (3.0f * s, 1.0f * s), shown, isHi ? juce::Colour (0xffa6b192) : juce::Colour (0xff1e2419), isHi ? 0.08f : 0.09f);
-    }
-}
-
-void RoninProgramList::mouseMove (const juce::MouseEvent& e)
-{
-    const int row = rowAt (e.position);
-    if (row >= 0 && row != hi)
-    {
-        hi = row;
-        repaint();
-    }
-}
-
-void RoninProgramList::mouseDown (const juce::MouseEvent& e)
-{
-    const int row = rowAt (e.position);
-    if (row >= 0)
-        choose (row);
-    else
-        close();
-}
-
-bool RoninProgramList::keyPressed (const juce::KeyPress& key)
-{
-    if (key == juce::KeyPress::escapeKey)
-        close();
-    else if (key == juce::KeyPress::upKey && hi > 0)
-        --hi;
-    else if (key == juce::KeyPress::downKey && hi + 1 < kFactoryPresetCount)
-        ++hi;
-    else if (key == juce::KeyPress::returnKey)
-        choose (hi);
-    repaint();
-    return true;
 }

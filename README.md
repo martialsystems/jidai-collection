@@ -26,7 +26,7 @@ A full rack in one plugin: VCO, a self-oscillating diode-bridge filter, two VCAs
 ## JIDAI RACK
 
 **BUSHIDO and RONIN in one rack, in one plugin.**
-A rack window in the style of a hardware cabinet: drag devices in from the browser, screw in as many of each as you like, and cable any jack to any other. Both engines are compiled into one VST3 effect and one Standalone app. Source in [`jidai-rack/`](jidai-rack/).
+A rack window in the style of a hardware cabinet: drag devices in from the browser, screw in as many of each as you like, and cable any jack to any other. Both engines are compiled into one VST3 effect and one Standalone app. Each screen has banks A and B. Bank A is that instrument's factory set. Bank B starts with the rack patches LOOP BASS and RING SEED. Source in [`jidai-rack/`](jidai-rack/).
 
 ## Better together
 
