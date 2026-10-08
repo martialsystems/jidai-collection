@@ -349,14 +349,14 @@ Twelve complete racks, every connection made with cables on the jacks. All of th
 | Group | Rack | Devices | What it does |
 |---|---|---|---|
 | INIT | INIT | RACK I/O | The empty rack. |
-| ACID | Acid Line | BUSHIDO, RONIN | A 12-step acid line on the host clock. Every note glides (PORTA A). Row C is the accent, opening the resonant filter further. |
-| ACID | Acid Fold | BUSHIDO, RONIN, ORIGAMI | An acid line through ORIGAMI. Row C sets each gate's length, so long steps glide into the next note. Triggers on steps 1, 6 and 11 fire the second envelope, which opens the filter and folds harder. |
+| ACID | Acid Line | BUSHIDO, RONIN | A 12-step acid line on the host clock, played on RONIN's ACID LINE sound. RONIN's INT slides between notes, the gate fires both envelopes (VCA and filter snap), and row C is the accent on the filter. |
+| ACID | Acid Fold | BUSHIDO, RONIN, ORIGAMI | An acid line on RONIN's ACID SQUELCH sound, through ORIGAMI. Wired like Acid Line, and the filter snap (EG 2) also folds harder through ORIGAMI's VC 1. Row C accents steps 1, 5 and 10. |
 | EDM | Driving Bass | BUSHIDO, RONIN, ORIGAMI | An 8-step rolling sixteenth bass. Step 9's trigger resets BUSHIDO, so its 12 steps play as an 8-step loop. ORIGAMI adds drive that keeps the low end clean. |
 | EDM | Pluck Lead | BUSHIDO, RONIN, ORIGAMI | An 8-step pluck lead quantized to semitones, with the pulse width moved by RONIN's MG and a fast envelope on the filter. |
 | EDM | Two Voices | BUSHIDO, 2 × RONIN, ORIGAMI | One sequencer plays two synths: row A is the bass, row C a counter line. RONIN 1's MIX sums both voices, and the pair plays through ORIGAMI. |
 | EDM | Stepped Fold | BUSHIDO, RONIN, ORIGAMI | BUSHIDO sequences the fold as well as the notes: row C sets ORIGAMI's VC 1 on every step, and step 5's trigger kicks VC 3 once a loop. |
 | EDM | MIDI Fold Synth | RONIN, ORIGAMI | Play RONIN from your DAW through RACK I/O's MIDI jacks (note, gate, velocity), through ORIGAMI. |
-| EDM | Acid Drum Jam | SHOGUN, BUSHIDO, RONIN, ORIGAMI | Every device: SHOGUN plays a four-on-the-floor kit clocked from RACK I/O's transport jacks. A BUSHIDO acid line plays RONIN through ORIGAMI, and the bass returns into SHOGUN's mix. |
+| EDM | Acid Drum Jam | SHOGUN, BUSHIDO, RONIN, ORIGAMI | Every device: SHOGUN plays a four-on-the-floor kit clocked from RACK I/O's transport jacks. A BUSHIDO acid line plays RONIN's ACID DRIVE sound through ORIGAMI, and the bass returns into SHOGUN's mix. |
 | EDM | Full EDM Jam | SHOGUN, BUSHIDO, RONIN, ORIGAMI | Every device, host-clocked: SHOGUN plays kick, clap, hats, open hat, a tom fill and a lead riff on its LEAD synth. BUSHIDO's 8-step bass on RONIN returns into SHOGUN, and SHOGUN's whole mix runs through ORIGAMI. |
 | FX | Filter Fold FX | RONIN, ORIGAMI | An insert effect: your track through RONIN's resonant filter swept by its MG, then through ORIGAMI. |
 | FX | Tempo Gate FX | RONIN, ORIGAMI | A tempo-synced gate: CLK 1/16 fires RONIN's envelope on every sixteenth note, chopping your track through VCA 1. ORIGAMI folds the result. Runs while the DAW plays. |
@@ -542,15 +542,20 @@ A cable whose other end is out of view (on a closed or folded device, or on the 
 
 | From | To | Why |
 |---|---|---|
-| BUSHIDO › CV A (blue) | RONIN › VCO V/OCT | Row A plays the notes. VCO RANGE at 16' puts the line an octave below BUSHIDO's C3. |
-| BUSHIDO › GATE A (green) | RONIN › EG 1 TRIG | Each step fires the envelope (gate converted to S-trigger). |
-| RONIN › EG 1 OUT A | RONIN › VCA 1 ENV and RONIN › MIX IN 1 | The envelope opens the VCA and, through MIX, the filter. |
-| BUSHIDO › CV C (yellow) | RONIN › MIX IN 2 | Row C is the accent: it adds to the envelope in MIX. |
-| RONIN › MIX OUT | RONIN › VCF CUTOFF | Envelope plus accent sweep the resonant filter. |
+RONIN is set like its ACID LINE program, but BUSHIDO plays it instead of RONIN's own MG pattern.
+
+| From | To | Why |
+|---|---|---|
+| BUSHIDO › CV A (blue) | RONIN › INT IN | Row A plays the notes. INT smooths each step into the next: that is the slide. |
+| RONIN › INT OUT | RONIN › VCO V/OCT | The slid pitch. VCO RANGE at 16' puts the line an octave below BUSHIDO's C3. |
+| BUSHIDO › GATE A (green) | RONIN › EG 1 TRIG and EG 2 TRIG | Each step fires both envelopes (gate converted to S-trigger). |
+| RONIN › EG 1 OUT A | RONIN › VCA 1 ENV | EG 1 opens the VCA. |
+| RONIN › EG 2 OUT + | RONIN › VCF CUTOFF | EG 2 is the filter snap. |
+| BUSHIDO › CV C (yellow) | RONIN › VCF CUTOFF | Row C is the accent. It sums with EG 2 on the same input (two cables on one jack). |
 | RONIN › VCO SAW → VCF IN, VCF OUT → VCA 1 IN, VCA 1 OUT → OUTPUT WET | | The voice path. |
 | RONIN › HOST OUT L/R (red) | RACK I/O › MAIN OUT L/R | To the DAW. |
 
-Try this: move the CV C cable from MIX IN 2 to VCF CUTOFF directly for harder accents.
+Try this: turn RONIN's INT TIME down for a dry line with no slide, or up for a slower, rubbery slide.
 
 ### Worked example 2: Acid Drum Jam (every device)
 
@@ -562,7 +567,7 @@ Try this: move the CV C cable from MIX IN 2 to VCF CUTOFF directly for harder ac
 |---|---|---|
 | RACK I/O › CLK 1/16 (green) | SHOGUN › CLOCK CLK IN | SHOGUN steps on every sixteenth note from the DAW. |
 | RACK I/O › RESET | SHOGUN › CLOCK RST IN | Restarts SHOGUN's pattern when the DAW starts. |
-| BUSHIDO › CV A, GATE A | RONIN › V/OCT, EG 1 TRIG | The acid line. |
+| BUSHIDO › CV A, GATE A, CV C | RONIN › INT IN, EG 1 TRIG and EG 2 TRIG, VCF CUTOFF | The acid line, wired as in Acid Line. RONIN mixes its saw and pulse into the filter, as in its ACID DRIVE program. |
 | RONIN › HOST OUT L | ORIGAMI › IN L | The bass through the folder (IN R follows IN L). |
 | ORIGAMI › OUT L | SHOGUN › BASS RET | The folded bass returns into SHOGUN's mix. |
 | SHOGUN › MIX L/R | RACK I/O › MAIN OUT L/R | Drums and bass to the DAW. |
