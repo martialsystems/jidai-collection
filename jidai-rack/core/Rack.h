@@ -83,6 +83,9 @@ public:
     // Migration M3: whether the v2 gate law (S-15 into every RONIN input) sounds different from JCS R2/R3s on a
     // cable between these jacks. Only those cables get legacyInvert when a v2 rack loads.
     bool legacyInversionDiffers (const std::string& jackA, const std::string& jackB) const;
+    // removeDevice and clear take devices out of the rack (and the audio graph) but do not free them: they are retired,
+    // so a view that still references one can paint it safely until it rebuilds. releaseRetired() frees them; the
+    // owner calls it on the message thread once no view references them (after the view rebuilt, or with no view).
     bool removeDevice (Device* device);           // also removes every cable on its jacks; RACK I/O stays
     bool moveDevice (Device* device, int position);
     int deviceCount() const { return (int) devices_.size(); }
@@ -90,6 +93,8 @@ public:
     int indexOf (const Device* device) const;
     Device* findDevice (const std::string& rackId) const;
     void clear();
+    void releaseRetired();
+    int retiredCount() const { return (int) retired_.size(); }
 
     // Cables. setCables replaces the whole patch (stack order is visual only; age decides feedback).
     void setCables (const std::vector<CableSpec>& cables);
@@ -137,6 +142,7 @@ private:
     void addCableLocked (const std::string& a, const std::string& b, bool autoRouted);
 
     std::vector<std::unique_ptr<Device>> devices_;
+    std::vector<std::unique_ptr<Device>> retired_;     // out of the rack, not yet freed (see removeDevice)
     std::vector<CableSpec> cables_;
     std::vector<CableInfo> info_;
     std::vector<BushidoDevice*> bushidos_;

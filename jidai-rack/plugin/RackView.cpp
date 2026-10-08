@@ -947,6 +947,7 @@ void RackView::rebuild()
     repaint();
     if (onLayoutChanged)
         onLayoutChanged();
+    proc.releaseRetiredDevices();     // the old views are gone: devices the rack dropped can be freed now
 }
 
 void RackView::rebuildLater()

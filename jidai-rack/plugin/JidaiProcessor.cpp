@@ -275,6 +275,7 @@ JidaiProcessor::JidaiProcessor()
 
 JidaiProcessor::~JidaiProcessor()
 {
+    cancelPendingUpdate();
     latencyTimer_.stopTimer();
 }
 
@@ -291,28 +292,128 @@ const juce::String JidaiProcessor::getProgramName (int index)
 
 void JidaiProcessor::setCurrentProgram (int index)
 {
-    const auto& racks = starterRacks();
-    if (index < 0 || index >= (int) racks.size())
+    if (index < 0 || index >= (int) starterRacks().size())
         return;
+    if (onMessageThread())
+    {
+        discardPendingState();      // this request is newer than anything staged
+        currentProgram_.store (index);
+        restoreProgram (index);
+        rackReplaced();
+        updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withProgramChanged (true));
+        return;
+    }
+    // Any other thread (the VST3 program parameter can arrive on the audio thread): stage it, lock-free.
+    const std::uint32_t seq = ++requestSeq_;
+    pendingProgram_.store (((std::uint64_t) seq << 32) | (std::uint64_t) (index + 1));
+    currentProgram_.store (index);
+    triggerAsyncUpdate();
+}
+
+void JidaiProcessor::restoreProgram (int index)
+{
+    const juce::ScopedLock sl (stateLock_);
     const int scale = scalePercent;          // the window size is the user's, not the rack's
-    restoreFromXml (*racks[(size_t) index].state);
+    restoreFromXml (*starterRacks()[(size_t) index].state);
     scalePercent = scale;
-    currentProgram_ = index;
-    sendChangeMessage();
-    updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withProgramChanged (true));
+}
+
+bool JidaiProcessor::onMessageThread()
+{
+    // No message manager (command-line tests): the caller's thread is the only one.
+    auto* mm = juce::MessageManager::getInstanceWithoutCreating();
+    return mm == nullptr || mm->isThisTheMessageThread();
+}
+
+void JidaiProcessor::discardPendingState()
+{
+    pendingProgram_.store (0);
+    std::unique_ptr<juce::XmlElement> dropped;
+    {
+        const std::lock_guard<std::mutex> g (pendingLock_);
+        dropped = std::move (pendingXml_);
+        pendingXmlSeq_ = 0;
+    }
+}
+
+bool JidaiProcessor::hasPendingState() const
+{
+    if (pendingProgram_.load() != 0)
+        return true;
+    const std::lock_guard<std::mutex> g (pendingLock_);
+    return pendingXml_ != nullptr;
+}
+
+bool JidaiProcessor::applyPendingState()
+{
+    jassert (onMessageThread());
+    bool programChanged = false;
+    {
+        // Taking the request and restoring it is one step for getStateInformation on another thread: it sees either
+        // the request still staged or the rack it made, never the old rack in between.
+        const juce::ScopedLock sl (stateLock_);
+        const std::uint64_t program = pendingProgram_.exchange (0);
+        std::unique_ptr<juce::XmlElement> xml;
+        std::uint32_t xmlSeq = 0;
+        {
+            const std::lock_guard<std::mutex> g (pendingLock_);
+            xml = std::move (pendingXml_);
+            xmlSeq = pendingXmlSeq_;
+            pendingXmlSeq_ = 0;
+        }
+        // Both replace the whole rack: only the newer one is applied. getCurrentProgram already reports it.
+        if (program != 0 && (xml == nullptr || (std::uint32_t) (program >> 32) > xmlSeq))
+        {
+            restoreProgram ((int) (program & 0xffffffffu) - 1);
+            programChanged = true;
+        }
+        else if (xml != nullptr)
+            restoreFromXml (*xml);
+        else
+            return false;
+    }
+    rackReplaced();
+    if (programChanged)
+        updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withProgramChanged (true));
+    return true;
+}
+
+std::unique_ptr<juce::XmlElement> JidaiProcessor::pendingStateXml() const
+{
+    const std::uint64_t program = pendingProgram_.load();
+    const std::lock_guard<std::mutex> g (pendingLock_);
+    if (program != 0 && (pendingXml_ == nullptr || (std::uint32_t) (program >> 32) > pendingXmlSeq_))
+    {
+        auto xml = std::make_unique<juce::XmlElement> (*starterRacks()[(size_t) (program & 0xffffffffu) - 1].state);
+        xml->setAttribute ("scale", scalePercent);       // as restoreProgram keeps the window size
+        return xml;
+    }
+    return pendingXml_ != nullptr ? std::make_unique<juce::XmlElement> (*pendingXml_) : nullptr;
+}
+
+void JidaiProcessor::rackReplaced()
+{
+    jassert (onMessageThread());
+    if (juce::MessageManager::getInstanceWithoutCreating() != nullptr)
+        sendSynchronousChangeMessage(); // the editor rebuilds its device views now, before anything repaints
+    rack_.releaseRetired();             // nothing references the dropped devices any more
 }
 
 void JidaiProcessor::resetToDefaultRack()
 {
-    rack_.clear();
-    loaded_.clear();
-    rack_.addDevice (DeviceKind::RackIO);
-    refreshLatency();
-    sendChangeMessage();
+    {
+        const juce::ScopedLock sl (stateLock_);
+        rack_.clear();
+        loaded_.clear();
+        rack_.addDevice (DeviceKind::RackIO);
+        refreshLatency();
+    }
+    rackReplaced();
 }
 
 void JidaiProcessor::refreshLatency()
 {
+    const juce::ScopedLock sl (stateLock_);
     rack_.updateLatency();
     if (rack_.latency() != getLatencySamples())
         setLatencySamples (rack_.latency());
@@ -322,6 +423,7 @@ void JidaiProcessor::refreshLatency()
 
 Device* JidaiProcessor::addDevice (DeviceKind kind, int position, bool route, bool asEffect)
 {
+    const juce::ScopedLock sl (stateLock_);
     Device* d = rack_.addDevice (kind, position);
     if (d == nullptr)
         return nullptr;
@@ -342,6 +444,7 @@ Device* JidaiProcessor::addDevice (DeviceKind kind, int position, bool route, bo
 
 void JidaiProcessor::removeDevice (Device* device)
 {
+    const juce::ScopedLock sl (stateLock_);
     loaded_.erase (device);
     rack_.removeDevice (device);
     refreshLatency();
@@ -349,17 +452,26 @@ void JidaiProcessor::removeDevice (Device* device)
 
 void JidaiProcessor::moveDevice (Device* device, int position)
 {
+    const juce::ScopedLock sl (stateLock_);
     rack_.moveDevice (device, position);
+}
+
+bool JidaiProcessor::setCableColor (int index, int color)
+{
+    const juce::ScopedLock sl (stateLock_);
+    return rack_.setCableColor (index, color);
 }
 
 void JidaiProcessor::setCables (const std::vector<jidai::CableSpec>& cables)
 {
+    const juce::ScopedLock sl (stateLock_);
     rack_.setCables (cables);
     refreshLatency();
 }
 
 void JidaiProcessor::loadRoninProgram (RoninDevice* ronin, int index)
 {
+    const juce::ScopedLock sl (stateLock_);
     if (rack_.loadRoninProgram (ronin, index))
         loaded_[ronin] = { 0, index };
 }
@@ -385,6 +497,7 @@ BushidoDevice* JidaiProcessor::firstBushido() const
 // Cables on other devices stay. The file lists cables oldest first, and that order is the age order.
 void JidaiProcessor::loadRackPatch (BushidoDevice* bushido, RoninDevice* ronin, int index)
 {
+    const juce::ScopedLock sl (stateLock_);
     if (! juce::isPositiveAndBelow (index, (int) rackPatches_.size()))
         return;
     if (bushido != nullptr && rack_.indexOf (bushido) < 0)
@@ -461,6 +574,7 @@ std::pair<int, int> JidaiProcessor::loadedPattern (const Device* device) const
 // and cables to other devices stay. A bank B index below the rack patches loads that rack patch instead.
 void JidaiProcessor::loadPattern (BushidoDevice* bushido, int bank, int index)
 {
+    const juce::ScopedLock sl (stateLock_);
     if (bushido == nullptr || (bank != 0 && bank != 1))
         return;
     if (bank == 1 && index < (int) rackPatches_.size())
@@ -541,6 +655,7 @@ juce::StringArray JidaiProcessor::roninPresetNames (int bank) const
 
 void JidaiProcessor::loadRoninPreset (RoninDevice* ronin, int bank, int index)
 {
+    const juce::ScopedLock sl (stateLock_);
     if (ronin == nullptr || rack_.indexOf (ronin) < 0 || (bank != 0 && bank != 1))
         return;
     const int front = bank == 0 ? kFactoryPresetCount : (int) rackPatches_.size();
@@ -631,6 +746,7 @@ bool JidaiProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 void JidaiProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     rack_.prepare (sampleRate, samplesPerBlock);
+    preparedBlock_.store (juce::jmax (1, samplesPerBlock));
     refreshLatency();
 }
 
@@ -652,7 +768,6 @@ void JidaiProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
             if (auto ppq = pos->getPpqPosition()) t.ppq = *ppq;
             if (auto smp = pos->getTimeInSamples()) t.samplePosition = *smp;
         }
-    rack_.setTransport (t);
     int events = 0;
     for (const auto meta : midi)
     {
@@ -674,7 +789,35 @@ void JidaiProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     // Host audio, if any, is read sample by sample before that sample of output is written, so in place is fine.
     const float* inL = ins > 0 ? buffer.getReadPointer (0) : nullptr;
     const float* inR = ins > 1 ? buffer.getReadPointer (1) : inL;
-    rack_.process (inL, inR, buffer.getWritePointer (0), buffer.getWritePointer (1), n, midiScratch_.data(), events);
+    float* outL = buffer.getWritePointer (0);
+    float* outR = buffer.getWritePointer (1);
+    // Hosts may send any block size, larger than prepareToPlay's too: the rack sees blocks of at most that size, each
+    // with its own MIDI (offsets from the chunk) and transport (moved on by the samples before it while playing).
+    const int chunkMax = preparedBlock_.load();
+    const double rate = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
+    int firstEvent = 0;
+    for (int start = 0; start < n;)
+    {
+        const int len = juce::jmin (chunkMax, n - start);
+        int count = 0;
+        const bool last = start + len >= n;     // the last chunk also takes any event the host placed past the block
+        while (firstEvent + count < events && (last || midiScratch_[(size_t) (firstEvent + count)].sample < start + len))
+        {
+            midiScratch_[(size_t) (firstEvent + count)].sample = juce::jmax (0, midiScratch_[(size_t) (firstEvent + count)].sample - start);
+            ++count;
+        }
+        jidai::Transport tc = t;
+        if (t.valid && t.playing && start > 0)
+        {
+            tc.ppq += t.bpm / 60.0 * (double) start / rate;
+            tc.samplePosition += start;
+        }
+        rack_.setTransport (tc);
+        rack_.process (inL != nullptr ? inL + start : nullptr, inR != nullptr ? inR + start : nullptr,
+                       outL + start, outR + start, len, midiScratch_.data() + firstEvent, count);
+        firstEvent += count;
+        start += len;
+    }
     for (int ch = 2; ch < outs; ++ch)
         buffer.clear (ch, 0, n);
 }
@@ -705,6 +848,14 @@ juce::String knobId (int k)
 
 void JidaiProcessor::getStateInformation (juce::MemoryBlock& dest)
 {
+    if (onMessageThread())
+        applyPendingState();        // a staged program or state is the current one: apply it, then save the rack
+    const juce::ScopedLock sl (stateLock_);
+    if (auto pending = pendingStateXml())
+    {
+        copyXmlToBinary (*pending, dest);      // staged but not applied yet: that is the plugin's state
+        return;
+    }
     juce::XmlElement xml ("JIDAIRACK");
     xml.setAttribute ("version", kStateVersion);
     xml.setAttribute ("browser", browserOpen ? 1 : 0);
@@ -820,12 +971,25 @@ void JidaiProcessor::setStateInformation (const void* data, int size)
     auto xml = getXmlFromBinary (data, size);
     if (xml == nullptr || ! xml->hasTagName ("JIDAIRACK"))
         return;
-    restoreFromXml (*xml);
-    sendChangeMessage();
+    if (onMessageThread())
+    {
+        discardPendingState();      // this state is newer than anything staged
+        restoreFromXml (*xml);
+        rackReplaced();
+        return;
+    }
+    // Another thread: stage it; the message thread applies it (AsyncUpdater), newest request wins.
+    {
+        const std::lock_guard<std::mutex> g (pendingLock_);
+        pendingXml_ = std::move (xml);
+        pendingXmlSeq_ = ++requestSeq_;
+    }
+    triggerAsyncUpdate();
 }
 
 void JidaiProcessor::restoreFromXml (const juce::XmlElement& xml)
 {
+    const juce::ScopedLock sl (stateLock_);
     const int version = xml.getIntAttribute ("version", 1);
     if (version > kStateVersion)
     {

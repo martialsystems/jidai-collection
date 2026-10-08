@@ -354,21 +354,18 @@ bool Rack::removeDevice (Device* device)
 {
     if (device != nullptr && device == rackIO_)
         return false;
-    std::unique_ptr<Device> removed;
-    {
-        std::lock_guard<std::mutex> g (lock_);
-        const int index = indexOf (device);
-        if (index < 0)
-            return false;
-        const std::string prefix = device->rackId() + "/";
-        cables_.erase (std::remove_if (cables_.begin(), cables_.end(), [&prefix] (const CableSpec& c)
-                                       { return c.a.rfind (prefix, 0) == 0 || c.b.rfind (prefix, 0) == 0; }),
-                       cables_.end());
-        removed = std::move (devices_[(size_t) index]);
-        devices_.erase (devices_.begin() + index);
-        rebuild();
-    }
-    return true;    // `removed` is freed here, after the audio thread has the routing without it
+    std::lock_guard<std::mutex> g (lock_);
+    const int index = indexOf (device);
+    if (index < 0)
+        return false;
+    const std::string prefix = device->rackId() + "/";
+    cables_.erase (std::remove_if (cables_.begin(), cables_.end(), [&prefix] (const CableSpec& c)
+                                   { return c.a.rfind (prefix, 0) == 0 || c.b.rfind (prefix, 0) == 0; }),
+                   cables_.end());
+    retired_.push_back (std::move (devices_[(size_t) index]));
+    devices_.erase (devices_.begin() + index);
+    rebuild();      // the audio thread gets the routing without it; the device itself waits in retired_
+    return true;
 }
 
 bool Rack::moveDevice (Device* device, int position)
@@ -389,13 +386,22 @@ bool Rack::moveDevice (Device* device, int position)
 
 void Rack::clear()
 {
-    std::vector<std::unique_ptr<Device>> removed;
+    std::lock_guard<std::mutex> g (lock_);
+    for (auto& d : devices_)
+        retired_.push_back (std::move (d));
+    devices_.clear();
+    rackIO_ = nullptr;
+    cables_.clear();
+    rebuild();      // the devices wait in retired_ until releaseRetired()
+}
+
+void Rack::releaseRetired()
+{
+    // Retired devices are in neither devices_ nor the audio graph (rebuild() swapped them out): freed outside the lock.
+    std::vector<std::unique_ptr<Device>> gone;
     {
         std::lock_guard<std::mutex> g (lock_);
-        removed.swap (devices_);
-        rackIO_ = nullptr;
-        cables_.clear();
-        rebuild();
+        gone.swap (retired_);
     }
 }
 

@@ -11,10 +11,21 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include <atomic>
+#include <cstdint>
 #include <map>
+#include <memory>
+#include <mutex>
 
+// Threads. The rack's devices and cables change on the message thread only, and the editor is told synchronously, so a
+// view never paints a device the rack has dropped (Rack retires devices; they are freed after the view rebuilt).
+// A host may call setCurrentProgram / setStateInformation on any thread (the VST3 program parameter, background state
+// loads): off the message thread the request is staged (newest wins) and applied on the message thread by an
+// AsyncUpdater. getCurrentProgram reports a staged program at once; getStateInformation returns the staged state until
+// it is applied (on the message thread it applies it first). The audio thread only try-locks the rack's graph.
 class JidaiProcessor : public juce::AudioProcessor,
-                       public juce::ChangeBroadcaster
+                       public juce::ChangeBroadcaster,
+                       private juce::AsyncUpdater
 {
 public:
     JidaiProcessor();
@@ -35,7 +46,7 @@ public:
     double getTailLengthSeconds() const override { return 0.0; }
     // Programs are the starter racks (StarterRacks.h), INIT first. Choosing one replaces the whole rack.
     int getNumPrograms() override;
-    int getCurrentProgram() override { return currentProgram_; }
+    int getCurrentProgram() override { return currentProgram_.load(); }
     void setCurrentProgram (int index) override;
     const juce::String getProgramName (int index) override;
     void changeProgramName (int, const juce::String&) override {}
@@ -50,11 +61,18 @@ public:
     void removeDevice (jidai::Device* device);
     void moveDevice (jidai::Device* device, int position);
     void setCables (const std::vector<jidai::CableSpec>& cables);
+    bool setCableColor (int index, int color);
     void loadRoninProgram (jidai::RoninDevice* ronin, int index);   // factory program on this RONIN only; the screen shows it on bank A
     void resetToDefaultRack();       // RACK I/O only: the INIT starter rack
     // Message thread: picks up device latency changes (ORIGAMI 2x) and reports the rack's latency to the host.
     // Called after every edit made through the processor and by a 10 Hz timer.
     void refreshLatency();
+    // Message thread: frees the devices the rack dropped. RackView::rebuild calls it once its old components are gone.
+    void releaseRetiredDevices() { rack_.releaseRetired(); }
+    // Message thread: applies a program or state the host staged off the message thread (the AsyncUpdater does this;
+    // tests and getStateInformation call it directly). True when something was applied.
+    bool applyPendingState();
+    bool hasPendingState() const;
 
     // Window state, saved with the rack (state v3).
     enum CableMode { CablesAll = 0, CablesHidePassThru, CablesSelected, CablesHide };
@@ -93,6 +111,15 @@ public:
 #endif
 
 private:
+    void handleAsyncUpdate() override { applyPendingState(); }
+    static bool onMessageThread();
+    void discardPendingState();
+    std::unique_ptr<juce::XmlElement> pendingStateXml() const;     // a copy of the staged state, or null
+    void restoreProgram (int index);                               // message thread, keeps the window size
+    // Message thread, after the rack was replaced: the editor rebuilds now (synchronous change message), then the
+    // dropped devices are freed.
+    void rackReplaced();
+
     struct RackPatch
     {
         juce::String name;
@@ -126,7 +153,17 @@ private:
     jidai::BushidoDevice* firstBushido() const;
 
     jidai::Rack rack_;
-    int currentProgram_ = 0;
+    std::atomic<int> currentProgram_ { 0 };
+    // Held by every change to the rack's devices and cables (message thread) and by getStateInformation, so a state
+    // saved on another thread is never half a rack. Recursive.
+    juce::CriticalSection stateLock_;
+    // A request staged off the message thread. Program: (sequence << 32) | (index + 1), 0 = none (one atomic, so the
+    // audio thread can stage it without a lock). State: the parsed XML and its sequence, under pendingLock_.
+    std::atomic<std::uint32_t> requestSeq_ { 0 };
+    std::atomic<std::uint64_t> pendingProgram_ { 0 };
+    mutable std::mutex pendingLock_;
+    std::unique_ptr<juce::XmlElement> pendingXml_;
+    std::uint32_t pendingXmlSeq_ = 0;
     std::vector<Pattern> banks_[2];
     std::vector<RoninStored> roninUser_[2];
     std::vector<RackPatch> rackPatches_;
@@ -134,6 +171,7 @@ private:
     int factoryCount_ = 0;
     std::map<const jidai::Device*, std::pair<int, int>> loaded_;
     std::vector<jidai::MidiNote> midiScratch_;
+    std::atomic<int> preparedBlock_ { 512 };     // prepareToPlay's block size: processBlock feeds the rack at most this much at once
     struct LatencyTimer : juce::Timer { JidaiProcessor& p; explicit LatencyTimer (JidaiProcessor& o) : p (o) {} void timerCallback() override { p.refreshLatency(); } };
     LatencyTimer latencyTimer_ { *this };
 

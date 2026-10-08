@@ -457,7 +457,7 @@ int RackCableLayer::disconnectAll (const std::string& jack)
 
 void RackCableLayer::setColour (int index, int colour)
 {
-    if (proc.rack().setCableColor (index, colour))
+    if (proc.setCableColor (index, colour))
         refresh();
 }
 
