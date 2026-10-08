@@ -463,7 +463,7 @@ int main (int argc, char** argv)
     }
 
     // SHOGUN: from its browser card (auto-routed MIX -> MAIN OUT), the MAIN face open (5.8 U), CLOSED (1 U), and its
-    // 151 jacks (the ports SHOGUN's own ROUTE bay offers) on a 4 U rear bay, every jack placed, none overlapping.
+    // 151 jacks (SHOGUN's port table, = its ROUTE bay) on a 4 U rear bay, every jack placed, none overlapping.
     {
         proc.setCurrentProgram (0);
         pump();

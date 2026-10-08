@@ -24,8 +24,17 @@ namespace jidai::shogunstate {
 constexpr int kVersion = 2;
 constexpr const char* kTag = "SHOGUN";
 
+// Saved bay cables a load could not place (shogun::parsePatch drops them): those with an end on a jack SHOGUN no longer
+// has (shogun::kRemovedPorts: CLOCK:FILL IN, MOD:LANE A) and any other unknown id.
+struct Dropped
+{
+    int cables = 0;         // all dropped cables
+    int removedJacks = 0;   // of those, the ones on a removed jack
+};
+
 std::string patchJson (const ShogunDevice& d);      // sparse: parameters and step fields that differ from INIT
-std::vector<std::pair<std::string, std::string>> loadPatchJson (ShogunDevice& d, const std::string& json, bool* ok = nullptr);
+std::vector<std::pair<std::string, std::string>> loadPatchJson (ShogunDevice& d, const std::string& json, bool* ok = nullptr,
+                                                                Dropped* dropped = nullptr);
 
 // SHOGUN's factory programs (engine/factory.h): 0 = INIT, then the kits, each with its pattern.
 int programCount();
@@ -50,6 +59,9 @@ void copyAB (ShogunDevice& d, int from, int to);
 bool abFilled (const ShogunDevice& d, int slot);
 
 std::unique_ptr<juce::XmlElement> toXml (const ShogunDevice& d);
-bool fromXml (ShogunDevice& d, const juce::XmlElement& x, std::vector<std::pair<std::string, std::string>>* cables = nullptr);
+bool fromXml (ShogunDevice& d, const juce::XmlElement& x, std::vector<std::pair<std::string, std::string>>* cables = nullptr,
+              Dropped* dropped = nullptr);
+// A rack cable end (SHOGUN#N/<id>) on a jack SHOGUN no longer has (shogun::kRemovedPorts).
+bool isRemovedJack (const std::string& rackJackId);
 
 } // namespace jidai::shogunstate

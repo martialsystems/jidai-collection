@@ -159,6 +159,57 @@ void testPluginPatch()
            "plugin patch: the old BASS:HZ/V id lands on BASS:NOTE with the Lin55 law (shogun::resolvePort)");
 }
 
+// SHOGUN removed CLOCK:FILL IN and MOD:LANE A (never read / always 0 V). A saved rack with cables on them, as rack
+// cables or as cables of SHOGUN's own bay inside its plugin patch, loads without them, says so in the migration
+// notice, keeps every other cable, and saves without them.
+void testRemovedJacks()
+{
+    const juce::String json = R"({"format":"shogun-patch","version":2,"params":{},"mod":[],
+        "cables":[["SHOGUN/MOD:LFO 1","SHOGUN/SD:TONE"],["SHOGUN/MOD:LANE A","SHOGUN/BD1:DECAY"],["SHOGUN/BD2:ENV","SHOGUN/NO SUCH:JACK"]],
+        "cvAmt":{},"inLaw":{},"seq":{"pattern":"OLD","seed":7,"tracks":[]}})";
+    juce::XmlElement rack ("JIDAIRACK");
+    rack.setAttribute ("version", 3);
+    auto* io = rack.createNewChildElement ("DEVICE");
+    io->setAttribute ("kind", "RACK I/O");
+    io->setAttribute ("number", 1);
+    auto* d = rack.createNewChildElement ("DEVICE");
+    d->setAttribute ("kind", "SHOGUN");
+    d->setAttribute ("number", 1);
+    auto* sx = d->createNewChildElement ("SHOGUN");
+    sx->setAttribute ("version", 2);
+    sx->addTextElement (json);
+    const char* cables[][2] = { { "SHOGUN#1/MIX:L", "RACK#1/MAIN:OUT L" }, { "RACK#1/TRANSPORT:CLK 1/16", "SHOGUN#1/CLOCK:FILL IN" },
+                                { "SHOGUN#1/MOD:LANE A", "SHOGUN#1/BD2:TONE" }, { "SHOGUN#1/MIX:R", "RACK#1/MAIN:OUT R" } };
+    for (const auto& c : cables)
+    {
+        auto* e = rack.createNewChildElement ("CABLE");
+        e->setAttribute ("a", c[0]);
+        e->setAttribute ("b", c[1]);
+    }
+    JidaiProcessor p;
+    p.prepareToPlay (48000.0, 512);
+    p.testRestore (rack);
+    bool onRemoved = false, mixL = false, mixR = false, lfo = false;
+    for (const auto& c : p.rack().cables())
+    {
+        onRemoved = onRemoved || shogunstate::isRemovedJack (c.a) || shogunstate::isRemovedJack (c.b);
+        mixL = mixL || c.a == "SHOGUN#1/MIX:L";
+        mixR = mixR || c.a == "SHOGUN#1/MIX:R";
+        lfo = lfo || (c.a == "SHOGUN#1/MOD:LFO 1" && c.b == "SHOGUN#1/SD:TONE");
+    }
+    check (! onRemoved, "no cable on CLOCK:FILL IN or MOD:LANE A after the load");
+    check (mixL && mixR && lfo, "every other cable loads (MIX L/R to MAIN OUT, SHOGUN's own LFO 1 -> SD TONE)");
+    const auto& n = p.migrationNotice;
+    check (n.contains ("SHOGUN no longer has the FILL IN and LANE A jacks: 3 cables on them were removed.")
+               && n.contains ("1 saved cable to an unknown jack was removed."),
+           "the migration notice reports the dropped cables: " + n);
+    check (! n.contains ("CLOCK:") && ! n.contains ("MOD:") && ! n.contains ("JCS"), "the notice is in plain words");
+    const auto saved = stateText (p);
+    check (! saved.contains ("FILL IN") && ! saved.contains ("LANE A"), "the rack saves without the removed jacks");
+    check (shogunstate::isRemovedJack ("SHOGUN#2/CLOCK:FILL IN") && ! shogunstate::isRemovedJack ("SHOGUN#1/CLOCK:CLK IN")
+               && ! shogunstate::isRemovedJack ("RONIN#1/MOD:LANE A"), "isRemovedJack: SHOGUN ends only, the two removed ids only");
+}
+
 struct PlayHead : juce::AudioPlayHead
 {
     double bpm = 120.0, sampleRate = 48000.0;
@@ -244,5 +295,6 @@ void runShogunStateTests (int& checks, int& failures)
     gFailures = &failures;
     testRoundTrip();
     testPluginPatch();
+    testRemovedJacks();
     testFactoryKits();
 }

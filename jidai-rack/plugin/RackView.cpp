@@ -589,7 +589,7 @@ float RackView::unitsFor (const Device& d) const
         case DeviceKind::Bushido: return proc.showBack ? 3.0f : (d.closed ? 1.0f : 3.0f);
         case DeviceKind::Ronin: return proc.showBack ? 4.0f : (d.closed ? 1.0f : 4.0f);
         case DeviceKind::Origami: return proc.showBack ? 1.0f : (d.closed ? 1.0f : 3.0f);
-        // SHOGUN's 1200 x 672 MAIN page at the rack's 1600 width (896 + the 30 strip = 5.8 U); 153 jacks on a 4 U back.
+        // SHOGUN's 1200 x 672 MAIN page at the rack's 1600 width (896 + the 30 strip = 5.8 U); 151 jacks on a 4 U back.
         case DeviceKind::Shogun: return proc.showBack ? 4.0f : (d.closed ? 1.0f : 5.8f);
     }
     return 1.0f;

@@ -38,18 +38,18 @@ FetchContent_Declare(ronin
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_Declare(shogun
   GIT_REPOSITORY https://github.com/martialsystems/shogun.git
-  # Shogun branch redesign/shogun: spec v2.2 engine (engine/shogun.h, per-sample processSample for the rack, 153 jacks
+  # Shogun branch redesign/shogun: spec v2.2 engine (engine/shogun.h, per-sample processSample for the rack, 151 jacks
   # with JCS roles, 0/23/26 latency at 1x/2x/4x), jidai-common 1.1.1 vendored, 0 warnings under `make strict`.
   # 3c7acfd: factory bank (INIT + 21 kits with patterns, engine/factory.h) and the shared patch format engine/patch.h,
   # which the rack uses to read and write SHOGUN device state (the same JSON as the SHOGUN plugin) and to load kits.
   # fedcdbf: no dead panel keys (KIT/PATTERN arrows and search, A/B, undo/redo, SRC; FILL, scenes, mute groups, lanes
-  # removed); its ROUTE bay offers 151 of the 153 ports (not CLOCK:FILL IN or MOD:LANE A, which the engine neither reads
-  # nor drives), and the rack offers the same 151 jacks, read from the same panel table.
+  # removed). d04147b: jidai-common 1.1.2 vendored, manual; CLOCK:FILL IN and MOD:LANE A removed from engine/ports.h
+  # (151 ports = its ROUTE bay = the rack's jacks); saved cables on them are dropped and reported (shogun::kRemovedPorts).
   # The rack compiles only engine/shogun.cpp, against
   # its own jidai-common (single include path; SHOGUN's vendored copy is not used) and reads plugin/Source/PanelLayout.inc
   # for the MAIN face. SHOGUN's alias shim (shogun::resolvePort) stays SHOGUN-local.
   # Pushed to origin on that branch. If it lands by squash or rebase, re-pin to the merged commit.
-  GIT_TAG fedcdbf7bf81221f101b693b4020bfb6c140226e
+  GIT_TAG d04147bce96b6c98d1efbd9d66ab3bf6e59931f4
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_MakeAvailable(JUCE bushido ronin shogun)
 set(SHOGUN_DIR ${shogun_SOURCE_DIR})
@@ -153,9 +153,8 @@ set(JIDAI_UI_SOURCES
   ${BUSHIDO_DIR}/ui/CableLayer.cpp
   ${BUSHIDO_DIR}/ui/PatternScreen.cpp)
 
-# SHOGUN's generated panel table (PanelLayout.inc): the rack's SHOGUN face draws its MAIN page, and the SHOGUN device
-# offers the jacks of its ROUTE bay.
-set_source_files_properties(plugin/ShogunFace.cpp core/ShogunDevice.cpp PROPERTIES INCLUDE_DIRECTORIES ${SHOGUN_DIR}/plugin/Source)
+# SHOGUN's generated panel table (PanelLayout.inc), for the rack's SHOGUN face only.
+set_source_files_properties(plugin/ShogunFace.cpp PROPERTIES INCLUDE_DIRECTORIES ${SHOGUN_DIR}/plugin/Source)
 
 # ---- the plugin: VST3 effect and a Standalone that opens the default audio devices ----
 juce_add_plugin(JidaiRack

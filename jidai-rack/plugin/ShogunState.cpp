@@ -28,7 +28,7 @@ std::string patchJson (const ShogunDevice& d)
     return shogun::patchToJson (pt, false);
 }
 
-std::vector<std::pair<std::string, std::string>> loadPatchJson (ShogunDevice& d, const std::string& json, bool* ok)
+std::vector<std::pair<std::string, std::string>> loadPatchJson (ShogunDevice& d, const std::string& json, bool* ok, Dropped* dropped)
 {
     std::vector<std::pair<std::string, std::string>> cables;
     shogun::Patch pt;
@@ -37,6 +37,11 @@ std::vector<std::pair<std::string, std::string>> loadPatchJson (ShogunDevice& d,
         *ok = parsed;
     if (! parsed)
         return cables;
+    if (dropped != nullptr)
+    {
+        dropped->cables += pt.droppedCables;
+        dropped->removedJacks += pt.droppedRemoved;
+    }
     for (int i = 0; i < shogun::kParamCount; ++i)
         d.setParam (i, pt.u[i]);
     ShogunDevice::Edits e;
@@ -208,12 +213,19 @@ std::unique_ptr<juce::XmlElement> toXml (const ShogunDevice& d)
     return x;
 }
 
-bool fromXml (ShogunDevice& d, const juce::XmlElement& x, std::vector<std::pair<std::string, std::string>>* cables)
+bool isRemovedJack (const std::string& rackJackId)
+{
+    const auto slash = rackJackId.find ('/');
+    return slash != std::string::npos && rackJackId.rfind ("SHOGUN#", 0) == 0
+           && shogun::isRemovedPort (rackJackId.substr (slash + 1).c_str());
+}
+
+bool fromXml (ShogunDevice& d, const juce::XmlElement& x, std::vector<std::pair<std::string, std::string>>* cables, Dropped* dropped)
 {
     if (! x.hasTagName (kTag) || x.getIntAttribute ("version", 1) < 2)
         return false;    // v1 plugin states (old parameter ids) are not migrated, as in the SHOGUN plugin
     bool ok = false;
-    auto c = loadPatchJson (d, x.getAllSubText().toStdString(), &ok);
+    auto c = loadPatchJson (d, x.getAllSubText().toStdString(), &ok, dropped);
     if (! ok)
         return false;
     if (cables != nullptr)

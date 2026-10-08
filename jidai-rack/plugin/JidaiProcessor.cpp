@@ -851,6 +851,7 @@ void JidaiProcessor::restoreFromXml (const juce::XmlElement& xml)
         rack_.addDevice (DeviceKind::RackIO);
     std::vector<RoninDevice*> roninFormat1;     // RONINs saved before RONIN's redesign: migrated once cables are set
     std::vector<std::pair<ShogunDevice*, std::vector<std::pair<std::string, std::string>>>> shogunBay;   // in device order
+    jidai::shogunstate::Dropped shogunDropped;     // saved cables on jacks SHOGUN no longer has (or unknown ids)
     for (auto* e : xml.getChildWithTagNameIterator ("DEVICE"))
     {
         DeviceKind kind = DeviceKind::Bushido;
@@ -936,7 +937,7 @@ void JidaiProcessor::restoreFromXml (const juce::XmlElement& xml)
             {
                 // A SHOGUN plugin patch may carry cables of SHOGUN's own bay: they become rack cables on this device.
                 std::vector<std::pair<std::string, std::string>> bay;
-                if (jidai::shogunstate::fromXml (*sg, *se, &bay) && ! bay.empty())
+                if (jidai::shogunstate::fromXml (*sg, *se, &bay, &shogunDropped) && ! bay.empty())
                     shogunBay.push_back ({ sg, std::move (bay) });
             }
     }
@@ -946,6 +947,13 @@ void JidaiProcessor::restoreFromXml (const juce::XmlElement& xml)
     for (auto* e : xml.getChildWithTagNameIterator ("CABLE"))
     {
         jidai::CableSpec c { e->getStringAttribute ("a").toStdString(), e->getStringAttribute ("b").toStdString() };
+        if (jidai::shogunstate::isRemovedJack (c.a) || jidai::shogunstate::isRemovedJack (c.b))
+        {
+            // SHOGUN's CLOCK:FILL IN and MOD:LANE A are gone (never read / always 0 V): the cable is dropped and reported.
+            ++shogunDropped.cables;
+            ++shogunDropped.removedJacks;
+            continue;
+        }
         c.age = e->getIntAttribute ("age", (int) cables.size());
         if (version >= 3)
         {
@@ -990,6 +998,18 @@ void JidaiProcessor::restoreFromXml (const juce::XmlElement& xml)
         rack_.addDevice (DeviceKind::RackIO);
     if (roninNotes.isNotEmpty())
         migrationNotice = (migrationNotice.isEmpty() ? juce::String ("RONIN updated:") : migrationNotice + " RONIN:") + roninNotes;
+    if (shogunDropped.cables > 0)
+    {
+        juce::String note;
+        const int removed = shogunDropped.removedJacks, other = shogunDropped.cables - shogunDropped.removedJacks;
+        if (removed > 0)
+            note << "SHOGUN no longer has the FILL IN and LANE A jacks: " << removed << (removed == 1 ? " cable on them was" : " cables on them were")
+                 << " removed.";
+        if (other > 0)
+            note << (note.isEmpty() ? "SHOGUN: " : " ") << other << (other == 1 ? " saved cable" : " saved cables")
+                 << " to an unknown jack " << (other == 1 ? "was" : "were") << " removed.";
+        migrationNotice = migrationNotice.isEmpty() ? note : migrationNotice + " " + note;
+    }
     refreshLatency();
 }
 

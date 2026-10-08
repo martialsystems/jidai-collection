@@ -59,25 +59,22 @@ void testJacks()
     Rack rack;
     auto* s = addShogun (rack, 2);
     check (s != nullptr && s->rackId() == "SHOGUN#1" && s->kind() == DeviceKind::Shogun, "add SHOGUN: SHOGUN#1");
-    // The rack offers exactly the ports SHOGUN's own ROUTE bay offers: engine/ports.h without CLOCK:FILL IN and
-    // MOD:LANE A (in the table, but the engine neither reads FILL IN nor drives LANE A).
+    // The rack's jacks are SHOGUN's port table (engine/ports.h), which is SHOGUN's own ROUTE bay: 151 ports, one jack
+    // each, jack index = port index. CLOCK:FILL IN and MOD:LANE A were removed from SHOGUN (kRemovedPorts).
     const int n = (int) s->jacks().size();
-    check (n == 151 && n == ShogunDevice::offeredJackCount() && shogun::kPorts == 153,
-           "SHOGUN: 151 jacks = the 153 ports of engine/ports.h that SHOGUN's ROUTE bay offers (" + std::to_string (n) + ")");
-    check (s->findJack ("CLOCK:FILL IN") < 0 && s->findJack ("MOD:LANE A") < 0 && ! ShogunDevice::offered (shogun::PORT_FILL_IN)
-               && ! ShogunDevice::offered (shogun::PORT_LANE_A),
-           "CLOCK:FILL IN and MOD:LANE A are not offered (SHOGUN's bay has no jack for them)");
+    check (n == 151 && n == shogun::kPorts, "SHOGUN: 151 jacks = the 151 ports of engine/ports.h (" + std::to_string (n) + ")");
+    bool removedGone = true;
+    for (const char* id : shogun::kRemovedPorts)
+        removedGone = removedGone && s->findJack (id) < 0 && shogun::findPort (id) < 0 && shogun::isRemovedPort (id);
+    check (removedGone, "CLOCK:FILL IN and MOD:LANE A are neither SHOGUN ports nor rack jacks");
     int idOk = 0, typeOk = 0, roleOk = 0, front = 0, mapped = 0;
     std::string badRoles;
     for (int j = 0; j < n; ++j)
     {
-        const int port = s->enginePort (j);
-        if (port < 0)
-            continue;
         ++mapped;
-        const auto& p = shogun::kPortTable[port];
+        const auto& p = shogun::kPortTable[j];
         const auto& jack = s->jacks()[(size_t) j];
-        idOk += jack.id == p.id && s->findJack (p.id) == j && s->jackOfPort (port) == j ? 1 : 0;
+        idOk += jack.id == p.id && s->findJack (p.id) == j ? 1 : 0;
         const PortType want = p.type == shogun::PortType::Audio ? PortType::Audio : (p.type == shogun::PortType::Gate ? PortType::Gate : PortType::CV);
         typeOk += jack.desc.type == want && (jack.desc.dir == PortDir::Out) == (p.dir == shogun::PortDir::Out) ? 1 : 0;
         // Role match: the rack's role (cable colour and glyph) is the role SHOGUN declares for the port.
@@ -93,9 +90,9 @@ void testJacks()
     check (front == 151, "every SHOGUN jack is on its rear bay");
     Device* found = nullptr;
     int jack = -1;
-    check (rack.resolve ("SHOGUN#1/BD1:TRIG", found, jack) && found == s && s->enginePort (jack) == shogun::drumPort (shogun::BD1, shogun::DJ_TRIG),
+    check (rack.resolve ("SHOGUN#1/BD1:TRIG", found, jack) && found == s && jack == shogun::drumPort (shogun::BD1, shogun::DJ_TRIG),
            "SHOGUN#1/BD1:TRIG resolves (JCS R6)");
-    check (rack.resolve ("SHOGUN#1/MIX:R", found, jack) && s->enginePort (jack) == shogun::PORT_MIX_R, "SHOGUN#1/MIX:R resolves");
+    check (rack.resolve ("SHOGUN#1/MIX:R", found, jack) && jack == shogun::PORT_MIX_R, "SHOGUN#1/MIX:R resolves");
     check (! rack.resolve ("SHOGUN#1/CLOCK:FILL IN", found, jack) && rack.connect ("SHOGUN#1/MOD:LANE A", "RACK#1/MAIN:OUT L") != Rack::Check::Ok,
            "SHOGUN#1/CLOCK:FILL IN does not resolve and MOD:LANE A cannot be patched");
     check (s->units().size() == 2 && s->units()[0]->plainVoltGates() && s->units()[1]->plainVoltGates(),

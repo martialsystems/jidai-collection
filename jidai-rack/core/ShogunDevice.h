@@ -6,13 +6,12 @@
 // one unit of the rack graph, run one sample at a time through Engine::processSample, its per-sample contract for
 // the rack (SHOGUN spec v2.2 §13.4).
 //
-// Jacks: the 151 ports of SHOGUN's jack table (engine/ports.h) that SHOGUN's own ROUTE bay offers (the "jack:" ops of
-// plugin/Source/PanelLayout.inc; CLOCK:FILL IN and MOD:LANE A are in the table but the engine neither reads nor drives
-// them, so neither SHOGUN nor the rack offers them). Ids SHOGUN#N/SECTION:LABEL (JCS R6), types and R14 roles from the
+// Jacks: the 151 ports of SHOGUN's jack table (engine/ports.h), which is exactly SHOGUN's own ROUTE bay; jack index =
+// port index. Ids SHOGUN#N/SECTION:LABEL (JCS R6), types and R14 roles from the
 // table: per drum voice TRIG VEL PITCH DECAY TONE RET OUT ENV, per synth GATE VEL NOTE V/OCT CUTOFF RET OUT NOTE OUT,
 // then MOD (LD/BS GATE, LFO 1-4, RND), CLOCK (CLK/RST/RUN IN, CLK/RST/RUN/ACC OUT), MIX L/R and the WAVE / FOLD VC
-// inputs of the five WAVE voices. Gates are plain 0/5 V (SHOGUN kPlainVoltGates). Jack indices are not port indices:
-// use enginePort() / jackOfPort().
+// inputs of the five WAVE voices. Gates are plain 0/5 V (SHOGUN kPlainVoltGates). CLOCK:FILL IN and MOD:LANE A are
+// no longer SHOGUN ports (shogun::kRemovedPorts): a saved rack cable on one of them is dropped at load and reported.
 //
 // Latency (JCS R11): the engine's oversampled domain (GLOBAL:OS 1x/2x/4x) delays every AUDIO output by 0/23/26
 // samples; CV and gate outputs are at zero latency. The device reports the latency of its audio outputs and the rack
@@ -40,9 +39,7 @@ namespace jidai {
 
 class ShogunDevice : public Device {
 public:
-    static constexpr int kPortCount = shogun::kPorts;    // 153 engine ports
-    static int offeredJackCount();                       // 151: the ports SHOGUN's ROUTE bay offers
-    static bool offered (int port);
+    static constexpr int kPortCount = shogun::kPorts;    // 151 ports = 151 jacks
 
     ShogunDevice();
     ~ShogunDevice() override;
@@ -59,8 +56,6 @@ public:
     std::vector<OrderEdge> orderEdges() const override;
     std::vector<JackGroup> jackGroups() const override;
     jidai::jcs::Role jackRole (int jack) const override;
-    int enginePort (int jack) const;     // the SHOGUN port behind a jack (-1 if none)
-    int jackOfPort (int port) const;     // the jack of a SHOGUN port (-1 if not offered)
 
     // Parameters, u in [0,1] by SHOGUN id (engine/params_table.h). Any thread; applied at the next block (smoothed).
     double param (int id) const;
@@ -126,8 +121,6 @@ public:
 private:
     int program_ = 0;
     History history_;
-    std::vector<int> portOfJack_;
-    std::array<int, shogun::kPorts> jackOfPort_ {};
     class EngineUnit;
     class RetUnit;
     shogun::Engine engine_;
