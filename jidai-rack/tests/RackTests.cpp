@@ -421,6 +421,7 @@ void testOrigamiDevice()
 }
 
 void runJcsRackTests (int& checks, int& failures);
+void runShogunRackTests (int& checks, int& failures);
 
 int main()
 {
@@ -434,6 +435,7 @@ int main()
     testBypass();
     testOrigamiDevice();
     runJcsRackTests (checks, failures);
+    runShogunRackTests (checks, failures);
     std::printf ("%d checks, %d failed\n", checks, failures);
     std::printf (failures == 0 ? "RACK TESTS PASS\n" : "RACK TESTS FAIL\n");
     return failures == 0 ? 0 : 1;

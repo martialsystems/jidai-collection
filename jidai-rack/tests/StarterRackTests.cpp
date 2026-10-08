@@ -9,6 +9,7 @@
 
 #include "plugin/JidaiProcessor.h"
 #include "plugin/StarterRacks.h"
+#include "plugin/ShogunState.h"
 #include "origami/plugin/OrigamiState.h"
 
 #include "UI/PatchBayLogic.h"
@@ -81,6 +82,10 @@ std::map<std::string, std::string> paramsOf (const juce::XmlElement& device)
     if (auto* o = device.getChildByName ("ORIGAMI"))
         for (auto* e : o->getChildWithTagNameIterator ("PARAM"))
             out["origami:" + e->getStringAttribute ("id").toStdString()] = e->getStringAttribute ("value").toStdString();
+    if (auto* s = device.getChildByName ("SHOGUN"))
+        if (auto* params = juce::JSON::parse (s->getAllSubText())["params"].getDynamicObject())
+            for (const auto& kv : params->getProperties())
+                out["shogun:" + kv.name.toString().toStdString()] = kv.value.toString().toStdString();
     return out;
 }
 
@@ -125,6 +130,41 @@ void checkParams (JidaiProcessor& p, const juce::XmlElement& device, const juce:
                 ++n;
                 if (std::abs (o->param (i) - values[i]) > 1.0e-9) { ++bad; if (first.isEmpty()) first = origami::paramInfo (i).id; }
             }
+        }
+    if (auto* sg = dynamic_cast<ShogunDevice*> (d))
+        if (auto* se = device.getChildByName ("SHOGUN"))
+        {
+            const auto patch = juce::JSON::parse (se->getAllSubText());
+            if (auto* params = patch["params"].getDynamicObject())
+                for (const auto& kv : params->getProperties())
+                {
+                    ++n;
+                    const int at = sg->paramIndex (kv.name.toString().toStdString());
+                    if (at < 0 || std::abs (sg->param (at) - (double) kv.value) > 1.0e-6) { ++bad; if (first.isEmpty()) first = kv.name.toString(); }
+                }
+            const auto e = sg->edits();
+            if (auto* tracks = patch["seq"]["tracks"].getArray())
+                for (const auto& t : *tracks)
+                {
+                    int v = -1;
+                    for (int k = 0; k < shogun::kVoices; ++k)
+                        if (t["id"].toString() == shogun::kVoiceNames[k]) v = k;
+                    ++n;
+                    if (v < 0 || e.pattern.tracks[v].len != (int) t["len"]) { ++bad; if (first.isEmpty()) first = t["id"].toString() + " LEN"; continue; }
+                    int on = 0;
+                    for (const auto& st : e.pattern.tracks[v].steps) on += st.on ? 1 : 0;
+                    if (auto* steps = t["steps"].getArray())
+                    {
+                        if (on != steps->size()) { ++bad; if (first.isEmpty()) first = t["id"].toString() + " steps"; }
+                        for (const auto& st : *steps)
+                        {
+                            ++n;
+                            const auto& got = e.pattern.tracks[v].steps[(int) st["i"]];
+                            const bool same = got.on && got.acc == (int) st["acc"] && (! st.hasProperty ("note") || got.note == (int) st["note"]);
+                            if (! same) { ++bad; if (first.isEmpty()) first = t["id"].toString() + " step " + st["i"].toString(); }
+                        }
+                    }
+                }
         }
     if (auto* io = dynamic_cast<RackIODevice*> (d))
     {
@@ -192,7 +232,7 @@ void testStarterRacks()
     const auto parsed = parseStarterRacks (*list, &errors);
     const auto& racks = starterRacks();
     check (errors.isEmpty() && parsed.size() == racks.size(), "starter racks: nothing skipped " + errors.joinIntoString ("; "));
-    check (racks.size() >= 7 && racks.size() <= 11, "starter racks: 6..10 racks after INIT, got " + juce::String ((int) racks.size()));
+    check (racks.size() >= 7 && racks.size() <= 13, "starter racks: 6..12 racks after INIT, got " + juce::String ((int) racks.size()));
     check (racks.front().name == "INIT" && racks.front().category == "INIT", "starter racks: INIT first");
     std::set<juce::String> names;
     std::map<juce::String, int> perCategory;

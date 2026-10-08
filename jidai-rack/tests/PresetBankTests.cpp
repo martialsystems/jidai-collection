@@ -479,6 +479,7 @@ void testEditor()
 
 void runRackStateTests (int& checks, int& failures);
 void runStarterRackTests (int& checks, int& failures);
+void runShogunStateTests (int& checks, int& failures);
 
 int main()
 {
@@ -521,6 +522,7 @@ int main()
     testVersion1Screen();
     testEditor();
     runRackStateTests (checks, failures);
+    runShogunStateTests (checks, failures);
     runStarterRackTests (checks, failures);
 
     check (! bushidoExisted || bushidoDir.exists(), "an existing BUSHIDO user folder is still there");

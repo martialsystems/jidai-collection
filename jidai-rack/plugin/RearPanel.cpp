@@ -25,6 +25,7 @@ const char* RearPanel::kindLine (DeviceKind k)
         case DeviceKind::Ronin: return "SEMI-MODULAR VOICE";
         case DeviceKind::Origami: return "TRIPLE WAVE SHAPER FX";
         case DeviceKind::RackIO: return "HOST AUDIO \xc2\xb7 MIDI \xc2\xb7 TRANSPORT";
+        case DeviceKind::Shogun: return "DRUM MACHINE \xc2\xb7 14 DRUMS + 2 SYNTHS";
     }
     return "";
 }

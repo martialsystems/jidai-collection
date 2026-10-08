@@ -8,6 +8,7 @@
 #include "UI/PatchBayLogic.h"
 #include "engine/BushidoState.h"
 #include "origami/plugin/OrigamiState.h"
+#include "ShogunState.h"
 
 #include <algorithm>
 #include <utility>
@@ -330,6 +331,8 @@ Device* JidaiProcessor::addDevice (DeviceKind kind, int position, bool route, bo
     }
     if (auto* r = dynamic_cast<RoninDevice*> (d))
         loaded_[r] = { 0, r->program() };
+    if (auto* sg = dynamic_cast<ShogunDevice*> (d))
+        sg->setParam (shogun::P_CLOCK_SOURCE, shogun::stepU (0, 3));     // a new SHOGUN follows the host transport
     if (route)
         rack_.autoRoute (d, asEffect);
     refreshLatency();
@@ -767,6 +770,11 @@ void JidaiProcessor::getStateInformation (juce::MemoryBlock& dest)
             e->setAttribute ("format", origami::kStateFormat);
             e->addChildElement (origami::stateToXml (values).release());
         }
+        if (auto* sg = dynamic_cast<ShogunDevice*> (d))
+        {
+            e->setAttribute ("format", jidai::shogunstate::kVersion);     // the SHOGUN plugin's state, unchanged inside
+            e->addChildElement (jidai::shogunstate::toXml (*sg).release());
+        }
     }
     for (auto& c : rack_.cables())
     {
@@ -838,6 +846,7 @@ void JidaiProcessor::restoreFromXml (const juce::XmlElement& xml)
     if (version >= 3 && xml.getChildByName ("DEVICE") == nullptr)
         rack_.addDevice (DeviceKind::RackIO);
     std::vector<RoninDevice*> roninFormat1;     // RONINs saved before RONIN's redesign: migrated once cables are set
+    std::vector<std::pair<ShogunDevice*, std::vector<std::pair<std::string, std::string>>>> shogunBay;   // in device order
     for (auto* e : xml.getChildWithTagNameIterator ("DEVICE"))
     {
         DeviceKind kind = DeviceKind::Bushido;
@@ -901,6 +910,14 @@ void JidaiProcessor::restoreFromXml (const juce::XmlElement& xml)
                     for (int p = 0; p < origami::kParamCount; ++p)
                         o->setParam (p, values[p]);
             }
+        if (auto* sg = dynamic_cast<ShogunDevice*> (d))
+            if (auto* se = e->getChildByName (jidai::shogunstate::kTag))
+            {
+                // A SHOGUN plugin patch may carry cables of SHOGUN's own bay: they become rack cables on this device.
+                std::vector<std::pair<std::string, std::string>> bay;
+                if (jidai::shogunstate::fromXml (*sg, *se, &bay) && ! bay.empty())
+                    shogunBay.push_back ({ sg, std::move (bay) });
+            }
     }
 
     std::vector<jidai::CableSpec> cables;
@@ -928,6 +945,13 @@ void JidaiProcessor::restoreFromXml (const juce::XmlElement& xml)
         }
         cables.push_back (c);
     }
+    for (const auto& [sg, bay] : shogunBay)
+        for (const auto& [a, b] : bay)
+        {
+            jidai::CableSpec c { sg->rackId() + "/" + a, sg->rackId() + "/" + b };
+            c.age = (int) cables.size();
+            cables.push_back (c);
+        }
     rack_.setCables (cables);
 
     // RONIN format 1 -> 2 (RONIN_Redesign 6): M-R1 EG knobs, M-R2 PARABOLA, M-R5 VCF CUTOFF; M-R3 is M3 above.

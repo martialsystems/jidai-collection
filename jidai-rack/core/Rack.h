@@ -19,6 +19,7 @@
 #include "OrigamiDevice.h"
 #include "RackIODevice.h"
 #include "RoninDevice.h"
+#include "ShogunDevice.h"
 
 #include "jidai/jcs/Roles.h"
 

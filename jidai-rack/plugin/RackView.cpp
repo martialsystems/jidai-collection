@@ -7,6 +7,7 @@
 #include "RackStyle.h"
 #include "RearPanel.h"
 #include "RoninPanel.h"
+#include "ShogunFace.h"
 
 #include "origami/plugin/OrigamiPanel.h"
 #include "ui/BushidoTabs.h"
@@ -522,6 +523,7 @@ juce::StringArray RackView::tabNames (DeviceKind k)
         case DeviceKind::Bushido: return { "MAIN", "STEPS", "CLOCK", "MIDI", "SETUP" };
         case DeviceKind::Ronin: return { "MAIN" };
         case DeviceKind::Origami: return { "MAIN", "STAGES", "DYNAMICS", "SETUP" };
+        case DeviceKind::Shogun: return { "MAIN" };
         case DeviceKind::RackIO: break;
     }
     return {};
@@ -561,6 +563,8 @@ float RackView::unitsFor (const Device& d) const
         case DeviceKind::Bushido: return proc.showBack ? 3.0f : (d.closed ? 1.0f : 3.0f);
         case DeviceKind::Ronin: return proc.showBack ? 4.0f : (d.closed ? 1.0f : 4.0f);
         case DeviceKind::Origami: return proc.showBack ? 1.0f : (d.closed ? 1.0f : 3.0f);
+        // SHOGUN's 1200 x 672 MAIN page at the rack's 1600 width (896 + the 30 strip = 5.8 U); 153 jacks on a 4 U back.
+        case DeviceKind::Shogun: return proc.showBack ? 4.0f : (d.closed ? 1.0f : 5.8f);
     }
     return 1.0f;
 }
@@ -803,6 +807,50 @@ void RackView::buildFace (Slot& slot)
                     juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<RackView> (this)] { if (sp != nullptr) sp->reloadCables(); });
                 };
                 slot.screen->save = [this, r] (int bank, const juce::String& name) { return proc.saveRoninPreset (r, bank, name); };
+            }
+            break;
+        }
+        case DeviceKind::Shogun:
+        {
+            auto* sg = static_cast<ShogunDevice*> (d);
+            if (d->closed)
+            {
+                std::vector<CompactFace::Item> items;
+                items.push_back (CompactFace::Item::title (juce::String (d->displayName()), 230.0f, [] { return u8 ("drum machine \xc2\xb7 CLOSED"); }));
+                CompactFace::Item lcd (CompactFace::Item::Lcd, "", 230.0f);
+                lcd.text = [sg]
+                {
+                    return juce::String::fromUTF8 (sg->edits().pattern.name) + "\n" + juce::String::fromUTF8 (sg->running() ? "\xe2\x96\xb6 STEP " : "\xe2\x96\xa0 STEP ")
+                           + juce::String (sg->step());
+                };
+                items.push_back (lcd);
+                CompactFace::Item run (CompactFace::Item::Toggle, "RUN", 80.0f);
+                run.get = [sg] { return sg->running() ? 1.0 : 0.0; };
+                run.set = [sg] (double v) { sg->requestRun (v > 0.5); };
+                items.push_back (run);
+                for (const char* id : { "CLOCK:TEMPO", "CLOCK:SWING", "MASTER:ACCENT", "MASTER:DRIVE", "MASTER:GLUE", "MASTER:VOLUME" })
+                {
+                    const int p = sg->paramIndex (id);
+                    if (p < 0)
+                        continue;
+                    CompactFace::Item it (CompactFace::Item::Knob, juce::String (id).fromFirstOccurrenceOf (":", false, false), 90.0f);
+                    it.get = [sg, p] { return sg->param (p); };
+                    it.set = [sg, p] (double v) { sg->setParam (p, v); };
+                    it.defaultValue = shogun::kParams[p].def;
+                    items.push_back (it);
+                }
+                CompactFace::Item meter (CompactFace::Item::Meter, "MIX", 110.0f);
+                meter.get = [sg] { return (double) std::max (sg->meter (0), sg->meter (1)) * 5.0; };
+                items.push_back (meter);
+                slot.face = std::make_unique<CompactFace> (std::move (items),
+                                                           CompactFace::Style { juce::Colour (0xff1b1d1b), juce::Colour (0xff0f110f), ink, juce::Colour (0xff4aa862) });
+            }
+            else
+            {
+                const float h = kPanelWidth * ShogunFace::kH / ShogunFace::kW;
+                slot.faceY = (areaH - h) * 0.5f;
+                slot.faceH = h;
+                slot.face = std::make_unique<ShogunFace> (*sg);
             }
             break;
         }

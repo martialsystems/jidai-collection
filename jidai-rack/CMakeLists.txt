@@ -4,7 +4,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # One binary. BUSHIDO, RONIN and ORIGAMI are compiled from their own repositories at pinned commits;
-# neither plugin is hosted inside the other. To build against local checkouts instead, pass
+# no plugin is hosted inside another (SHOGUN likewise, from its own repository). To build against local checkouts instead, pass
 # -DFETCHCONTENT_SOURCE_DIR_BUSHIDO=/path/to/bushido -DFETCHCONTENT_SOURCE_DIR_RONIN=/path/to/ronin
 # and -DFETCHCONTENT_SOURCE_DIR_ORIGAMI=/path/to/origami
 # (and -DFETCHCONTENT_SOURCE_DIR_JUCE=/path/to/JUCE for an existing JUCE 8.0.4 checkout).
@@ -31,7 +31,20 @@ FetchContent_Declare(ronin
   # Pushed to origin on that branch. If it lands by squash or rebase, re-pin to the merged commit.
   GIT_TAG 38bfc11917fab48d18da01663a4ca7920ebcc97b
   SOURCE_SUBDIR jidai-rack-sources-only)
-FetchContent_MakeAvailable(JUCE bushido ronin)
+FetchContent_Declare(shogun
+  GIT_REPOSITORY https://github.com/martialsystems/shogun.git
+  # Shogun branch redesign/shogun: spec v2.2 engine (engine/shogun.h, per-sample processSample for the rack, 153 jacks
+  # with JCS roles, 0/23/26 latency at 1x/2x/4x), jidai-common 1.1.1 vendored, 0 warnings under `make strict`.
+  # 3c7acfd: factory bank (INIT + 21 kits with patterns, engine/factory.h) and the shared patch format engine/patch.h,
+  # which the rack uses to read and write SHOGUN device state (the same JSON as the SHOGUN plugin) and to load kits.
+  # The rack compiles only engine/shogun.cpp, against
+  # its own jidai-common (single include path; SHOGUN's vendored copy is not used) and reads plugin/Source/PanelLayout.inc
+  # for the MAIN face. SHOGUN's alias shim (shogun::resolvePort) stays SHOGUN-local.
+  # Pushed to origin on that branch. If it lands by squash or rebase, re-pin to the merged commit.
+  GIT_TAG 3c7acfdcc01d3f8fada853ab572aae180fbc00ca
+  SOURCE_SUBDIR jidai-rack-sources-only)
+FetchContent_MakeAvailable(JUCE bushido ronin shogun)
+set(SHOGUN_DIR ${shogun_SOURCE_DIR})
 
 set(BUSHIDO_DIR ${bushido_SOURCE_DIR})
 
@@ -65,6 +78,8 @@ add_library(jidai_core STATIC
   core/BushidoDevice.cpp
   core/OrigamiDevice.cpp
   core/RackIODevice.cpp
+  core/ShogunDevice.cpp
+  ${SHOGUN_DIR}/engine/shogun.cpp
   ${BUSHIDO_DIR}/engine/BushidoModule.cpp
   ${RONIN_DIR}/Source/Modular/Module.cpp
   ${RONIN_DIR}/Source/Modular/PatchGraph.cpp
@@ -86,12 +101,12 @@ add_library(jidai_core STATIC
   ${RONIN_DIR}/Source/Modular/Mixer.cpp
   ${RONIN_DIR}/Source/Modular/SampleHold.cpp
   ${RONIN_DIR}/Source/UI/PatchBayLogic.cpp)
-target_include_directories(jidai_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${BUSHIDO_DIR} ${RONIN_DIR}/Source)
+target_include_directories(jidai_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${BUSHIDO_DIR} ${RONIN_DIR}/Source ${SHOGUN_DIR}/engine)
 target_link_libraries(jidai_core PUBLIC jidai::common origami::dsp)
 set_target_properties(jidai_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 enable_testing()
-add_executable(JidaiRackTests tests/RackTests.cpp tests/JcsRackTests.cpp)
+add_executable(JidaiRackTests tests/RackTests.cpp tests/JcsRackTests.cpp tests/ShogunRackTests.cpp)
 target_link_libraries(JidaiRackTests PRIVATE jidai_core)
 target_compile_options(JidaiRackTests PRIVATE -Wall -Wextra)
 add_test(NAME rack COMMAND JidaiRackTests)
@@ -116,6 +131,8 @@ set(JIDAI_UI_SOURCES
   plugin/RackCableLayer.cpp
   plugin/RearPanel.cpp
   plugin/CompactFace.cpp
+  plugin/ShogunState.cpp
+  plugin/ShogunFace.cpp
   ${ORIGAMI_UI_SOURCES}
   ${BUSHIDO_DIR}/ui/BushidoTabs.cpp
   ${BUSHIDO_DIR}/rack/CableModel.cpp
@@ -123,6 +140,9 @@ set(JIDAI_UI_SOURCES
   ${BUSHIDO_DIR}/ui/RackPanel.cpp
   ${BUSHIDO_DIR}/ui/CableLayer.cpp
   ${BUSHIDO_DIR}/ui/PatternScreen.cpp)
+
+# SHOGUN's generated MAIN-page table (PanelLayout.inc), for the rack's SHOGUN face only.
+set_source_files_properties(plugin/ShogunFace.cpp PROPERTIES INCLUDE_DIRECTORIES ${SHOGUN_DIR}/plugin/Source)
 
 # ---- the plugin: VST3 effect and a Standalone that opens the default audio devices ----
 juce_add_plugin(JidaiRack
@@ -167,7 +187,7 @@ add_test(NAME rack_ui COMMAND JidaiRackProbe ${CMAKE_BINARY_DIR}/rack-shots)
 
 # Preset banks: factory lists, the compiled rack patches, and a temp user-file directory.
 juce_add_console_app(JidaiPresetTests PRODUCT_NAME "JidaiPresetTests")
-target_sources(JidaiPresetTests PRIVATE tests/PresetBankTests.cpp tests/RackStateTests.cpp tests/StarterRackTests.cpp ${JIDAI_UI_SOURCES})
+target_sources(JidaiPresetTests PRIVATE tests/PresetBankTests.cpp tests/RackStateTests.cpp tests/StarterRackTests.cpp tests/ShogunStateTests.cpp ${JIDAI_UI_SOURCES})
 target_compile_definitions(JidaiPresetTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JIDAI_NO_PLUGIN_ENTRY=1 JIDAI_PRESET_TEST=1)
 target_link_libraries(JidaiPresetTests PRIVATE
   jidai_core

@@ -17,6 +17,7 @@ const std::vector<DeviceBrowser::Entry>& DeviceBrowser::catalogue()
     static const std::vector<Entry> entries = {
         { "SEQUENCER", DeviceKind::Bushido, "BUSHIDO", "12-step sequencer \xc2\xb7 CV/gate", false },
         { "VOICE", DeviceKind::Ronin, "RONIN", "semi-modular voice", false },
+        { "DRUMS", DeviceKind::Shogun, "SHOGUN", "drum machine \xc2\xb7 14 drums + 2 synths", false },
         { "EFFECT", DeviceKind::Ronin, "RONIN FX", "RONIN at EXT IN", true },
         { "EFFECT", DeviceKind::Origami, "ORIGAMI", "triple wave shaper FX", false },
         { "UTILITY", DeviceKind::RackIO, "RACK I/O", "host audio \xc2\xb7 MIDI \xc2\xb7 clock", false },

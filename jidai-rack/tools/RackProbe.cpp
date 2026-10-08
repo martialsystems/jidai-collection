@@ -8,6 +8,8 @@
 #include "plugin/JidaiEditor.h"
 #include "plugin/RackCableLayer.h"
 #include "plugin/StarterRacks.h"
+#include "plugin/RearPanel.h"
+#include "plugin/ShogunFace.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #if JUCE_LINUX
@@ -125,14 +127,15 @@ int main (int argc, char** argv)
     {
         auto& b = editor->browser();
         expect (b.getWidth() == JidaiEditor::kListWidth, "browser is 184 wide");
-        expect (b.rowCount() == 5, "browser: BUSHIDO, RONIN, RONIN FX, ORIGAMI, RACK I/O");
-        expect (juce::String (b.row (3).group) == "EFFECT" && b.row (3).kind == jidai::DeviceKind::Origami
-                && juce::String (b.row (4).group) == "UTILITY" && b.row (4).kind == jidai::DeviceKind::RackIO, "ORIGAMI under EFFECT, RACK I/O under UTILITY");
-        expect (! b.available (b.row (4)), "RACK I/O card is used up (one per rack)");
+        expect (b.rowCount() == 6, "browser: BUSHIDO, RONIN, SHOGUN, RONIN FX, ORIGAMI, RACK I/O");
+        expect (juce::String (b.row (2).group) == "DRUMS" && b.row (2).kind == jidai::DeviceKind::Shogun, "SHOGUN under DRUMS");
+        expect (juce::String (b.row (4).group) == "EFFECT" && b.row (4).kind == jidai::DeviceKind::Origami
+                && juce::String (b.row (5).group) == "UTILITY" && b.row (5).kind == jidai::DeviceKind::RackIO, "ORIGAMI under EFFECT, RACK I/O under UTILITY");
+        expect (! b.available (b.row (5)), "RACK I/O card is used up (one per rack)");
         b.setSearch ("ori");
         expect (b.rowCount() == 1 && b.row (0).kind == jidai::DeviceKind::Origami, "search 'ori' shows ORIGAMI");
         b.setSearch ("");
-        click (b, b.rowBounds (4).toFloat().getCentre());
+        click (b, b.rowBounds (5).toFloat().getCentre());
         expect (proc.rack().deviceCount() == 1, "clicking the used-up RACK I/O card adds nothing");
     }
     snapshot (*editor, out.getChildFile ("window_default_rack_1200x672.png"));
@@ -424,6 +427,65 @@ int main (int argc, char** argv)
         proc.setCurrentProgram (0);
         pump();
         expect (proc.rack().deviceCount() == 1 && proc.rack().device (0)->kind() == jidai::DeviceKind::RackIO, "INIT starter rack: RACK I/O only");
+    }
+
+    // SHOGUN: from its browser card (auto-routed MIX -> MAIN OUT), the MAIN face open (5.8 U), CLOSED (1 U), and its
+    // 153 jacks on a 4 U rear bay, every jack placed, none overlapping.
+    {
+        proc.setCurrentProgram (0);
+        pump();
+        auto& b = editor->browser();
+        click (b, b.rowBounds (2).toFloat().getCentre());
+        pump (30);
+        auto* sg = proc.rack().deviceCount() == 2 ? dynamic_cast<jidai::ShogunDevice*> (proc.rack().device (1)) : nullptr;
+        expect (sg != nullptr, "SHOGUN card adds SHOGUN#1");
+        if (sg != nullptr)
+        {
+            int routed = 0;
+            for (auto& c : proc.rack().cables())
+                routed += c.autoRouted && c.a.rfind ("SHOGUN#1/MIX:", 0) == 0 ? 1 : 0;
+            expect (routed == 2, "SHOGUN auto-routes MIX L/R to MAIN OUT");
+            expect (rack.slotBounds (1).getHeight() == juce::roundToInt (5.8f * RackView::kUnit * rack.scale()), "SHOGUN open front is 5.8 U");
+            auto* face = dynamic_cast<ShogunFace*> (rack.faceComponent (1));
+            expect (face != nullptr && face->paramKnobCount() >= 50,
+                    "SHOGUN MAIN face from SHOGUN's own op table: " + juce::String (face != nullptr ? face->paramKnobCount() : 0) + " parameter controls");
+            if (face != nullptr)
+                face->setSelectedVoice (shogun::SD);
+            editor->setSize (1964, 1100);
+            pump (60);
+            snapshot (rack, out.getChildFile ("shogun_front_open.png"));
+            rack.setClosed (sg, true);
+            pump (30);
+            expect (rack.slotBounds (1).getHeight() == juce::roundToInt (RackView::kUnit * rack.scale()), "SHOGUN CLOSED is 1 U");
+            snapshot (rack, out.getChildFile ("shogun_front_closed.png"));
+            rack.setClosed (sg, false);
+            rack.setShowBack (true);
+            rack.setCableMode (JidaiProcessor::CablesAll);
+            pump (60);
+            auto* rear = dynamic_cast<RearPanel*> (rack.faceComponent (1));
+            int inside = 0, overlaps = 0;
+            if (rear != nullptr)
+            {
+                const auto area = rear->getLocalBounds().toFloat();
+                for (int j = 0; j < rear->jackCount(); ++j)
+                {
+                    const auto c = rear->jackCentre (j);
+                    inside += area.contains (c) && c != juce::Point<float>() ? 1 : 0;
+                    for (int k = j + 1; k < rear->jackCount(); ++k)
+                        overlaps += c.getDistanceFrom (rear->jackCentre (k)) < 2.0f * rear->jackRadius() ? 1 : 0;
+                }
+            }
+            expect (rear != nullptr && rear->jackCount() == 153 && inside == 153 && overlaps == 0,
+                    "SHOGUN rear bay: 153 jacks placed on the plate (" + juce::String (inside) + "), " + juce::String (overlaps) + " overlapping");
+            expect (rack.slotBounds (1).getHeight() == juce::roundToInt (4.0f * RackView::kUnit * rack.scale()), "SHOGUN back is 4 U");
+            int spots = 0;
+            for (int j = 0; j < 153; ++j)
+                spots += rack.spotFor ("SHOGUN#1/" + std::string (shogun::kPortTable[j].id)) != nullptr ? 1 : 0;
+            expect (spots == 153, "every SHOGUN jack is a cable spot on the back (" + juce::String (spots) + ")");
+            snapshot (rack, out.getChildFile ("shogun_back.png"));
+            rack.setShowBack (false);
+            pump();
+        }
     }
 
     editor.reset();

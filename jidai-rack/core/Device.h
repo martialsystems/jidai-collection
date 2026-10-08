@@ -15,7 +15,7 @@
 
 namespace jidai {
 
-enum class DeviceKind { Bushido, Ronin, Origami, RackIO };
+enum class DeviceKind { Bushido, Ronin, Origami, RackIO, Shogun };
 
 const char* deviceKindName (DeviceKind kind);     // "BUSHIDO", "RONIN", "ORIGAMI", "RACK I/O"
 const char* deviceKindPrefix (DeviceKind kind);   // "BUSHIDO", "RONIN", "ORIGAMI", "RACK" (JCS R6 prefixes)
@@ -72,6 +72,9 @@ public:
     virtual std::vector<const Unit*> latencyUnits() const { return {}; }
     // Host transport for this block (audio thread, before beginBlock).
     virtual void setTransport (const Transport&) {}
+    // A setting changed that needs prepare() again (SHOGUN GLOBAL:OS allocates). The rack re-prepares the device on
+    // the message thread under its lock (Rack::updateLatency) and rebuilds the latency compensation.
+    virtual bool needsPrepare() const { return false; }
     // "Run A before B" inside the device. Never feedback; for path latency they count as internal audio paths.
     virtual std::vector<OrderEdge> orderEdges() const { return {}; }
     // Rear bay sections. The default groups jacks by SECTION, in jack order.

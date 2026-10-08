@@ -17,6 +17,7 @@ const char* deviceKindName (DeviceKind kind)
         case DeviceKind::Ronin: return "RONIN";
         case DeviceKind::Origami: return "ORIGAMI";
         case DeviceKind::RackIO: return "RACK I/O";
+        case DeviceKind::Shogun: return "SHOGUN";
     }
     return "";
 }
@@ -24,7 +25,7 @@ const char* deviceKindPrefix (DeviceKind kind) { return kind == DeviceKind::Rack
 
 const char* deviceKindFromName (const std::string& n, DeviceKind& kind)
 {
-    for (DeviceKind k : { DeviceKind::Bushido, DeviceKind::Ronin, DeviceKind::Origami, DeviceKind::RackIO })
+    for (DeviceKind k : { DeviceKind::Bushido, DeviceKind::Ronin, DeviceKind::Origami, DeviceKind::RackIO, DeviceKind::Shogun })
         if (n == deviceKindName (k) || n == deviceKindPrefix (k))
         {
             kind = k;
@@ -191,6 +192,8 @@ Device* Rack::addDevice (DeviceKind kind, int position, int number)
         made = std::make_unique<OrigamiDevice>();
     else if (kind == DeviceKind::RackIO)
         made = std::make_unique<RackIODevice>();
+    else if (kind == DeviceKind::Shogun)
+        made = std::make_unique<ShogunDevice>();
     else
         made = std::make_unique<BushidoDevice>();
     made->number = number > 0 ? number : nextNumber (kind);
@@ -305,6 +308,10 @@ int Rack::autoRoute (Device* device, bool asEffect)
             add (io + "HOST:IN R", me + "HOST:IN R");
             add (me + "HOST:OUT L", io + "MAIN:OUT L");
             add (me + "HOST:OUT R", io + "MAIN:OUT R");
+            break;
+        case DeviceKind::Shogun:       // the stereo mix to the host; its clock follows the host (CLOCK:SOURCE HOST)
+            add (me + "MIX:L", io + "MAIN:OUT L");
+            add (me + "MIX:R", io + "MAIN:OUT R");
             break;
         case DeviceKind::Bushido:      // no audio out to the host by default (MIXER:OUT is a mixer for patching)
         case DeviceKind::RackIO:
@@ -530,6 +537,12 @@ bool Rack::updateLatency()
 {
     std::lock_guard<std::mutex> g (lock_);
     bool changed = deviceLatency_.size() != devices_.size();
+    for (auto& d : devices_)
+        if (d->needsPrepare())
+        {
+            d->prepare (sampleRate_);     // audio is held off by lock_ (process() try-locks and outputs silence)
+            changed = true;
+        }
     for (size_t i = 0; ! changed && i < devices_.size(); ++i)
         changed = deviceLatency_[i] != devices_[i]->latencySamples();
     if (changed)

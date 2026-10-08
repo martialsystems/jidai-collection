@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 # Copyright (c) 2026 Martial Systems LLC. All rights reserved.
 # Writes racks/starter_racks.xml, the JIDAI RACK starter racks:
-#   python3 tools/make_starter_racks.py <origami factory.xml> racks/starter_racks.xml
-# Each starter rack is a complete rack state (JIDAIRACK version 3), the same XML the rack saves. Units are set by their
-# own parameters (BUSHIDO PARAM ids, RONIN KNOB ids, ORIGAMI params from ORIGAMI's factory bank by name), never by a
-# unit's preset name, and every connection is a cable on the jacks (the back of the rack shows them all).
+#   python3 tools/make_starter_racks.py <origami factory.xml> <shogun source dir> racks/starter_racks.xml
+# (the SHOGUN source is the pinned one: <build>/_deps/shogun-src). Each starter rack is a complete rack state
+# (JIDAIRACK version 3), the same XML the rack saves. Units are set by their own parameters (BUSHIDO PARAM ids, RONIN
+# KNOB ids, ORIGAMI params from ORIGAMI's factory bank by name, SHOGUN parameter ids and pattern steps in SHOGUN's own
+# patch JSON), never by a unit's preset name, and every connection is a cable on the jacks (the back shows them all).
 # The presets test (JidaiPresetTests) loads every rack, checks each cable against the Jidai Cable Standard, and plays it.
+import json
+import re
 import sys
 import xml.etree.ElementTree as ET
 
@@ -63,6 +66,39 @@ def fmt(v):
 
 def esc(s): return s.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;")
 
+# ---------------------------------------------------------------------------------------------------- SHOGUN
+# Parameter ids, kinds, defaults and step counts from SHOGUN's own table (engine/params_table.h at the pinned commit).
+SHOGUN_PARAMS = {}
+SHOGUN_VOICES = ["BD1", "BD2", "SD", "RS", "CP", "CL", "MA", "CB", "CH", "OH", "CY", "LTC", "MTC", "HTC", "LEAD", "BASS"]
+def load_shogun(src_dir):
+    text = open(src_dir + "/engine/params_table.h").read()
+    for m in re.finditer(r'\{"([^"]+)", ParamKind::(\w+), ([0-9.e+-]+)f, -?\d+, (\d+),', text):
+        SHOGUN_PARAMS[m.group(1)] = (m.group(2), float(m.group(3)), int(m.group(4)))
+    assert len(SHOGUN_PARAMS) > 300, len(SHOGUN_PARAMS)
+
+def step_u(index, n):
+    """A stepped SHOGUN control at choice index (the centre of its bin, SHOGUN's stepU)."""
+    return round((index + 0.5) / n, 6)
+
+def shogun_choice(pid, index):
+    kind, _, steps = SHOGUN_PARAMS[pid]
+    assert kind in ("Stepped", "Toggle") and 0 <= index < max(steps, 2), (pid, index)
+    return float(index) if kind == "Toggle" else step_u(index, steps)
+
+def drum_steps(text):
+    """'x...X...' -> SHOGUN steps: x = on (accent 2), X = accent (3), . = off."""
+    out = []
+    for i, ch in enumerate(text):
+        if ch in "xX":
+            out.append({"i": i, "on": True, "acc": 3 if ch == "X" else 2, "prob": 1.0, "micro": 0.0, "flam": 0,
+                        "ratchet": 1, "locks": {}})
+    return out
+
+def synth_steps(notes):
+    """[(step, MIDI note, accent, tie)] -> SHOGUN synth steps."""
+    return [{"i": i, "on": True, "acc": acc, "prob": 1.0, "micro": 0.0, "flam": 0, "ratchet": 1, "note": n,
+             "tie": tie, "locks": {}} for i, n, acc, tie in notes]
+
 # ---------------------------------------------------------------------------------------------------- devices
 class Rack:
     def __init__(self, name, category, about, view="back"):
@@ -104,6 +140,22 @@ class Rack:
         self.devices.append(("ORIGAMI", number, name, vals))
         return f"ORIGAMI#{number}"
 
+    def shogun(self, number=1, name="", pattern="", params=None, tracks=None, running=0):
+        p = {}
+        for pid, v in (params or {}).items():
+            assert pid in SHOGUN_PARAMS, pid
+            assert 0.0 <= v <= 1.0, (pid, v)
+            p[pid] = round(float(v), 6)
+        trs = []
+        for vid, (length, steps) in (tracks or {}).items():
+            assert vid in SHOGUN_VOICES, vid
+            assert 1 <= length <= 32 and all(0 <= s["i"] < length for s in steps), vid
+            trs.append({"id": vid, "len": length, "steps": steps})
+        patch = {"format": "shogun-patch", "version": 2, "name": pattern, "params": p, "mod": [], "cables": [],
+                 "cvAmt": {}, "inLaw": {}, "seq": {"pattern": pattern, "seed": 1513406686, "tracks": trs}}
+        self.devices.append(("SHOGUN", number, name, (patch, running)))
+        return f"SHOGUN#{number}"
+
     def cable(self, a, b):
         self.cables.append((a, b))
 
@@ -123,6 +175,11 @@ class Rack:
                            f'effect="1" triShape="triangle">')
                 for kid, _ in RONIN_KNOBS:
                     out.append(f'{indent}    <KNOB id="{esc(kid)}" value="{fmt(vals[kid])}"/>')
+            elif kind == "SHOGUN":
+                patch, running = vals
+                out.append(f'{indent}  <DEVICE kind="SHOGUN" number="{number}"{nm} front="open" format="2">')
+                text = json.dumps(patch, separators=(",", ":"))
+                out.append(f'{indent}    <SHOGUN version="2" running="{running}">{text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")}</SHOGUN>')
             else:
                 out.append(f'{indent}  <DEVICE kind="ORIGAMI" number="{number}"{nm} front="open" format="1">')
                 out.append(f'{indent}    <ORIGAMI format="1" unit="ORIGAMI">')
@@ -316,7 +373,72 @@ def build():
     to_main(r, f"{o}/OUT:OUT L", f"{o}/OUT:OUT R")
     racks.append(r)
 
-    # 8. FILTER FOLD FX: host audio through RONIN's filter (MG sweep) and ORIGAMI.
+    # 8. ACID DRUM JAM: every unit. SHOGUN plays an EDM kit clocked from RACK I/O (CLK 1/16 into CLK IN, RESET into
+    #    RST IN, CLOCK:SOURCE EXT); BUSHIDO plays a 12-step acid line on the host clock into RONIN's resonant filter;
+    #    ORIGAMI folds the bass, which returns into SHOGUN's mix on BASS RET (SHOGUN's own BASS voice is unused).
+    r = Rack("Acid Drum Jam", "EDM",
+             "Every unit: SHOGUN plays a four-on-the-floor kit clocked from RACK I/O (CLK 1/16 -> CLK IN, RESET -> RST IN). "
+             "BUSHIDO plays a 12-step acid line (PORTA A slides, row C accents) into RONIN's resonant filter, ORIGAMI "
+             "folds it, and the bass returns into SHOGUN's mix on BASS RET. SHOGUN's MIX goes to the host.")
+    sg = r.shogun(name="KIT", pattern="ACID JAM", running=1,
+                  params={"CLOCK:SOURCE": shogun_choice("CLOCK:SOURCE", 2), "CLOCK:CLK IN": shogun_choice("CLOCK:CLK IN", 0),
+                          "MASTER:GLUE": 0.3, "CH:LEVEL": 0.42, "OH:LEVEL": 0.38, "CP:LEVEL": 0.5},
+                  tracks={"BD1": (16, drum_steps("X...x...x...x...")),
+                          "CP": (16, drum_steps("....x.......x...")),
+                          "CH": (16, drum_steps("x.x.x.x.x.x.x.xX")),
+                          "OH": (16, drum_steps("..x...x...x...x."))})
+    b = r.bushido(name="ACID SEQ",
+                  steps_a=semis(0, 0, 12, 0, 3, 0, 7, 10, 0, 12, 5, 3),
+                  steps_c=[1, 0, 0, 0.8, 0, 0, 1, 0, 0, 0.6, 0, 0.9],
+                  CH__PORTA_A=0.14, CH__RANGE_A=0, STEPS__QUANT_A=1)
+    v = r.ronin(name="ACID BASS", VCO__RANGE=FOOT[16], VCF__CUTOFF=cutoff(170), VCF__PEAK=0.8, VCF__MOD=0.55,
+                EG_1__ATTACK=0.0, EG_1__DECAY=eg(0.18), EG_1__SUSTAIN=0.08, EG_1__RELEASE=eg(0.05),
+                MIX__LEVEL_1=0.8, MIX__LEVEL_2=0.55, OUTPUT__LEVEL=0.55)
+    o = r.origami("Acid Grit", name="GRIT")
+    ronin_voice(r, v, pitch=f"{b}/OUTPUTS:CV A", gate=f"{b}/OUTPUTS:GATE A", filter_cv="mix")
+    r.cable(f"{v}/EG 1:OUT A", f"{v}/MIX:IN 1")
+    r.cable(f"{b}/OUTPUTS:CV C", f"{v}/MIX:IN 2")
+    r.cable(f"{v}/MIX:OUT", f"{v}/VCF:CUTOFF")
+    r.cable("RACK#1/TRANSPORT:CLK 1/16", f"{sg}/CLOCK:CLK IN")
+    r.cable("RACK#1/TRANSPORT:RESET", f"{sg}/CLOCK:RST IN")
+    r.cable(f"{v}/HOST:OUT L", f"{o}/IN:IN L")
+    r.cable(f"{o}/OUT:OUT L", f"{sg}/BASS:RET")
+    to_main(r, f"{sg}/MIX:L", f"{sg}/MIX:R")
+    racks.append(r)
+
+    # 9. FULL EDM JAM: SHOGUN on the host clock with its full kit and its own LEAD synth; BUSHIDO's 8-step driving bass
+    #    on RONIN returns into SHOGUN on BASS RET; ORIGAMI sits on SHOGUN's mix bus.
+    r = Rack("Full EDM Jam", "EDM",
+             "Every unit, host-clocked: SHOGUN plays kick, clap, hats, open hat and a tom fill plus a lead riff on its own "
+             "LEAD synth. BUSHIDO's 8-step bass (TRIG 9 -> RESET) plays RONIN, which returns into SHOGUN on BASS RET. "
+             "SHOGUN's whole mix runs through ORIGAMI as a glue fold on the bus.")
+    sg = r.shogun(name="KIT", pattern="FULL JAM",
+                  params={"CLOCK:SOURCE": shogun_choice("CLOCK:SOURCE", 0), "MASTER:GLUE": 0.35, "MASTER:DRIVE": 0.1,
+                          "CH:LEVEL": 0.4, "OH:LEVEL": 0.36, "CP:LEVEL": 0.5, "LTC:LEVEL": 0.45,
+                          "LEAD:CUTOFF": 0.62, "LEAD:RESO": 0.35, "LEAD:DECAY": 0.35, "LEAD:LEVEL": 0.36,
+                          "LEAD:PAN": 0.6, "CH:PAN": 0.42},
+                  tracks={"BD1": (16, drum_steps("X...x...x...x...")),
+                          "CP": (16, drum_steps("....X.......x...")),
+                          "CH": (16, drum_steps("x.x.x.x.x.x.x.x.")),
+                          "OH": (16, drum_steps("..x...x...x...X.")),
+                          "LTC": (32, drum_steps("..............................x.")),
+                          "LEAD": (16, synth_steps([(0, 72, 3, False), (3, 75, 2, False), (6, 79, 2, False),
+                                                    (8, 77, 3, False), (11, 75, 2, False), (14, 70, 2, False)]))})
+    b = r.bushido(name="BASS SEQ",
+                  steps_a=semis(0, 0, 12, 0, 0, 12, 0, 10, 0, 0, 0, 0),
+                  CH__RANGE_A=0, STEPS__QUANT_A=1)
+    v = r.ronin(name="BASS", VCO__RANGE=FOOT[16], VCF__CUTOFF=cutoff(260), VCF__PEAK=0.35, VCF__MOD=0.5,
+                EG_1__ATTACK=0.0, EG_1__DECAY=eg(0.12), EG_1__SUSTAIN=0.25, EG_1__RELEASE=eg(0.03), OUTPUT__LEVEL=0.5)
+    o = r.origami("Drum-Bus Glue", name="BUS GLUE")
+    ronin_voice(r, v, pitch=f"{b}/OUTPUTS:CV A", gate=f"{b}/OUTPUTS:GATE A")
+    r.cable(f"{b}/9:TRIG", f"{b}/INPUTS:RESET")
+    r.cable(f"{v}/HOST:OUT L", f"{sg}/BASS:RET")
+    r.cable(f"{sg}/MIX:L", f"{o}/IN:IN L")
+    r.cable(f"{sg}/MIX:R", f"{o}/IN:IN R")
+    to_main(r, f"{o}/OUT:OUT L", f"{o}/OUT:OUT R")
+    racks.append(r)
+
+    # 10. FILTER FOLD FX: host audio through RONIN's filter (MG sweep) and ORIGAMI.
     r = Rack("Filter Fold FX", "FX",
              "An insert effect for your track: host audio from RACK I/O goes through RONIN's resonant filter, swept by "
              "the MG, then through ORIGAMI, and back to the host.")
@@ -334,7 +456,7 @@ def build():
     to_main(r, f"{o}/OUT:OUT L", f"{o}/OUT:OUT R")
     racks.append(r)
 
-    # 9. TEMPO GATE FX: host audio chopped in time with the host (TRANSPORT CLK 1/16 fires EG 1 on VCA 1), folded.
+    # 11. TEMPO GATE FX: host audio chopped in time with the host (TRANSPORT CLK 1/16 fires EG 1 on VCA 1), folded.
     r = Rack("Tempo Gate FX", "FX",
              "A tempo-synced gate for your track: RACK I/O's TRANSPORT CLK 1/16 fires RONIN's EG 1 on every 16th, "
              "which opens VCA 1 on the host audio; ORIGAMI folds the chopped signal. Runs while the DAW plays.")
@@ -358,6 +480,7 @@ def build():
 
 def main():
     load_origami(sys.argv[1])
+    load_shogun(sys.argv[2])
     racks = build()
     names = set()
     out = ['<?xml version="1.0" encoding="UTF-8"?>',
@@ -371,7 +494,7 @@ def main():
         out += rk.xml()
         out.append('  </RACK>')
     out.append('</JIDAI_STARTER_RACKS>')
-    open(sys.argv[2], "w").write("\n".join(out) + "\n")
+    open(sys.argv[3], "w").write("\n".join(out) + "\n")
     print(len(racks), "racks")
 
 
