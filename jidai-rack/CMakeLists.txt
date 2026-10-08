@@ -117,11 +117,22 @@ add_library(jidai_core STATIC
 target_include_directories(jidai_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${BUSHIDO_DIR} ${RONIN_DIR}/Source ${RONIN_DIR}/Source/Modular ${SHOGUN_DIR}/engine)
 target_link_libraries(jidai_core PUBLIC jidai::common origami::dsp)
 set_target_properties(jidai_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# Same numbers on every platform: no contraction into FMA (Apple arm64 clang contracts by default), as BUSHIDO's
+# rack_core and ORIGAMI's targets do. PUBLIC, so the tests, the probe and the plugin compile the devices the same way.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+  target_compile_options(jidai_core PUBLIC /fp:precise)
+elseif(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")   # clang-cl
+  target_compile_options(jidai_core PUBLIC /clang:-ffp-contract=off)
+else()
+  target_compile_options(jidai_core PUBLIC -ffp-contract=off)
+endif()
 
 enable_testing()
 add_executable(JidaiRackTests tests/RackTests.cpp tests/JcsRackTests.cpp tests/ShogunRackTests.cpp)
 target_link_libraries(JidaiRackTests PRIVATE jidai_core)
-target_compile_options(JidaiRackTests PRIVATE -Wall -Wextra)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(JidaiRackTests PRIVATE -Wall -Wextra)
+endif()
 add_test(NAME rack COMMAND JidaiRackTests)
 
 # ---- panel art: each instrument's own vector panel and layout ----
