@@ -18,6 +18,13 @@ public:
     struct Item
     {
         enum Type { Title, Knob, Toggle, Momentary, Meter, Lcd, Lamps, Space };
+        Item (Type t = Space, juce::String l = {}, float w = 80.0f) : type (t), label (std::move (l)), width (w) {}
+        static Item title (juce::String name, float w, std::function<juce::String()> sub)
+        {
+            Item it (Title, std::move (name), w);
+            it.text = std::move (sub);
+            return it;
+        }
         Type type = Space;
         juce::String label;
         float width = 80.0f;                                  // design units

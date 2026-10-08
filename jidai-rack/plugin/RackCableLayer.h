@@ -52,6 +52,7 @@ public:
     int disconnectAll (const std::string& jack);
     void setColour (int cableIndex, int colour);      // -1 = role colour
     juce::String lastMessage() const { return message; }
+    void clearMessage() { message.clear(); repaint(); }
 
     bool hitTest (int x, int y) override;
     void paint (juce::Graphics&) override;

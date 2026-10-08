@@ -7,7 +7,8 @@ using namespace jidai;
 using namespace rackstyle;
 
 namespace {
-constexpr float kW = 1600.0f, kPad = 14.0f, kGap = 10.0f, kTitleH = 20.0f, kMaxCols = 8;
+constexpr float kW = 1600.0f, kPad = 14.0f, kGap = 10.0f, kTitleH = 20.0f;
+constexpr int kMaxCols = 8;
 
 juce::String jackLabel (const std::string& id)
 {
@@ -76,10 +77,10 @@ bool RearPanel::layoutPass (float cw, float ch, bool place)
     for (auto& b : boxes)
     {
         const int n = (int) b.jacks.size();
-        const int cols = juce::jmin (n, (int) kMaxCols);
+        const int cols = juce::jmin (n, kMaxCols);
         const int rows = (n + cols - 1) / cols;
-        const float bw = juce::jmax (cols * cw + 12.0f, 9.0f * (float) b.title.length() + 16.0f);
-        const float bh = compact ? bottom - top : kTitleH + rows * ch + 6.0f;
+        const float bw = juce::jmax ((float) cols * cw + 12.0f, 9.0f * (float) b.title.length() + 16.0f);
+        const float bh = compact ? bottom - top : kTitleH + (float) rows * ch + 6.0f;
         if (x + bw > kW - kPad && x > left)
         {
             if (compact)
@@ -93,15 +94,15 @@ bool RearPanel::layoutPass (float cw, float ch, bool place)
         if (place)
         {
             b.r = { x, y, bw, bh };
-            const float gridW = cols * cw;
+            const float gridW = (float) cols * cw;
             const float x0 = x + (bw - gridW) * 0.5f;
-            const float y0 = compact ? y + kTitleH + (bh - kTitleH - rows * ch) * 0.5f : y + kTitleH;
+            const float y0 = compact ? y + kTitleH + (bh - kTitleH - (float) rows * ch) * 0.5f : y + kTitleH;
             for (int i = 0; i < n; ++i)
             {
                 const int c = i % cols, r = i / cols;
                 const int j = b.jacks[(size_t) i];
                 if (j >= 0 && j < (int) centres.size())
-                    centres[(size_t) j] = { x0 + (c + 0.5f) * cw, y0 + r * ch + ch * 0.36f };
+                    centres[(size_t) j] = { x0 + ((float) c + 0.5f) * cw, y0 + (float) r * ch + ch * 0.36f };
             }
         }
         x += bw + kGap;
@@ -130,7 +131,9 @@ void RearPanel::paint (juce::Graphics& g)
     for (int i = 0; i < 260; ++i)
     {
         g.setColour (juce::Colour (grain.nextBool() ? 0x07ffffff : 0x0a000000));
-        g.fillRect (grain.nextFloat() * bounds.getWidth(), grain.nextFloat() * bounds.getHeight(), 1.5f * s, 1.5f * s);
+        const float gx = grain.nextFloat() * bounds.getWidth();      // sequenced: argument order is unspecified
+        const float gy = grain.nextFloat() * bounds.getHeight();
+        g.fillRect (gx, gy, 1.5f * s, 1.5f * s);
     }
 
     // Sticker.
@@ -147,10 +150,10 @@ void RearPanel::paint (juce::Graphics& g)
         g.setFont (font (10.0f * s));
         g.setColour (juce::Colour (0xff4a463c));
         const int n = (int) device.jacks().size();
-        juce::String line = juce::String (kindLine (device.kind())) + " \xc2\xb7 REAR PATCH BAY \xc2\xb7 " + juce::String (n) + " JACKS";
+        juce::String line = u8 (kindLine (device.kind())) + u8 (" \xc2\xb7 REAR PATCH BAY \xc2\xb7 ") + juce::String (n) + " JACKS";
         if (! device.name.empty())
-            line = juce::String (device.displayName()) + " \xc2\xb7 " + line;
-        g.drawFittedText (juce::String::fromUTF8 (line.toRawUTF8()), t.toNearestInt(), juce::Justification::topLeft, compact ? 3 : 1, 0.8f);
+            line = u8 (device.displayName().c_str()) + u8 (" \xc2\xb7 ") + line;
+        g.drawFittedText (line, t.toNearestInt(), juce::Justification::topLeft, compact ? 3 : 1, 0.8f);
         if (compact)
         {
             g.setColour (juce::Colour (0xff8a6d1f));
@@ -188,7 +191,7 @@ void RearPanel::paint (juce::Graphics& g)
         g.drawText ("LAT " + juce::String (latency ? latency() : 0) + " smp", lp.withTrimmedBottom (lp.getHeight() * 0.45f), juce::Justification::centredBottom);
         g.setFont (font (10.0f * s));
         g.setColour (kAmber.withAlpha (0.7f));
-        g.drawText ("JCS v1.1 \xc2\xb7 0/5 V gates", lp.withTrimmedTop (lp.getHeight() * 0.58f), juce::Justification::centredTop);
+        g.drawText (u8 ("JCS v1.1 \xc2\xb7 0/5 V gates"), lp.withTrimmedTop (lp.getHeight() * 0.58f), juce::Justification::centredTop);
     }
 
     // Group boxes and sockets.

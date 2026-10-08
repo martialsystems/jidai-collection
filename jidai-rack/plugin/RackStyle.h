@@ -19,6 +19,8 @@ inline const juce::Colour kRefuse { 0xffe5483b };
 inline const juce::Colour kStrip { 0xff1b1b1e };
 inline const juce::Colour kPlate { 0xff1e1e21 };
 
+inline juce::String u8 (const char* utf8) { return juce::String::fromUTF8 (utf8); }
+
 inline juce::Colour roleColour (jidai::jcs::Role r) { return juce::Colour (jidai::jcs::roleArgb (r)); }
 inline juce::String roleGlyph (jidai::jcs::Role r) { return juce::String::fromUTF8 (jidai::jcs::roleInfo (r).glyph); }
 inline juce::String roleName (jidai::jcs::Role r) { return juce::String (jidai::jcs::roleInfo (r).name); }

@@ -363,7 +363,7 @@ public:
         g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 12.0f * sc, juce::Font::plain)));
         juce::String sub = juce::String (device.rackId());
         if (device.folded)
-            sub << "   " << RearPanel::kindLine (device.kind()) << "   " << deviceCableCount (view.proc.rack(), device) << " cables";
+            sub << "   " << u8 (RearPanel::kindLine (device.kind())) << "   " << deviceCableCount (view.proc.rack(), device) << " cables";
         g.drawText (sub, nameR.withTrimmedLeft (nw + 12.0f * sc).withWidth (900.0f * sc), juce::Justification::centredLeft);
 
         auto button = [&] (int p, const juce::String& text, bool on, juce::Colour onColour)
@@ -651,8 +651,8 @@ void RackView::buildFace (Slot& slot)
         {
             auto* io = static_cast<RackIODevice*> (d);
             std::vector<CompactFace::Item> items;
-            items.push_back ({ CompactFace::Item::Title, "RACK I/O", 250.0f, {}, {}, [] { return juce::String ("host audio \xc2\xb7 MIDI \xc2\xb7 transport"); } });
-            CompactFace::Item lcd { CompactFace::Item::Lcd, "", 330.0f };
+            items.push_back (CompactFace::Item::title ("RACK I/O", 250.0f, [] { return u8 ("host audio \xc2\xb7 MIDI \xc2\xb7 transport"); }));
+            CompactFace::Item lcd (CompactFace::Item::Lcd, "", 330.0f);
             lcd.text = [io]
             {
                 const auto t = io->transportView();
@@ -663,21 +663,21 @@ void RackView::buildFace (Slot& slot)
                        + juce::String ((int) bar) + "." + juce::String ((int) beat);
             };
             items.push_back (lcd);
-            items.push_back ({ CompactFace::Item::Space, "", 30.0f });
+            items.push_back (CompactFace::Item (CompactFace::Item::Space, {}, 30.0f));
             const char* names[] = { "IN L", "IN R", "OUT L", "OUT R" };
             for (int k = 0; k < 4; ++k)
             {
-                CompactFace::Item m { CompactFace::Item::Meter, names[k], 110.0f };
+                CompactFace::Item m (CompactFace::Item::Meter, names[k], 110.0f);
                 m.get = [io, k] { return (double) io->meter (k) * 5.0; };
                 items.push_back (m);
             }
-            items.push_back ({ CompactFace::Item::Space, "", 30.0f });
-            CompactFace::Item level { CompactFace::Item::Knob, "MAIN", 100.0f };
+            items.push_back (CompactFace::Item (CompactFace::Item::Space, {}, 30.0f));
+            CompactFace::Item level (CompactFace::Item::Knob, "MAIN", 100.0f);
             level.get = [io] { return (double) io->mainLevel() * 0.5; };
             level.set = [io] (double v) { io->setMainLevel ((float) (v * 2.0)); };
             level.text = [io] { return "MAIN " + juce::String (juce::Decibels::gainToDecibels (io->mainLevel(), -60.0f), 1) + " dB"; };
             items.push_back (level);
-            CompactFace::Item lat { CompactFace::Item::Lcd, "", 300.0f };
+            CompactFace::Item lat (CompactFace::Item::Lcd, "", 300.0f);
             lat.text = [this] { return "LAT " + juce::String (proc.rack().latency()) + " smp\npath-aligned (JCS R11)"; };
             items.push_back (lat);
             slot.face = std::make_unique<CompactFace> (std::move (items),
@@ -692,26 +692,26 @@ void RackView::buildFace (Slot& slot)
             {
                 auto* bind = slot.binding.get();
                 std::vector<CompactFace::Item> items;
-                items.push_back ({ CompactFace::Item::Title, juce::String (d->displayName()), 230.0f, {}, {}, [] { return juce::String ("12-step sequencer \xc2\xb7 CLOSED"); } });
-                CompactFace::Item lcd { CompactFace::Item::Lcd, "", 150.0f };
+                items.push_back (CompactFace::Item::title (juce::String (d->displayName()), 230.0f, [] { return u8 ("12-step sequencer \xc2\xb7 CLOSED"); }));
+                CompactFace::Item lcd (CompactFace::Item::Lcd, "", 150.0f);
                 lcd.text = [bind] { return bind->readoutText ({}) + (bind->readoutEnabled ({}) ? " BPM" : ""); };
                 items.push_back (lcd);
-                CompactFace::Item tempo { CompactFace::Item::Knob, "TEMPO", 90.0f };
+                CompactFace::Item tempo (CompactFace::Item::Knob, "TEMPO", 90.0f);
                 tempo.get = [b] { return (double) b->param ("CLOCK:TEMPO"); };
                 tempo.set = [b] (double v) { b->setParam ("CLOCK:TEMPO", (float) v); };
                 items.push_back (tempo);
-                CompactFace::Item run { CompactFace::Item::Momentary, "START/STOP", 120.0f };
+                CompactFace::Item run (CompactFace::Item::Momentary, "START/STOP", 120.0f);
                 run.get = [b] { return (double) b->indicator ("MODE:RUN"); };
                 run.set = [b] (double v) { b->press ("MODE:START/STOP", v > 0.5); };
                 items.push_back (run);
-                CompactFace::Item lamps { CompactFace::Item::Lamps, "STEP", 480.0f };
+                CompactFace::Item lamps (CompactFace::Item::Lamps, "STEP", 480.0f);
                 lamps.lamps = 12;
                 lamps.lamp = [b] (int k) { return b->indicator ("STEP:" + std::to_string (k + 1)); };
                 items.push_back (lamps);
-                CompactFace::Item reset { CompactFace::Item::Momentary, "RESET", 100.0f };
+                CompactFace::Item reset (CompactFace::Item::Momentary, "RESET", 100.0f);
                 reset.set = [b] (double v) { b->press ("MODE:RESET", v > 0.5); };
                 items.push_back (reset);
-                CompactFace::Item lvl { CompactFace::Item::Knob, "LEVEL 1", 90.0f };
+                CompactFace::Item lvl (CompactFace::Item::Knob, "LEVEL 1", 90.0f);
                 lvl.get = [b] { return (double) b->param ("MIXER:LEVEL 1"); };
                 lvl.set = [b] (double v) { b->setParam ("MIXER:LEVEL 1", (float) v); };
                 items.push_back (lvl);
@@ -755,8 +755,8 @@ void RackView::buildFace (Slot& slot)
             if (d->closed)
             {
                 std::vector<CompactFace::Item> items;
-                items.push_back ({ CompactFace::Item::Title, juce::String (d->displayName()), 230.0f, {}, {}, [] { return juce::String ("semi-modular voice \xc2\xb7 CLOSED"); } });
-                CompactFace::Item lcd { CompactFace::Item::Lcd, "", 230.0f };
+                items.push_back (CompactFace::Item::title (juce::String (d->displayName()), 230.0f, [] { return u8 ("semi-modular voice \xc2\xb7 CLOSED"); }));
+                CompactFace::Item lcd (CompactFace::Item::Lcd, "", 230.0f);
                 lcd.text = [this, r]
                 {
                     const auto names = proc.roninPresetNames (0);
@@ -771,17 +771,17 @@ void RackView::buildFace (Slot& slot)
                     const int k = roninKnob (sec, lab);
                     if (k < 0)
                         continue;
-                    CompactFace::Item it { CompactFace::Item::Knob, juce::String (sec) + " " + lab, 96.0f };
+                    CompactFace::Item it (CompactFace::Item::Knob, juce::String (sec) + " " + lab, 96.0f);
                     it.get = [r, k] { return (double) r->knob (k); };
                     it.set = [r, k] (double v) { r->setKnob (k, (float) v); };
                     it.defaultValue = kPanelKnobs[k].valueDefault;
                     items.push_back (it);
                 }
-                CompactFace::Item fx { CompactFace::Item::Toggle, "EFFECT", 110.0f };
+                CompactFace::Item fx (CompactFace::Item::Toggle, "EFFECT", 110.0f);
                 fx.get = [r] { return r->effectOn() ? 1.0 : 0.0; };
                 fx.set = [r] (double v) { r->setEffectOn (v > 0.5); };
                 items.push_back (fx);
-                CompactFace::Item meter { CompactFace::Item::Meter, "OUTPUT", 120.0f };
+                CompactFace::Item meter (CompactFace::Item::Meter, "OUTPUT", 120.0f);
                 meter.get = [r] { return (double) r->meterVolts(); };
                 items.push_back (meter);
                 slot.face = std::make_unique<CompactFace> (std::move (items),
@@ -828,7 +828,8 @@ void RackView::buildFace (Slot& slot)
 
 void RackView::rebuild()
 {
-    cables.reset();
+    if (cables != nullptr)
+        removeChildComponent (cables.get());     // the layer stays (it may be mid-drag); only the devices are rebuilt
     slots.clear();
     spots.clear();
 
@@ -861,7 +862,8 @@ void RackView::rebuild()
         s->shade = std::make_unique<Shade>();
         addAndMakeVisible (*s->shade);
     }
-    cables = std::make_unique<RackCableLayer> (*this, proc);
+    if (cables == nullptr)
+        cables = std::make_unique<RackCableLayer> (*this, proc);
     addAndMakeVisible (*cables);
     for (auto& s : slots)
         if (s->topLayer != nullptr)
@@ -910,6 +912,8 @@ void RackView::setShowBack (bool back)
             }
     }
     proc.showBack = back;
+    if (cables != nullptr)
+        cables->clearMessage();
     rebuild();
     if (port != nullptr && anchor != nullptr)
     {
@@ -1156,8 +1160,8 @@ void RackView::paint (juce::Graphics& g)
     g.fillRect (shadow);
     g.setColour (juce::Colour (0x66dcd6c2));
     g.setFont (font (juce::jmax (11.0f, 17.0f * s)));
-    g.drawText (slots.size() <= 1 ? "Drag a device in from the browser \xc2\xb7 empty rack space"
-                                  : "drop a device here \xc2\xb7 empty rack space",
+    g.drawText (u8 (slots.size() <= 1 ? "Drag a device in from the browser \xc2\xb7 empty rack space"
+                                      : "drop a device here \xc2\xb7 empty rack space"),
                 interior.withHeight (juce::jmin (interior.getHeight(), kUnit * s)), juce::Justification::centred);
 }
 

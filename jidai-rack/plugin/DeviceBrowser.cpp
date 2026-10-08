@@ -120,7 +120,7 @@ int DeviceBrowser::rowAt (juce::Point<float> p) const
 
 void DeviceBrowser::resized()
 {
-    search.setBounds (kPad, 60, getWidth() - 2 * (int) kPad, 28);
+    search.setBounds ((int) kPad, 60, getWidth() - 2 * (int) kPad, 28);
     layoutRows();
 }
 
@@ -234,7 +234,7 @@ void DeviceBrowser::paint (juce::Graphics& g)
     }
     g.setColour (dropHover ? juce::Colour (0xffe0675e) : juce::Colour (0x77dcd6c2));
     g.drawFittedText (dropHover ? juce::String ("Drop here to remove it.")
-                                : juce::String ("Drag into the rack \xc2\xb7 Shift = no auto-route. Click a card to add one at the bottom.\n\n"
+                                : juce::String::fromUTF8 ("Drag into the rack \xc2\xb7 Shift = no auto-route. Click a card to add one at the bottom.\n\n"
                                                 "Grab a device by its ear or strip to move it; drag it back here to remove it."),
                       juce::Rectangle<int> (14, (int) y, getWidth() - 28, 140), juce::Justification::topLeft, 10);
 

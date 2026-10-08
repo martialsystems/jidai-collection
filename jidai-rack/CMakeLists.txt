@@ -131,7 +131,7 @@ target_link_libraries(JidaiRack PRIVATE
   juce::juce_recommended_config_flags
   juce::juce_recommended_warning_flags)
 
-# ---- window probe: builds the editor offscreen, drags devices in and out, writes a PNG ----
+# ---- rack UI probe: builds the editor offscreen, drives it with mouse events and keys, writes PNGs ----
 juce_add_console_app(JidaiRackProbe PRODUCT_NAME "JidaiRackProbe")
 target_sources(JidaiRackProbe PRIVATE tools/RackProbe.cpp ${JIDAI_UI_SOURCES})
 target_compile_definitions(JidaiRackProbe PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JIDAI_NO_PLUGIN_ENTRY=1 JUCE_MODAL_LOOPS_PERMITTED=1)
@@ -140,6 +140,7 @@ target_link_libraries(JidaiRackProbe PRIVATE
   JidaiPanels
   juce::juce_audio_utils
   juce::juce_recommended_config_flags)
+add_test(NAME rack_ui COMMAND JidaiRackProbe ${CMAKE_BINARY_DIR}/rack-shots)
 
 # Preset banks: factory lists, the compiled rack patches, and a temp user-file directory.
 juce_add_console_app(JidaiPresetTests PRODUCT_NAME "JidaiPresetTests")
