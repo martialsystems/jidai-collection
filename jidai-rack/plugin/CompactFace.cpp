@@ -186,7 +186,7 @@ void CompactFace::mouseDrag (const juce::MouseEvent& e)
     if (it.type == Item::Knob && it.set)
     {
         const float range = 200.0f * scale() * (e.mods.isShiftDown() ? 5.0f : 1.0f);
-        it.set (juce::jlimit (0.0, 1.0, dragStart + (double) (dragY - e.position.y) / juce::jmax (1.0f, range)));
+        it.set (juce::jlimit (0.0, 1.0, dragStart + (double) (dragY - e.position.y) / (double) juce::jmax (1.0f, range)));
         repaint();
     }
 }

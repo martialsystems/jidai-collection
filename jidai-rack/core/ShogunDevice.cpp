@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Martial Systems LLC. All rights reserved.
 
 #include "ShogunDevice.h"
+#include "core/FloatCompare.h"
 
 #include <cmath>
 
@@ -142,9 +143,9 @@ std::vector<JackGroup> ShogunDevice::jackGroups() const
         g.push_back (grp);
     }
     // WAVE / FOLD VC belong to their voices.
-    auto addTo = [&] (const char* name, int port) {
+    auto addTo = [&] (const char* groupName, int port) {
         for (auto& grp : g)
-            if (grp.title == name) { grp.jacks.push_back (port); return; }
+            if (grp.title == groupName) { grp.jacks.push_back (port); return; }
     };
     addTo ("BD1", shogun::PORT_BD1_WAVE);
     addTo ("BD1", shogun::PORT_FOLD_VC_BD1);
@@ -214,7 +215,7 @@ void ShogunDevice::beginBlock()
         for (int p = 0; p < shogun::kParamCount; ++p)
         {
             const double v = params_[(size_t) p].load (std::memory_order_relaxed);
-            if (v != applied_[(size_t) p])
+            if (! exactlyEqual (v, applied_[(size_t) p]))
             {
                 applied_[(size_t) p] = v;
                 engine_.setParam (p, v);
@@ -304,7 +305,7 @@ void ShogunDevice::loadInit()
 {
     // Engine::loadInit: every parameter at its default, CV AMT 1, plain input laws, empty matrix and pattern.
     for (int p = 0; p < shogun::kParamCount; ++p)
-        setParam (p, shogun::kParams[p].def);
+        setParam (p, (double) shogun::kParams[p].def);
     Edits e;
     e.pattern = shogun::Pattern {};
     e.rows.fill (shogun::mod::Row {});

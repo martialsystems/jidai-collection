@@ -73,7 +73,7 @@ juce::var patternToVar (const JidaiProcessor::Pattern& pat)
     o->setProperty ("name", pat.name);
     auto* params = new juce::DynamicObject();
     for (auto& [id, v] : pat.params)
-        params->setProperty (id, v);
+        params->setProperty (id, (double) v);
     o->setProperty ("params", juce::var (params));
     juce::Array<juce::var> cl;
     for (size_t i = 0; i < pat.cables.size(); ++i)
@@ -188,7 +188,7 @@ juce::var JidaiProcessor::roninToVar (const RoninStored& u)
         o->setProperty ("triShape", u.triShape == 1 ? "parabola" : "triangle");
     auto* knobs = new juce::DynamicObject();
     for (auto& [id, v] : u.knobs)
-        knobs->setProperty (id, v);
+        knobs->setProperty (id, (double) v);
     o->setProperty ("knobs", juce::var (knobs));
     juce::Array<juce::var> cl;
     for (size_t i = 0; i < u.cables.size(); ++i)

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Martial Systems LLC. All rights reserved.
 
 #include "RoninDevice.h"
+#include "core/FloatCompare.h"
 
 #include "Modular/EffectSwitch.h"
 #include "Modular/PatchState.h"
@@ -183,7 +184,7 @@ void RoninDevice::beginBlock()
     {
         const float v = knobs_[(size_t) i].load();
         const FaceKnob f = face_[(size_t) i];
-        if (! force && v == applied_[(size_t) i] && f != FaceKnob::OutputMix)
+        if (! force && exactlyEqual (v, applied_[(size_t) i]) && f != FaceKnob::OutputMix)
             continue;
         applied_[(size_t) i] = v;
         switch (f)
@@ -239,7 +240,7 @@ RoninDevice::Format1Report RoninDevice::migrateFormat1 (const std::vector<std::p
         const int k = panelKnobIndex (section, label);
         if (k < 0)
             return;
-        const double old = knob (k);
+        const double old = (double) knob (k);
         if (attack && patchstate::attackStalledInV1 (old))
             report.attackWasStalled = true;
         setKnob (k, (float) (attack ? patchstate::migrateEgAttack (old) : patchstate::migrateEgDecayRelease (old)));
@@ -262,7 +263,7 @@ RoninDevice::Format1Report RoninDevice::migrateFormat1 (const std::vector<std::p
             const int k = panelKnobIndex ("VCF", "CUTOFF");
             if (k >= 0)
             {
-                report.cutoffBefore = knob (k);
+                report.cutoffBefore = (double) knob (k);
                 report.cutoffAfter = patchstate::compensateCutoff (report.cutoffBefore, level);
                 setKnob (k, (float) report.cutoffAfter);
                 report.cutoffCompensated = true;

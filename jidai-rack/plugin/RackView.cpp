@@ -804,7 +804,7 @@ void RackView::buildFace (Slot& slot)
                     CompactFace::Item it (CompactFace::Item::Knob, juce::String (sec) + " " + lab, 96.0f);
                     it.get = [r, k] { return (double) r->knob (k); };
                     it.set = [r, k] (double v) { r->setKnob (k, (float) v); };
-                    it.defaultValue = kPanelKnobs[k].valueDefault;
+                    it.defaultValue = (double) kPanelKnobs[k].valueDefault;
                     items.push_back (it);
                 }
                 CompactFace::Item fx (CompactFace::Item::Toggle, "EFFECT", 110.0f);
@@ -862,7 +862,7 @@ void RackView::buildFace (Slot& slot)
                     CompactFace::Item it (CompactFace::Item::Knob, juce::String (id).fromFirstOccurrenceOf (":", false, false), 90.0f);
                     it.get = [sg, p] { return sg->param (p); };
                     it.set = [sg, p] (double v) { sg->setParam (p, v); };
-                    it.defaultValue = shogun::kParams[p].def;
+                    it.defaultValue = (double) shogun::kParams[p].def;
                     items.push_back (it);
                 }
                 CompactFace::Item meter (CompactFace::Item::Meter, "MIX", 110.0f);

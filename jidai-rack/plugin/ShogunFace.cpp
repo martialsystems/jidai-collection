@@ -408,8 +408,8 @@ void ShogunFace::paintOp (juce::Graphics& g, int opIndex, const Bound* b)
             const ParamInfo& pi = kParams[pid];
             v = u;
             if (o.kind == KNOB && pi.kind == ParamKind::Stepped && pi.steps > 1)
-                v = (float) stepIndex (u, pi.steps) / (float) (pi.steps - 1);
-            on = stepIndex (u, pi.steps > 0 ? pi.steps : 2) > 0;
+                v = (float) stepIndex ((double) u, pi.steps) / (float) (pi.steps - 1);
+            on = stepIndex ((double) u, pi.steps > 0 ? pi.steps : 2) > 0;
             if (o.kind == KEY)
             {
                 fill = on ? (t == "M" || t.containsIgnoreCase ("MUTE") ? RED.getARGB() : (fill ? fill : AMB.getARGB())) : 0;
@@ -811,7 +811,7 @@ void ShogunFace::mouseDrag (const juce::MouseEvent& e)
     const LayoutOp& o = kOps[b.op];
     const float u = juce::jlimit (0.0f, 1.0f, dragStartU_ + (dragStart_.y - e.position.y) / (e.mods.isShiftDown() ? 800.0f : 200.0f));
     if (b.kind == B_PARAM && b.a >= 0 && o.kind == KNOB)
-        device_.setParam (b.a, u);
+        device_.setParam (b.a, (double) u);
     else if (b.kind == B_SK && e.mouseWasDraggedSinceMouseDown())
     {
         Step& st = selStep();
@@ -847,7 +847,7 @@ void ShogunFace::mouseDoubleClick (const juce::MouseEvent& e)
     if (b.kind == B_PARAM && b.a >= 0 && kOps[b.op].kind == KNOB)
     {
         jidai::shogunstate::beginUndoStep (device_);
-        device_.setParam (b.a, kParams[b.a].def);     // double-click = default (noon kit value)
+        device_.setParam (b.a, (double) kParams[b.a].def);     // double-click = default (noon kit value)
         jidai::shogunstate::settleUndoStep (device_);
     }
 }
@@ -861,7 +861,7 @@ void ShogunFace::mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWhe
     if (b.kind == B_PARAM && b.a >= 0 && kOps[b.op].kind == KNOB)
     {
         jidai::shogunstate::beginUndoStep (device_);
-        device_.setParam (b.a, device_.param (b.a) + w.deltaY * 0.05f);
+        device_.setParam (b.a, device_.param (b.a) + (double) (w.deltaY * 0.05f));
         jidai::shogunstate::settleUndoStep (device_);
     }
 }

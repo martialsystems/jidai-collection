@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Martial Systems LLC. All rights reserved.
 
 #include "OrigamiDevice.h"
+#include "core/FloatCompare.h"
 
 #include <cmath>
 
@@ -42,9 +43,9 @@ public:
         // Normals: HOST IN R <- HOST IN L; IN L <- HOST IN L; IN R <- IN L if patched, else HOST IN R.
         const float hostL = value[HostInL];
         const float hostR = isConnected[HostInR] ? value[HostInR] : hostL;
-        in.inL = isConnected[InL] ? value[InL] : hostL;
-        in.inR = isConnected[InR] ? value[InR] : (isConnected[InL] ? value[InL] : hostR);
-        in.vcaCv = value[VcaCv];
+        in.inL = (double) (isConnected[InL] ? value[InL] : hostL);
+        in.inR = (double) (isConnected[InR] ? value[InR] : (isConnected[InL] ? value[InL] : hostR));
+        in.vcaCv = (double) value[VcaCv];
         in.vcaPatched = isConnected[VcaCv];
         // Sidechain, as in the plugin: mono, feeds VC SOURCE = SIDECHAIN; its follower is the VCA CV unless the
         // VCA CV jack is patched (a patched jack wins).
@@ -67,7 +68,7 @@ public:
             scFollow = 0.0;
         for (int i = 0; i < 3; ++i)
         {
-            in.vc[i] = value[Vc1 + i];
+            in.vc[i] = (double) value[Vc1 + i];
             in.vcPatched[i] = isConnected[Vc1 + i];
         }
         double l = 0.0, r = 0.0;
@@ -139,7 +140,7 @@ void OrigamiDevice::syncParams()
     for (int p = 0; p < origami::kParamCount; ++p)
     {
         const double v = params_[(size_t) p].load (std::memory_order_relaxed);
-        if (v != core_.param (p))
+        if (! exactlyEqual (v, core_.param (p)))
             core_.setParam (p, v);
     }
     latency_.store (core_.latencySamples());
