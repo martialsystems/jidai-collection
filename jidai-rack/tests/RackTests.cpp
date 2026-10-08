@@ -482,14 +482,18 @@ void testOrigamiSidechain()
 // MAIN OUT R. The rack's reported latency must equal where the impulse lands, and the compensated dry path must land
 // on the same sample (RONIN 0, ORIGAMI QUALITY 1x 0 and 2x 46). ORIGAMI at WAVE 0 measures its resampling chain alone:
 // a running fold stage is first-order ADAA, which averages neighbouring samples like a gentle low-pass and adds half
-// a sample of group delay at the rate it runs (not a buffering latency, so it is not reported).
+// a sample of group delay at the rate it runs (jidai::dsp::TripleShaper::groupDelay(); fractional and WAVE-dependent,
+// not a buffering latency, so it is not reported). Since jidai-common 1.1.2 a stage at amount 0 is a wire at any SYM,
+// so WAVE 0 with SYM set is still a bit-exact bypass that lands on the reported sample.
 void testImpulseAlignment()
 {
-    struct Case { const char* name; DeviceKind kind; double quality, wave; const char* in; const char* out; int want; };
+    struct Case { const char* name; DeviceKind kind; double quality, wave, sym; const char* in; const char* out; int want; };
     const Case cases[] = {
-        { "RONIN MIX", DeviceKind::Ronin, 0.0, 0.0, "RONIN#1/MIX:IN 1", "RONIN#1/MIX:OUT", 0 },
-        { "ORIGAMI 1x WAVE 0", DeviceKind::Origami, 0.0, 0.0, "ORIGAMI#1/IN:IN L", "ORIGAMI#1/OUT:OUT L", 0 },
-        { "ORIGAMI 2x WAVE 0", DeviceKind::Origami, 1.0, 0.0, "ORIGAMI#1/IN:IN L", "ORIGAMI#1/OUT:OUT L", 46 },
+        { "RONIN MIX", DeviceKind::Ronin, 0.0, 0.0, 0.0, "RONIN#1/MIX:IN 1", "RONIN#1/MIX:OUT", 0 },
+        { "ORIGAMI 1x WAVE 0", DeviceKind::Origami, 0.0, 0.0, 0.0, "ORIGAMI#1/IN:IN L", "ORIGAMI#1/OUT:OUT L", 0 },
+        { "ORIGAMI 2x WAVE 0", DeviceKind::Origami, 1.0, 0.0, 0.0, "ORIGAMI#1/IN:IN L", "ORIGAMI#1/OUT:OUT L", 46 },
+        { "ORIGAMI 1x WAVE 0 SYM 0.7", DeviceKind::Origami, 0.0, 0.0, 0.7, "ORIGAMI#1/IN:IN L", "ORIGAMI#1/OUT:OUT L", 0 },
+        { "ORIGAMI 2x WAVE 0 SYM 0.7", DeviceKind::Origami, 1.0, 0.0, 0.7, "ORIGAMI#1/IN:IN L", "ORIGAMI#1/OUT:OUT L", 46 },
     };
     for (const auto& c : cases)
     {
@@ -501,6 +505,7 @@ void testImpulseAlignment()
         {
             o->setParam (origami::kQuality, c.quality);
             o->setParam ("wave", c.wave);
+            o->setParam ("sym", c.sym);
         }
         for (const auto& cs : std::vector<CableSpec> (rack.cables()))   // drop the auto-routed host cables
             if (cs.a.rfind ("RACK#1/", 0) == 0 || cs.b.rfind ("RACK#1/", 0) == 0)
@@ -524,6 +529,8 @@ void testImpulseAlignment()
         check (rack.latency() == c.want && pl == c.want && pr == c.want,
                std::string (c.name) + ": reported " + std::to_string (rack.latency()) + ", impulse through the device "
                    + std::to_string (pl) + ", dry path " + std::to_string (pr) + " (want " + std::to_string (c.want) + ")");
+        if (c.kind == DeviceKind::Origami)
+            check (outL == outR, std::string (c.name) + ": the device path is bit-identical to the compensated dry path");
         std::printf ("INFO %s: reported %d, impulse %d, dry %d\n", c.name, rack.latency(), pl, pr);
     }
 }

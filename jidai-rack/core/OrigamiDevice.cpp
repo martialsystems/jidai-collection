@@ -124,7 +124,7 @@ void OrigamiDevice::beginBlock()
 {
     if (dirty_.exchange (false))
         syncParams();
-    // Once per block: which shaper stages are true wires (jidai-common 1.1.1, never decided per sample).
+    // Once per block: which shaper stages are true wires (jidai-common 1.1.2, never decided per sample).
     const bool* c = unit_->connected();
     const bool vcPatched[3] { c[Vc1], c[Vc2], c[Vc3] };
     unit_->scLive = c[ScL] || c[ScR];
