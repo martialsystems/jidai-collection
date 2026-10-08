@@ -222,7 +222,7 @@ void testAliasing()
             const double x = std::sin (2.0 * kPi * B0 * n / N);
             double out;
             if (M == 1) out = ts.process (x, c, 0.0);
-            else { double u0, u1; up.process (x, u0, u1); out = dn.process (ts.process (u0, c, 0.0), ts.process (u1, c, 0.0)); }
+            else { double u0, u1; up.process (x, u0, u1); const double w0 = ts.process (u0, c, 0.0); const double w1 = ts.process (u1, c, 0.0); out = dn.process (w0, w1); } // sequenced: argument order is unspecified, and the stateful shaper must see u0 before u1
             if (n >= N) y[(size_t) (n - N)] = out;
         }
         return jidai::test::aliasDb (y, 48000.0, B0);
