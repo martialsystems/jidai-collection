@@ -4,13 +4,13 @@ Header-only C++17 library shared by every Jidai unit (BUSHIDO, RONIN, SHOGUN, OR
 It is the code form of the **Jidai Cable Standard v1.1** (`JCS`, R1–R16) plus the shared DSP blocks.
 No framework, no allocation in the per-sample helpers, no global state.
 
-> **Version 1.1.1 (2026-10-08) — re-vendor.** One commit for BUSHIDO, RONIN and SHOGUN to re-vendor. Changes since 1.1.0:
+> **Version 1.1.1 (2026-10-08).** Changes since 1.1.0:
 > - `pitch::kC3Hz` is the exact `440·2^(−21/12)` = **130.8127826502993 Hz** (was the rounded 130.8128). Use it everywhere; never write 130.8128.
 > - `pitch::lin55ToVoct(V)` is `log2(V) − 1.25` exactly (`kLin55Octaves = 1.25`, since 55/C3 = 2^(−15/12)); it was 1.9e-7 V low.
 > - `TripleShaper` decides stage skipping **per block** (`planBlock(ctl, steady, vcLive)`), never per sample, so the ADAA half-sample delay cannot toggle mid-stream under modulation or VC. Without a plan no stage is skipped.
 > - `AliasTable` carries a per-alias **input law** (`AliasLaw::{Identity, Lin55ToVoct, HzvLinToVoct, VoctToHzvLin, Scale}`): `add(old, canonical, law)`, `resolve(id)` → `{id, conversion}`, `conversion.convert(V)`. E.g. SHOGUN `LEAD:HZ/V` → `LEAD:NOTE` with `Lin55ToVoct` (V′ = log2 V − 1.25).
 > - Headers are clean under `-Wfloat-equal` (`clampRail` uses `std::isnan`; shaper compares use `same()`), enforced by the new `headers` test.
-> - `LevelComp`'s 1e-30 detector floor is documented (moves SHOGUN's output by at most 9.9e-7; kept).
+> - `LevelComp`'s 1e-30 detector floor is documented.
 > - Neutral names only: R16 level `ModularHalfLevel`; tests use the fake prefix `ACME`.
 
 ## Use it
@@ -38,9 +38,8 @@ No framework, no allocation in the per-sample helpers, no global state.
 
 - **Jack labels may contain `/` and non-ASCII.** R6 says "no `/`", but canonical ids in the same standard (`VCO:HZ/V`, `INPUTS:START/STOP`, RONIN `EG 2:OUT −`) need it. The parser splits at the first `/` before the first `:`; sections never contain `/`.
 - **No retired-prefix aliases (R6).** Only the neutral prefixes are known; a stored cable with any other prefix is kept as stored and shows as missing. Per-device `AliasTable`s cover future jack renames.
-- **Neutral names only.** No third-party brand or model names appear in code or identifiers (the R16 level is `ModularHalfLevel`).
-- **R16 is a hook, not a feature.** It stays identity until the user decides.
-
+- **Neutral names.** Code and identifiers use neutral names (the R16 level is `ModularHalfLevel`).
+- **R16 is a hook only.** It stays at unity gain for now.
 - **2× on external audio costs 46 samples, not 23.** SHOGUN generates at 2× and only decimates (23). An effect such as ORIGAMI has to upsample *and* decimate, so its true latency is 46 base samples, and that is what it reports. (A 47-tap pair would reach 23 total, at only 63.6 dB stopband.)
 
 ## Tests
