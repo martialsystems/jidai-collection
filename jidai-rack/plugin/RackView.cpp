@@ -682,7 +682,7 @@ void RackView::buildFace (Slot& slot)
             level.text = [io] { return "MAIN " + juce::String (juce::Decibels::gainToDecibels (io->mainLevel(), -60.0f), 1) + " dB"; };
             items.push_back (level);
             CompactFace::Item lat (CompactFace::Item::Lcd, "", 300.0f);
-            lat.text = [this] { return "LAT " + juce::String (proc.rack().latency()) + " smp\npath-aligned (JCS R11)"; };
+            lat.text = [this] { return "LAT " + juce::String (proc.rack().latency()) + " smp\npaths aligned"; };
             items.push_back (lat);
             slot.face = std::make_unique<CompactFace> (std::move (items),
                                                        CompactFace::Style { juce::Colour (0xff1f1f23), juce::Colour (0xff141417), ink, kGold });

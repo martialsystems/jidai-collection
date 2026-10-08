@@ -303,7 +303,7 @@ void RackCableLayer::paint (juce::Graphics& g)
         const auto mid = d.shown == Shown::Rope ? d.path.getPointAlongPath (d.path.getLength() * 0.5f) : anchor.translated (14.0f * sc, 24.0f * sc);
         if (in.comp > 0)
         {
-            const auto t = "+" + juce::String (in.comp) + " comp (R11)";
+            const auto t = "+" + juce::String (in.comp) + " comp";
             const auto r = place (juce::Rectangle<float> (tagWidth (t), fs * 1.6f).withCentre (anchor.translated (0.0f, -fs * 2.2f)));
             paintTag (g, r, juce::Colour (0xee1a1608), kAmber, t, fs, kAmber.withAlpha (0.7f));
         }
