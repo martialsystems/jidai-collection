@@ -268,7 +268,7 @@ void Rack::addCableLocked (const std::string& a, const std::string& b, bool auto
     cables_.push_back (c);
 }
 
-int Rack::autoRoute (Device* device)
+int Rack::autoRoute (Device* device, bool asEffect)
 {
     const int index = indexOf (device);
     if (index < 0 || rackIO_ == nullptr || device == rackIO_)
@@ -286,6 +286,11 @@ int Rack::autoRoute (Device* device)
         case DeviceKind::Ronin:
             add (me + RoninDevice::kHostOutL, io + "MAIN:OUT L");
             add (me + RoninDevice::kHostOutR, io + "MAIN:OUT R");
+            if (asEffect)
+            {
+                add (io + "HOST:IN L", me + RoninDevice::kHostInL);
+                add (io + "HOST:IN R", me + RoninDevice::kHostInR);
+            }
             if (index > 0)
                 if (auto* above = dynamic_cast<BushidoDevice*> (devices_[(size_t) index - 1].get()))
                 {

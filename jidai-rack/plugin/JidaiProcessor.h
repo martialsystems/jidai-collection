@@ -45,7 +45,7 @@ public:
     jidai::Rack& rack() { return rack_; }
     // A user insert: a new BUSHIDO opens on pattern A001 and takes its new-instance defaults (HOST clock while the
     // host plays); then auto-route (JIDAI_RACK_Redesign 3.6) unless autoRoute is false (Shift held).
-    jidai::Device* addDevice (jidai::DeviceKind kind, int position = -1, bool autoRoute = true);
+    jidai::Device* addDevice (jidai::DeviceKind kind, int position = -1, bool autoRoute = true, bool asEffect = false);
     void removeDevice (jidai::Device* device);
     void moveDevice (jidai::Device* device, int position);
     void setCables (const std::vector<jidai::CableSpec>& cables);

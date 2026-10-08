@@ -2,29 +2,23 @@
 
 #include "RackView.h"
 #include "BinaryData.h"
+#include "CompactFace.h"
+#include "RackCableLayer.h"
+#include "RackStyle.h"
+#include "RearPanel.h"
+#include "RoninPanel.h"
+
+#include "origami/plugin/OrigamiPanel.h"
+#include "ui/BushidoTabs.h"
+#include "ui/PatternScreen.h"
+#include "ui/RackPanel.h"
 
 using namespace jidai;
+using namespace rackstyle;
 
 namespace {
 
-std::vector<jidai::CableSpec> toRack (const std::vector<::CableSpec>& specs)
-{
-    std::vector<jidai::CableSpec> out;
-    for (auto& c : specs)
-        out.push_back ({ c.a.toStdString(), c.b.toStdString(), c.color, c.age });
-    return out;
-}
-
-std::vector<::CableSpec> toLayer (const std::vector<jidai::CableSpec>& specs)
-{
-    std::vector<::CableSpec> out;
-    for (auto& c : specs)
-        out.push_back ({ juce::String (c.a), juce::String (c.b), c.color, c.age });
-    return out;
-}
-
 // RONIN's layout has the glass, the LCD and the dropdown key, and no banks or SAVE.
-// Those sit on the same x and y as BUSHIDO's. 17 characters fits "A013 DELAY BOUNCE".
 PanelLayout::Screen roninScreen()
 {
     PanelLayout::Screen s;
@@ -40,238 +34,51 @@ PanelLayout::Screen roninScreen()
     return s;
 }
 
-}
-
-// ---------------- rack hardware ----------------
-
-namespace {
-
-const juce::Colour kInk { 0xffe8e2cf };
-
-void paintScrew (juce::Graphics& g, juce::Point<float> c, float r, float angle)
+int roninKnob (const char* section, const char* label)
 {
-    g.setColour (juce::Colour (0xaa000000));                                  // countersink shadow
-    g.fillEllipse (juce::Rectangle<float> (r * 2.5f, r * 2.5f).withCentre (c.translated (0.0f, r * 0.15f)));
-    juce::ColourGradient metal (juce::Colour (0xffe6e4dc), c.x - r * 0.6f, c.y - r * 0.7f,
-                                juce::Colour (0xff5d5c58), c.x + r * 0.7f, c.y + r * 0.8f, true);
-    g.setGradientFill (metal);
-    g.fillEllipse (juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (c));
-    g.setColour (juce::Colour (0xff2a2a28));
-    g.drawEllipse (juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (c), juce::jmax (0.6f, r * 0.12f));
-    // Phillips cross
-    const float len = r * 0.62f, wdt = juce::jmax (1.0f, r * 0.26f);
-    for (int k = 0; k < 2; ++k)
-    {
-        const float a = angle + (float) k * juce::MathConstants<float>::halfPi;
-        const juce::Point<float> d (std::cos (a) * len, std::sin (a) * len);
-        g.setColour (juce::Colour (0xff3a3936));
-        g.drawLine ({ c - d, c + d }, wdt);
-        g.setColour (juce::Colour (0x55ffffff));
-        g.drawLine ({ c - d + juce::Point<float> (0.0f, wdt * 0.6f), c + d + juce::Point<float> (0.0f, wdt * 0.6f) }, wdt * 0.35f);
-    }
+    for (int i = 0; i < kPanelKnobCount; ++i)
+        if (juce::String (kPanelKnobs[i].section) == section && juce::String (kPanelKnobs[i].label) == label)
+            return i;
+    return -1;
 }
 
-// A device's ear: dark brushed steel the colour of its faceplate, with a bevel.
-void paintEar (juce::Graphics& g, juce::Rectangle<float> r, bool left, float s)
+int frontCableCount (Rack& rack, const Device& d)
 {
-    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff302e2a), left ? r.getX() : r.getRight(), r.getY(),
-                                             juce::Colour (0xff191816), left ? r.getRight() : r.getX(), r.getY(), false));
-    g.fillRect (r);
-    juce::Random grain (left ? 7 : 11);                                        // brushed lines, the same every paint
-    for (float y = r.getY() + 1.0f; y < r.getBottom(); y += juce::jmax (1.5f, 2.2f * s))
-    {
-        g.setColour (juce::Colour (grain.nextBool() ? 0x0cffffff : 0x10000000));
-        g.drawHorizontalLine ((int) y, r.getX(), r.getRight());
-    }
-    g.setColour (juce::Colour (0x26ffffff));
-    g.drawVerticalLine ((int) (left ? r.getX() : r.getRight() - 1.0f), r.getY(), r.getBottom());
-    g.drawHorizontalLine ((int) r.getY(), r.getX(), r.getRight());
-    g.setColour (juce::Colour (0xcc000000));
-    g.drawHorizontalLine ((int) (r.getBottom() - 1.0f), r.getX(), r.getRight());
-    g.drawVerticalLine ((int) (left ? r.getRight() - 1.0f : r.getX()), r.getY(), r.getBottom());
+    const std::string prefix = d.rackId() + "/";
+    int n = 0;
+    for (auto& c : rack.cables())
+        for (const std::string* end : { &c.a, &c.b })
+            if (end->rfind (prefix, 0) == 0)
+            {
+                const int j = d.findJack (end->substr (prefix.size()));
+                if (j >= 0 && ! d.jacks()[(size_t) j].backOnly)
+                {
+                    ++n;
+                    break;
+                }
+            }
+    return n;
 }
 
-}
-
-// ---------------- the mount of one device: ears, screws, fold arrow, name, remove button ----------------
-// It spans the rack from rail to rail, behind the device's panel, so it is reached on the ears; folded, it is the
-// whole strip.
-
-class RackView::Mount : public juce::Component
+int deviceCableCount (Rack& rack, const Device& d)
 {
-public:
-    Mount (RackView& v, Device& d) : view (v), device (d) {}
+    const std::string prefix = d.rackId() + "/";
+    int n = 0;
+    for (auto& c : rack.cables())
+        if (c.a.rfind (prefix, 0) == 0 || c.b.rfind (prefix, 0) == 0)
+            ++n;
+    return n;
+}
 
-    float s() const { return view.scale(); }
-    float ear() const { return kRail * s(); }
-    bool folded() const { return device.folded; }
+juce::String bpmText (double bpm)
+{
+    const double v = std::round (bpm * 10.0) / 10.0;
+    return juce::String (v, 1);
+}
 
-    juce::Rectangle<float> foldBox() const
-    {
-        const float b = 28.0f * s();
-        return folded() ? juce::Rectangle<float> (b, b).withCentre ({ ear() + 26.0f * s(), (float) getHeight() * 0.5f })
-                        : juce::Rectangle<float> (b, b).withCentre ({ ear() * 0.5f, 60.0f * s() });
-    }
-    juce::Rectangle<float> removeBox() const
-    {
-        const float b = 28.0f * s();
-        return folded() ? juce::Rectangle<float> (b, b).withCentre ({ (float) getWidth() - ear() - 26.0f * s(), (float) getHeight() * 0.5f })
-                        : juce::Rectangle<float> (b, b).withCentre ({ (float) getWidth() - ear() * 0.5f, 60.0f * s() });
-    }
+} // namespace
 
-    void paint (juce::Graphics& g) override
-    {
-        const auto r = getLocalBounds().toFloat();
-        const float sc = s(), e = ear();
-        const auto leftEar = r.withWidth (e), rightEar = r.withTrimmedLeft (r.getWidth() - e);
-
-        if (folded())
-        {
-            auto face = r.reduced (e, 0.0f);
-            g.setGradientFill (juce::ColourGradient (juce::Colour (0xff2a2925), 0, face.getY(), juce::Colour (0xff151513), 0, face.getBottom(), false));
-            g.fillRect (face);
-            g.setColour (juce::Colour (0x22ffffff));
-            g.drawHorizontalLine ((int) face.getY(), face.getX(), face.getRight());
-            g.setColour (juce::Colour (0xdd000000));
-            g.drawHorizontalLine ((int) (face.getBottom() - 1.0f), face.getX(), face.getRight());
-            g.setColour (kInk);
-            g.setFont (juce::FontOptions (22.0f * sc, juce::Font::bold));
-            const auto text = face.withTrimmedLeft (56.0f * sc);
-            g.drawText (juce::String (device.title()), text, juce::Justification::centredLeft);
-            g.setColour (kInk.withAlpha (0.55f));
-            g.setFont (juce::FontOptions (15.0f * sc));
-            g.drawText (device.kind() == DeviceKind::Bushido ? "3 x 12 step sequencer" : "modular synthesizer",
-                        text.withTrimmedLeft (190.0f * sc), juce::Justification::centredLeft);
-        }
-
-        paintEar (g, leftEar, true, sc);
-        paintEar (g, rightEar, false, sc);
-
-        // Screws on the rail holes: top and bottom of each ear (one each, centred, when folded).
-        const float sr = 8.5f * sc;
-        const float salt = (float) device.number * 0.7f + (device.kind() == DeviceKind::Ronin ? 0.4f : 0.0f);
-        auto screwsAt = [&] (float y, float a) {
-            paintScrew (g, { leftEar.getCentreX(), y }, sr, a);
-            paintScrew (g, { rightEar.getCentreX(), y }, sr, a + 0.9f);
-        };
-        if (folded())
-            screwsAt (r.getCentreY(), salt);
-        else
-        {
-            screwsAt (24.0f * sc, salt);
-            screwsAt (r.getBottom() - 24.0f * sc, salt + 1.3f);
-        }
-
-        // Fold arrow: down while open, right while folded.
-        {
-            const auto b = foldBox();
-            g.setColour (hover == 1 ? kInk : kInk.withAlpha (0.7f));
-            juce::Path p;
-            const auto c = b.getCentre();
-            const float k = b.getWidth() * 0.28f;
-            if (folded())
-                p.addTriangle (c.x - k * 0.7f, c.y - k, c.x - k * 0.7f, c.y + k, c.x + k, c.y);
-            else
-                p.addTriangle (c.x - k, c.y - k * 0.7f, c.x + k, c.y - k * 0.7f, c.x, c.y + k);
-            g.fillPath (p);
-        }
-
-        // Remove: a small round button with an x.
-        {
-            const auto b = removeBox().reduced (3.0f * sc);
-            g.setColour (hover == 2 ? juce::Colour (0xffc8322a) : juce::Colour (0xff121211));
-            g.fillEllipse (b);
-            g.setColour (juce::Colour (0x40ffffff));
-            g.drawEllipse (b, 1.0f);
-            g.setColour (hover == 2 ? kInk : kInk.withAlpha (0.75f));
-            const auto c = b.reduced (b.getWidth() * 0.32f);
-            g.drawLine (c.getX(), c.getY(), c.getRight(), c.getBottom(), juce::jmax (1.0f, 2.2f * sc));
-            g.drawLine (c.getRight(), c.getY(), c.getX(), c.getBottom(), juce::jmax (1.0f, 2.2f * sc));
-        }
-
-        // The device's name runs up the left ear, as on a real rack unit.
-        if (! folded())
-        {
-            const auto area = leftEar.withTrimmedTop (90.0f * sc).withTrimmedBottom (50.0f * sc);
-            juce::Graphics::ScopedSaveState state (g);
-            g.addTransform (juce::AffineTransform::rotation (-juce::MathConstants<float>::halfPi, area.getCentreX(), area.getCentreY()));
-            g.setColour (kInk.withAlpha (0.78f));
-            g.setFont (juce::FontOptions (17.0f * sc, juce::Font::bold));
-            g.drawText (juce::String (device.title()), juce::Rectangle<float> (area.getHeight(), area.getWidth()).withCentre (area.getCentre()),
-                        juce::Justification::centred);
-        }
-    }
-
-    int partAt (juce::Point<float> p) const
-    {
-        if (foldBox().expanded (4.0f).contains (p)) return 1;
-        if (removeBox().contains (p)) return 2;
-        return 0;
-    }
-
-    void mouseMove (const juce::MouseEvent& e) override
-    {
-        const int part = partAt (e.position);
-        setMouseCursor (part != 0 ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::DraggingHandCursor);
-        if (part != hover)
-        {
-            hover = part;
-            repaint();
-        }
-    }
-    void mouseExit (const juce::MouseEvent&) override { hover = 0; repaint(); }
-
-    void mouseDown (const juce::MouseEvent& e) override { pressed = partAt (e.position); }
-
-    void mouseDrag (const juce::MouseEvent& e) override
-    {
-        if (pressed != 0 || e.getDistanceFromDragStart() < 6)
-            return;
-        if (auto* container = juce::DragAndDropContainer::findParentDragContainerFor (this))
-        {
-            if (container->isDragAndDropActive())
-                return;
-            // The drag image is the device itself, shrunk.
-            const auto area = view.slotBounds (view.indexOfSlotFor (device));
-            auto image = view.createComponentSnapshot (area, true, 1.0f);
-            const int w = juce::jmin (360, image.getWidth());
-            const int h = juce::jmax (1, image.getHeight() * w / juce::jmax (1, image.getWidth()));
-            image = image.rescaled (w, h);
-            image.multiplyAllAlphas (0.8f);
-            container->startDragging ("move:" + juce::String (device.rackId()), this, juce::ScaledImage (image), false, nullptr, &e.source);
-        }
-    }
-
-    void mouseUp (const juce::MouseEvent& e) override
-    {
-        const int part = pressed;
-        pressed = 0;
-        if (part == 0 || partAt (e.position) != part)
-            return;
-        juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<RackView> (&view), d = &device, part]
-        {
-            if (sp == nullptr)
-                return;
-            if (part == 1)
-                sp->setFolded (d, ! d->folded);
-            else
-                sp->removeDevice (d);
-        });
-    }
-
-    void mouseDoubleClick (const juce::MouseEvent& e) override
-    {
-        if (partAt (e.position) == 0 && folded())
-            juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<RackView> (&view), d = &device]
-                                             { if (sp != nullptr) sp->setFolded (d, false); });
-    }
-
-    RackView& view;
-    Device& device;
-    int hover = 0, pressed = 0;
-};
-
-// ---------------- BUSHIDO's panel controls, bound to its engine ----------------
+// ---------------- bindings ----------------
 
 class RackView::BushidoBinding : public RackPanel::Binding
 {
@@ -292,7 +99,6 @@ public:
     }
     void press (const juce::String& id, bool down) override { b.press (id.toStdString(), down); }
     float indicator (const juce::String& id) override { return b.indicator (id.toStdString()); }
-    // The BPM readout: the TEMPO parameter shown as BPM at the DIV setting (BUSHIDO's editor does the same).
     juce::String readoutText (const juce::String&) override
     {
         if (! readoutEnabled ({}))
@@ -309,45 +115,52 @@ public:
     BushidoDevice& b;
 };
 
-// Four cable colours in BUSHIDO's top bar, where its own editor puts them. They set the rack's cable colour.
-class RackView::Swatches : public juce::Component
+// BUSHIDO's STEPS / CLOCK / MIDI / SETUP pages (its own TabPage, from the pinned bushido sources).
+class RackView::BushidoTabHost : public bushido_ui::TabHost
 {
 public:
-    Swatches (std::function<int()> g, std::function<void (int)> s) : getColour (std::move (g)), setColour (std::move (s)) {}
-    void paint (juce::Graphics& g) override
+    BushidoTabHost (BushidoDevice& d, JidaiProcessor& p, std::function<void()> rescale) : b (d), proc (p), onRescale (std::move (rescale)) {}
+    float value (const juce::String& id) override { return b.param (id.toStdString()); }
+    void setValue (const juce::String& id, float v) override { b.setParam (id.toStdString(), v); }
+    void edit (const juce::String&, bool) override {}
+    float lamp (const juce::String& id) override { return b.indicator (id.toStdString()); }
+    double extPeriod() override { return b.engine().measuredExtPeriod(); }
+    double hostBpm() override { return b.engine().hostBpm(); }
+    int settleSamples() override { return b.engine().settleSamples(); }
+    std::vector<juce::String> migrationLines() override { return {}; }
+    bool lawMismatch (int) override { return false; }
+    bool readOnly() override { return false; }
+    int scalePercent() override { return proc.scalePercent; }
+    void setScalePercent (int percent) override
     {
-        const float d = (float) getHeight() * 0.62f;
-        for (int i = 0; i < 4; ++i)
-        {
-            auto r = cell (i).withSizeKeepingCentre (d, d);
-            g.setColour (CableLayer::cableColour (i, 0));
-            g.fillEllipse (r);
-            if (i == getColour())
-            {
-                g.setColour (juce::Colours::white);
-                g.drawEllipse (r.expanded (2.5f), 1.5f);
-            }
-        }
+        proc.scalePercent = percent;
+        if (onRescale)
+            onRescale();
     }
-    void mouseDown (const juce::MouseEvent& e) override
-    {
-        for (int i = 0; i < 4; ++i)
-            if (cell (i).contains (e.position))
-                setColour (i);
-    }
-
-private:
-    std::function<int()> getColour;
-    std::function<void (int)> setColour;
-    juce::Rectangle<float> cell (int i) const
-    {
-        const float w = (float) getWidth() / 4.0f;
-        return { w * (float) i, 0, w, (float) getHeight() };
-    }
+    BushidoDevice& b;
+    JidaiProcessor& proc;
+    std::function<void()> onRescale;
 };
 
-// The shadow the unit above (or the rack's top) casts on a device. It is short: it fades out where the device's top
-// screws begin, since the units are mounted upright and sit flush.
+class RackView::OrigamiAccess : public OrigamiPanel::Access
+{
+public:
+    OrigamiAccess (OrigamiDevice& d, Rack& r) : o (d), rack (r) {}
+    double get (int p) const override { return o.param (p); }
+    void set (int p, double v) override { o.setParam (p, v); }
+    float inPeak (int ch) const override { return o.core().inPeak (ch) * 5.0f; }
+    float outPeak (int ch) const override { return o.core().outPeak (ch) * 5.0f; }
+    float follower() const override { return o.follower(); }
+    bool over() const override { return o.overLit(); }
+    int latencySamples() const override { return o.latencySamples(); }
+    double sampleRate() const override { return rack.sampleRate(); }
+    double stageCurve (int stage, double x) const override { return o.stageCurve (stage, x); }
+    OrigamiDevice& o;
+    Rack& rack;
+};
+
+// ---------------- the shade under the unit above ----------------
+
 class RackView::Shade : public juce::Component
 {
 public:
@@ -360,51 +173,376 @@ public:
     }
 };
 
-// ---------------- slots ----------------
+// ---------------- slot ----------------
 
 struct RackView::Slot {
     Device* device = nullptr;
-    std::unique_ptr<Mount> mount;
-    std::unique_ptr<RackPanel> panel;
-    std::unique_ptr<Shade> shade;
     std::unique_ptr<BushidoBinding> binding;
-    std::unique_ptr<juce::Component> topLayer;      // pattern screen (and BUSHIDO's swatches), above the cables
+    std::unique_ptr<BushidoTabHost> tabHost;
+    std::unique_ptr<OrigamiAccess> origamiAccess;
+    std::unique_ptr<Mount> mount;
+    std::unique_ptr<juce::Component> face;
+    std::unique_ptr<Strip> strip;
+    std::unique_ptr<Shade> shade;
     std::unique_ptr<PatternScreen> screen;
-    std::unique_ptr<Swatches> swatches;
-    float top = 0.0f;           // design units
-    float height = 0.0f;        // design units: the open panel
-    float shown() const { return device->folded ? kFoldHeight : height; }
+    std::unique_ptr<juce::Component> topLayer;        // the pattern screen, above the cables (its list drops over them)
+    RackPanel* panel = nullptr;                       // BUSHIDO or RONIN panel (MAIN)
+    OrigamiPanel* origami = nullptr;
+    RearPanel* rear = nullptr;
+    float top = 0.0f, height = 0.0f;                  // design units, strip included
+    float faceY = 0.0f, faceH = 0.0f;                 // the face component inside the face area (design, from the area top)
 };
 
-// Passes a child's pointer events to a component that watches them all. Wheel events are not passed: a component's
-// default mouseWheelMove hands the wheel to its parent, so a watching component would scroll the rack for every wheel
-// a child had already used (the preset list, a knob).
-struct RackView::PointerRelay final : public juce::MouseListener
+// ---------------- mount: ears, screws, the plate behind the face ----------------
+
+class RackView::Mount : public juce::Component
 {
-    explicit PointerRelay (juce::Component& c) : to (c) {}
-    void mouseMove (const juce::MouseEvent& e) override        { to.mouseMove (e); }
-    void mouseEnter (const juce::MouseEvent& e) override       { to.mouseEnter (e); }
-    void mouseExit (const juce::MouseEvent& e) override        { to.mouseExit (e); }
-    void mouseDown (const juce::MouseEvent& e) override        { to.mouseDown (e); }
-    void mouseDrag (const juce::MouseEvent& e) override        { to.mouseDrag (e); }
-    void mouseUp (const juce::MouseEvent& e) override          { to.mouseUp (e); }
-    void mouseDoubleClick (const juce::MouseEvent& e) override { to.mouseDoubleClick (e); }
-    juce::Component& to;
+public:
+    Mount (RackView& v, Device& d) : view (v), device (d) { setMouseCursor (juce::MouseCursor::DraggingHandCursor); }
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto r = getLocalBounds().toFloat();
+        const float s = view.scale(), e = kRail * s;
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xff222225), 0, 0, juce::Colour (0xff151517), 0, r.getBottom(), false));
+        g.fillRect (r.reduced (e, 0.0f));
+        paintEar (g, r.withWidth (e), true, s);
+        paintEar (g, r.withTrimmedLeft (r.getWidth() - e), false, s);
+        const float sr = 8.5f * s;
+        const float salt = (float) device.number * 0.7f + (float) device.kind() * 0.4f;
+        auto screwsAt = [&] (float y, float a) {
+            paintScrew (g, { e * 0.5f, y }, sr, a);
+            paintScrew (g, { r.getWidth() - e * 0.5f, y }, sr, a + 0.9f);
+        };
+        if (device.folded || r.getHeight() < 170.0f * s)
+            screwsAt (r.getCentreY(), salt);
+        else
+            for (float u = 0.0f; u + 1.0f <= std::round (r.getHeight() / (kUnit * s)); u += 1.0f)
+            {
+                screwsAt ((u * kUnit + 24.0f) * s, salt + u);
+                screwsAt (((u + 1.0f) * kUnit - 24.0f) * s, salt + u + 1.3f);
+            }
+    }
+
+    void mouseDown (const juce::MouseEvent&) override { view.selectDevice (&device); }
+    void mouseDrag (const juce::MouseEvent& e) override { startMove (view, device, *this, e); }
+
+    static void startMove (RackView& view, Device& device, juce::Component& from, const juce::MouseEvent& e)
+    {
+        if (e.getDistanceFromDragStart() < 6 || device.kind() == DeviceKind::RackIO)
+            return;
+        if (auto* container = juce::DragAndDropContainer::findParentDragContainerFor (&from))
+        {
+            if (container->isDragAndDropActive())
+                return;
+            const auto area = view.slotBounds (view.indexOfSlotFor (device));
+            auto image = view.createComponentSnapshot (area, true, 1.0f);
+            const int w = juce::jmin (360, image.getWidth());
+            const int h = juce::jmax (1, image.getHeight() * w / juce::jmax (1, image.getWidth()));
+            image = image.rescaled (w, h);
+            image.multiplyAllAlphas (0.8f);
+            container->startDragging ("move:" + juce::String (device.rackId()), &from, juce::ScaledImage (image), false, nullptr, &e.source);
+        }
+    }
+
+    RackView& view;
+    Device& device;
 };
+
+// ---------------- strip: fold, name, id, OPEN/CLOSED, tabs, LAT, view, BYPASS, remove ----------------
+
+class RackView::Strip : public juce::Component
+{
+public:
+    Strip (RackView& v, Device& d) : view (v), device (d) {}
+
+    float s() const { return view.scale(); }
+    float h() const { return (float) getHeight() / juce::jmax (0.001f, s()); }       // design
+
+    bool hasBypass() const { return device.kind() == DeviceKind::Bushido || device.kind() == DeviceKind::Origami; }
+    bool bypassed() const
+    {
+        if (auto* b = dynamic_cast<BushidoDevice*> (&device))
+            return b->bypassed();
+        if (auto* o = dynamic_cast<OrigamiDevice*> (&device))
+            return o->param (origami::kBypass) > 0.5;
+        return false;
+    }
+    void toggleBypass()
+    {
+        if (auto* b = dynamic_cast<BushidoDevice*> (&device))
+            b->setBypassed (! b->bypassed());
+        else if (auto* o = dynamic_cast<OrigamiDevice*> (&device))
+            o->setParam (origami::kBypass, bypassed() ? 0.0 : 1.0);
+    }
+
+    // Part rectangles in design units, local to the strip.
+    juce::Rectangle<float> part (int p) const
+    {
+        const float H = h();
+        const bool front = ! view.showBack(), rackIO = device.kind() == DeviceKind::RackIO;
+        switch (p)
+        {
+            case PartFold: return { 6.0f, (H - 22.0f) * 0.5f, 22.0f, 22.0f };
+            case PartName: return { 34.0f, 0.0f, 380.0f, H };
+            case PartRemove: return rackIO ? juce::Rectangle<float>() : juce::Rectangle<float> (1570.0f, (H - 22.0f) * 0.5f, 22.0f, 22.0f);
+            case PartOpenClose:
+                return front && ! rackIO && ! device.folded ? juce::Rectangle<float> (430.0f, 4.0f, 108.0f, 22.0f) : juce::Rectangle<float>();
+            case PartBypass: return hasBypass() && ! device.folded ? juce::Rectangle<float> (1440.0f, 4.0f, 110.0f, 22.0f) : juce::Rectangle<float>();
+            case PartBackBadge:
+                return front && device.closed && ! device.folded && frontCableCount (view.proc.rack(), device) > 0
+                           ? juce::Rectangle<float> (556.0f, 4.0f, 250.0f, 22.0f) : juce::Rectangle<float>();
+            default: break;
+        }
+        if (p >= PartTab0 && front && ! device.closed && ! device.folded)
+        {
+            const auto names = tabNames (device.kind());
+            const int k = p - PartTab0;
+            if (k < names.size())
+                return { 1180.0f - 84.0f * (float) (names.size() - k), 4.0f, 80.0f, 22.0f };
+        }
+        return {};
+    }
+    juce::Rectangle<float> partPx (int p) const
+    {
+        const auto r = part (p);
+        return { r.getX() * s(), r.getY() * s(), r.getWidth() * s(), r.getHeight() * s() };
+    }
+    int partAt (juce::Point<float> px) const
+    {
+        for (int p : { (int) PartFold, (int) PartRemove, (int) PartOpenClose, (int) PartBypass, (int) PartBackBadge })
+            if (partPx (p).expanded (2.0f).contains (px))
+                return p;
+        for (int k = 0; k < 8; ++k)
+            if (partPx (PartTab0 + k).contains (px))
+                return PartTab0 + k;
+        if (partPx (PartName).contains (px))
+            return PartName;
+        return PartNone;
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        const float sc = s();
+        const auto r = getLocalBounds().toFloat();
+        const bool sel = view.selectedDevice() == &device;
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xff26262a), 0, 0, juce::Colour (0xff18181b), 0, r.getBottom(), false));
+        g.fillRect (r);
+        g.setColour (juce::Colour (0x22ffffff));
+        g.drawHorizontalLine (0, 0.0f, r.getRight());
+        g.setColour (juce::Colour (0xff050505));
+        g.drawHorizontalLine ((int) r.getBottom() - 1, 0.0f, r.getRight());
+        if (sel)
+        {
+            g.setColour (kGold.withAlpha (0.75f));
+            g.drawRect (r, juce::jmax (1.0f, 1.5f * sc));
+        }
+
+        // Fold arrow.
+        {
+            const auto b = partPx (PartFold);
+            const auto c = b.getCentre();
+            const float k = b.getWidth() * 0.26f;
+            juce::Path p;
+            if (device.folded)
+                p.addTriangle (c.x - k * 0.7f, c.y - k, c.x - k * 0.7f, c.y + k, c.x + k, c.y);
+            else
+                p.addTriangle (c.x - k, c.y - k * 0.7f, c.x + k, c.y - k * 0.7f, c.x, c.y + k);
+            g.setColour (hover == PartFold ? kInk : kInk.withAlpha (0.7f));
+            g.fillPath (p);
+        }
+
+        // Name and id.
+        const auto nameR = partPx (PartName);
+        g.setColour (kInk);
+        g.setFont (font (16.0f * sc, true));
+        const auto name = juce::String (device.displayName());
+        g.drawText (name, nameR, juce::Justification::centredLeft);
+        const float nw = juce::GlyphArrangement::getStringWidth (g.getCurrentFont(), name);
+        g.setColour (kDim);
+        g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 12.0f * sc, juce::Font::plain)));
+        juce::String sub = juce::String (device.rackId());
+        if (device.folded)
+            sub << "   " << RearPanel::kindLine (device.kind()) << "   " << deviceCableCount (view.proc.rack(), device) << " cables";
+        g.drawText (sub, nameR.withTrimmedLeft (nw + 12.0f * sc).withWidth (900.0f * sc), juce::Justification::centredLeft);
+
+        auto button = [&] (int p, const juce::String& text, bool on, juce::Colour onColour)
+        {
+            const auto b = partPx (p);
+            if (b.isEmpty())
+                return;
+            g.setColour (on ? onColour : (hover == p ? juce::Colour (0xff3a3a40) : juce::Colour (0xff2c2c31)));
+            g.fillRoundedRectangle (b, 3.0f * sc);
+            g.setColour (juce::Colour (0x40ffffff));
+            g.drawRoundedRectangle (b, 3.0f * sc, 1.0f);
+            g.setColour (on ? juce::Colour (0xff121212) : kInk.withAlpha (0.9f));
+            g.setFont (font (11.0f * sc, true));
+            g.drawFittedText (text, b.toNearestInt(), juce::Justification::centred, 1, 0.7f);
+        };
+
+        if (! device.folded)
+        {
+            button (PartOpenClose, device.closed ? juce::String::fromUTF8 ("\xe2\x96\xad CLOSED") : juce::String::fromUTF8 ("\xe2\x96\xa3 OPEN"), false, kGold);
+            const auto names = tabNames (device.kind());
+            const int t = view.tabOf (&device);
+            for (int k = 0; k < names.size(); ++k)
+                button (PartTab0 + k, names[k], k == t, kGold);
+            const int n = frontCableCount (view.proc.rack(), device);
+            button (PartBackBadge, juce::String::fromUTF8 ("\xe2\x87\x84 ") + juce::String (n) + (n == 1 ? " cable" : " cables")
+                                       + juce::String::fromUTF8 (" \xc2\xb7 patch on BACK"), false, kGold);
+
+            // LAT, view, BYPASS.
+            const int lat = device.kind() == DeviceKind::RackIO ? view.proc.rack().latency() : device.latencySamples();
+            g.setFont (font (11.5f * sc, true));
+            g.setColour (lat > 0 ? kAmber : kDim);
+            g.drawText ("LAT " + juce::String (lat), juce::Rectangle<float> (1196.0f * sc, 0.0f, 110.0f * sc, r.getHeight()), juce::Justification::centredLeft);
+            g.setColour (kDim);
+            g.drawText (view.showBack() ? "BACK" : "FRONT", juce::Rectangle<float> (1320.0f * sc, 0.0f, 100.0f * sc, r.getHeight()), juce::Justification::centredLeft);
+            button (PartBypass, bypassed() ? "BYPASS ON" : "BYPASS", bypassed(), juce::Colour (0xffe0782a));
+        }
+
+        // Remove.
+        {
+            const auto b = partPx (PartRemove).reduced (2.0f * sc);
+            if (! b.isEmpty())
+            {
+                g.setColour (hover == PartRemove ? juce::Colour (0xffc8322a) : juce::Colour (0xff121211));
+                g.fillEllipse (b);
+                g.setColour (juce::Colour (0x40ffffff));
+                g.drawEllipse (b, 1.0f);
+                g.setColour (kInk.withAlpha (hover == PartRemove ? 1.0f : 0.75f));
+                const auto c = b.reduced (b.getWidth() * 0.32f);
+                g.drawLine (c.getX(), c.getY(), c.getRight(), c.getBottom(), juce::jmax (1.0f, 2.0f * sc));
+                g.drawLine (c.getRight(), c.getY(), c.getX(), c.getBottom(), juce::jmax (1.0f, 2.0f * sc));
+            }
+        }
+    }
+
+    void mouseMove (const juce::MouseEvent& e) override
+    {
+        const int p = partAt (e.position);
+        setMouseCursor (p != PartNone && p != PartName ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::DraggingHandCursor);
+        if (p != hover)
+        {
+            hover = p;
+            repaint();
+        }
+    }
+    void mouseExit (const juce::MouseEvent&) override { hover = PartNone; repaint(); }
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        pressed = partAt (e.position);
+        view.selectDevice (&device);
+    }
+    void mouseDrag (const juce::MouseEvent& e) override
+    {
+        if (pressed == PartNone || pressed == PartName)
+            Mount::startMove (view, device, *this, e);
+    }
+    void mouseUp (const juce::MouseEvent& e) override
+    {
+        const int p = pressed;
+        pressed = PartNone;
+        if (p == PartNone || p == PartName || partAt (e.position) != p || e.mouseWasDraggedSinceMouseDown())
+            return;
+        if (p == PartBypass)
+        {
+            toggleBypass();
+            repaint();
+            return;
+        }
+        juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<RackView> (&view), d = &device, p]
+        {
+            if (sp == nullptr || sp->proc.rack().indexOf (d) < 0)
+                return;
+            if (p == PartFold) sp->setFolded (d, ! d->folded);
+            else if (p == PartRemove) sp->removeDevice (d);
+            else if (p == PartOpenClose) sp->setClosed (d, ! d->closed);
+            else if (p == PartBackBadge) { sp->setShowBack (true); sp->scrollTo (d); }
+            else if (p >= PartTab0) sp->setTab (d, p - PartTab0);
+        });
+    }
+    void mouseDoubleClick (const juce::MouseEvent& e) override
+    {
+        if (partAt (e.position) == PartName)
+            startRename();
+        else if (partAt (e.position) == PartNone && device.folded)
+            juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<RackView> (&view), d = &device]
+                                             { if (sp != nullptr && sp->proc.rack().indexOf (d) >= 0) sp->setFolded (d, false); });
+    }
+
+    void startRename()
+    {
+        editor = std::make_unique<juce::TextEditor>();
+        editor->setFont (font (15.0f * s(), true));
+        editor->setText (juce::String (device.displayName()), false);
+        editor->setSelectAllWhenFocused (true);
+        editor->setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xff0d0d0f));
+        editor->setColour (juce::TextEditor::textColourId, kInk);
+        editor->setBounds (partPx (PartName).withWidth (260.0f * s()).reduced (0.0f, 3.0f * s()).toNearestInt());
+        auto commit = [this]
+        {
+            if (editor == nullptr)
+                return;
+            const auto text = editor->getText().trim();
+            juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<RackView> (&view), d = &device, text]
+                                             { if (sp != nullptr && sp->proc.rack().indexOf (d) >= 0) sp->renameDevice (d, text); });
+        };
+        editor->onReturnKey = commit;
+        editor->onFocusLost = commit;
+        editor->onEscapeKey = [this] { juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<RackView> (&view)] { if (sp != nullptr) sp->rebuild(); }); };
+        addAndMakeVisible (*editor);
+        editor->grabKeyboardFocus();
+    }
+
+    RackView& view;
+    Device& device;
+    int hover = PartNone, pressed = PartNone;
+    std::unique_ptr<juce::TextEditor> editor;
+};
+
+// ---------------- RackView ----------------
 
 RackView::RackView (JidaiProcessor& p) : proc (p)
 {
     setWantsKeyboardFocus (false);
-    selfRelay = std::make_unique<PointerRelay> (*this);
-    addMouseListener (selfRelay.get(), true);       // RONIN's meter follows the jack pressed, even under the cable layer
     rebuild();
 }
 
 RackView::~RackView()
 {
-    if (cableRelay != nullptr)
-        removeMouseListener (cableRelay.get());
-    removeMouseListener (selfRelay.get());
+    cables.reset();
+    slots.clear();
+}
+
+juce::StringArray RackView::tabNames (DeviceKind k)
+{
+    switch (k)
+    {
+        case DeviceKind::Bushido: return { "MAIN", "STEPS", "CLOCK", "MIDI", "SETUP" };
+        case DeviceKind::Ronin: return { "MAIN" };
+        case DeviceKind::Origami: return { "MAIN", "STAGES", "DYNAMICS", "SETUP" };
+        case DeviceKind::RackIO: break;
+    }
+    return {};
+}
+
+const char* RackView::cableModeName (int mode)
+{
+    switch (mode)
+    {
+        case JidaiProcessor::CablesAll: return "ALL";
+        case JidaiProcessor::CablesHidePassThru: return "HIDE PASS-THRU";
+        case JidaiProcessor::CablesSelected: return "SELECTED";
+        case JidaiProcessor::CablesHide: return "HIDE";
+        default: break;
+    }
+    return "";
+}
+
+Device* RackView::slotDevice (int i) const
+{
+    return i >= 0 && i < (int) slots.size() ? slots[(size_t) i]->device : nullptr;
 }
 
 int RackView::indexOfSlotFor (const Device& d) const
@@ -415,11 +553,29 @@ int RackView::indexOfSlotFor (const Device& d) const
     return -1;
 }
 
+float RackView::unitsFor (const Device& d) const
+{
+    switch (d.kind())
+    {
+        case DeviceKind::RackIO: return 1.0f;
+        case DeviceKind::Bushido: return proc.showBack ? 3.0f : (d.closed ? 1.0f : 3.0f);
+        case DeviceKind::Ronin: return proc.showBack ? 4.0f : (d.closed ? 1.0f : 4.0f);
+        case DeviceKind::Origami: return proc.showBack ? 1.0f : (d.closed ? 1.0f : 3.0f);
+    }
+    return 1.0f;
+}
+
+int RackView::tabOf (const Device* d) const
+{
+    const auto it = tabs.find (d);
+    return it != tabs.end() ? it->second : 0;
+}
+
 float RackView::devicesHeight() const
 {
     float h = 0.0f;
     for (auto& s : slots)
-        h += s->shown();
+        h += s->height;
     return h;
 }
 
@@ -434,128 +590,282 @@ juce::Rectangle<int> RackView::slotBounds (int index) const
         return {};
     const float s = scale();
     const auto& slot = *slots[(size_t) index];
-    return juce::Rectangle<float> (kSide * s, slot.top * s, (kDesignWidth - 2.0f * kSide) * s, slot.shown() * s).toNearestInt();
+    return juce::Rectangle<float> (kSide * s, slot.top * s, (kDesignWidth - 2.0f * kSide) * s, slot.height * s).toNearestInt();
 }
 
-juce::Rectangle<int> RackView::removeButtonBounds (int index) const
+juce::Rectangle<int> RackView::stripBounds (int index) const
 {
     if (index < 0 || index >= (int) slots.size())
         return {};
-    const auto& m = *slots[(size_t) index]->mount;
-    return m.removeBox().toNearestInt() + m.getPosition();
+    const float s = scale();
+    const auto& slot = *slots[(size_t) index];
+    const float h = slot.device->folded ? kFoldHeight : kStripHeight;
+    return juce::Rectangle<float> (kMargin * s, slot.top * s, kPanelWidth * s, h * s).toNearestInt();
 }
 
-juce::Rectangle<int> RackView::foldButtonBounds (int index) const
+juce::Rectangle<int> RackView::faceBounds (int index) const
+{
+    if (index < 0 || index >= (int) slots.size() || slots[(size_t) index]->device->folded)
+        return {};
+    const float s = scale();
+    const auto& slot = *slots[(size_t) index];
+    return juce::Rectangle<float> (kMargin * s, (slot.top + kStripHeight) * s, kPanelWidth * s, (slot.height - kStripHeight) * s).toNearestInt();
+}
+
+juce::Rectangle<int> RackView::partBounds (int index, int part) const
 {
     if (index < 0 || index >= (int) slots.size())
         return {};
-    const auto& m = *slots[(size_t) index]->mount;
-    return m.foldBox().toNearestInt() + m.getPosition();
+    const auto& st = *slots[(size_t) index]->strip;
+    const auto r = st.partPx (part);
+    return r.isEmpty() ? juce::Rectangle<int>() : r.toNearestInt() + st.getPosition();
+}
+
+juce::Component* RackView::faceComponent (int index) const
+{
+    return index >= 0 && index < (int) slots.size() ? slots[(size_t) index]->face.get() : nullptr;
+}
+
+void RackView::buildFace (Slot& slot)
+{
+    Device* d = slot.device;
+    const float areaH = slot.height - kStripHeight;
+    slot.faceY = 0.0f;
+    slot.faceH = areaH;
+    if (d->folded)
+        return;
+    if (proc.showBack)
+    {
+        auto rear = std::make_unique<RearPanel> (*d, areaH, [this, d]
+        {
+            return d->kind() == DeviceKind::RackIO ? proc.rack().latency() : d->latencySamples();
+        });
+        slot.rear = rear.get();
+        slot.face = std::move (rear);
+        return;
+    }
+    const auto ink = juce::Colour (0xffe8e2cf);
+    switch (d->kind())
+    {
+        case DeviceKind::RackIO:
+        {
+            auto* io = static_cast<RackIODevice*> (d);
+            std::vector<CompactFace::Item> items;
+            items.push_back ({ CompactFace::Item::Title, "RACK I/O", 250.0f, {}, {}, [] { return juce::String ("host audio \xc2\xb7 MIDI \xc2\xb7 transport"); } });
+            CompactFace::Item lcd { CompactFace::Item::Lcd, "", 330.0f };
+            lcd.text = [io]
+            {
+                const auto t = io->transportView();
+                if (! t.valid)
+                    return juce::String ("NO HOST TRANSPORT");
+                const double bar = std::floor (t.ppq / 4.0) + 1.0, beat = std::floor (std::fmod (t.ppq, 4.0)) + 1.0;
+                return juce::String::fromUTF8 (t.playing ? "\xe2\x96\xb6 " : "\xe2\x96\xa0 ") + bpmText (t.bpm) + " BPM  BAR "
+                       + juce::String ((int) bar) + "." + juce::String ((int) beat);
+            };
+            items.push_back (lcd);
+            items.push_back ({ CompactFace::Item::Space, "", 30.0f });
+            const char* names[] = { "IN L", "IN R", "OUT L", "OUT R" };
+            for (int k = 0; k < 4; ++k)
+            {
+                CompactFace::Item m { CompactFace::Item::Meter, names[k], 110.0f };
+                m.get = [io, k] { return (double) io->meter (k) * 5.0; };
+                items.push_back (m);
+            }
+            items.push_back ({ CompactFace::Item::Space, "", 30.0f });
+            CompactFace::Item level { CompactFace::Item::Knob, "MAIN", 100.0f };
+            level.get = [io] { return (double) io->mainLevel() * 0.5; };
+            level.set = [io] (double v) { io->setMainLevel ((float) (v * 2.0)); };
+            level.text = [io] { return "MAIN " + juce::String (juce::Decibels::gainToDecibels (io->mainLevel(), -60.0f), 1) + " dB"; };
+            items.push_back (level);
+            CompactFace::Item lat { CompactFace::Item::Lcd, "", 300.0f };
+            lat.text = [this] { return "LAT " + juce::String (proc.rack().latency()) + " smp\npath-aligned (JCS R11)"; };
+            items.push_back (lat);
+            slot.face = std::make_unique<CompactFace> (std::move (items),
+                                                       CompactFace::Style { juce::Colour (0xff1f1f23), juce::Colour (0xff141417), ink, kGold });
+            break;
+        }
+        case DeviceKind::Bushido:
+        {
+            auto* b = static_cast<BushidoDevice*> (d);
+            slot.binding = std::make_unique<BushidoBinding> (*b);
+            if (d->closed)
+            {
+                auto* bind = slot.binding.get();
+                std::vector<CompactFace::Item> items;
+                items.push_back ({ CompactFace::Item::Title, juce::String (d->displayName()), 230.0f, {}, {}, [] { return juce::String ("12-step sequencer \xc2\xb7 CLOSED"); } });
+                CompactFace::Item lcd { CompactFace::Item::Lcd, "", 150.0f };
+                lcd.text = [bind] { return bind->readoutText ({}) + (bind->readoutEnabled ({}) ? " BPM" : ""); };
+                items.push_back (lcd);
+                CompactFace::Item tempo { CompactFace::Item::Knob, "TEMPO", 90.0f };
+                tempo.get = [b] { return (double) b->param ("CLOCK:TEMPO"); };
+                tempo.set = [b] (double v) { b->setParam ("CLOCK:TEMPO", (float) v); };
+                items.push_back (tempo);
+                CompactFace::Item run { CompactFace::Item::Momentary, "START/STOP", 120.0f };
+                run.get = [b] { return (double) b->indicator ("MODE:RUN"); };
+                run.set = [b] (double v) { b->press ("MODE:START/STOP", v > 0.5); };
+                items.push_back (run);
+                CompactFace::Item lamps { CompactFace::Item::Lamps, "STEP", 480.0f };
+                lamps.lamps = 12;
+                lamps.lamp = [b] (int k) { return b->indicator ("STEP:" + std::to_string (k + 1)); };
+                items.push_back (lamps);
+                CompactFace::Item reset { CompactFace::Item::Momentary, "RESET", 100.0f };
+                reset.set = [b] (double v) { b->press ("MODE:RESET", v > 0.5); };
+                items.push_back (reset);
+                CompactFace::Item lvl { CompactFace::Item::Knob, "LEVEL 1", 90.0f };
+                lvl.get = [b] { return (double) b->param ("MIXER:LEVEL 1"); };
+                lvl.set = [b] (double v) { b->setParam ("MIXER:LEVEL 1", (float) v); };
+                items.push_back (lvl);
+                slot.face = std::make_unique<CompactFace> (std::move (items),
+                                                           CompactFace::Style { juce::Colour (0xff23211c), juce::Colour (0xff15140f), ink, kGold });
+            }
+            else if (tabOf (d) == 0)
+            {
+                auto layout = PanelLayout::fromJson (juce::String::fromUTF8 (BinaryData::bushido_layout_json, BinaryData::bushido_layout_jsonSize));
+                layout.rack = juce::String (d->rackId());
+                auto bg = juce::Drawable::createFromImageData (BinaryData::bushido_panel_bg_svg, BinaryData::bushido_panel_bg_svgSize);
+                auto panel = std::make_unique<RackPanel> (layout, std::move (bg), *slot.binding);
+                slot.panel = panel.get();
+                slot.faceY = (areaH - layout.height) * 0.5f;
+                slot.faceH = layout.height;
+                slot.face = std::move (panel);
+                slot.screen = std::make_unique<PatternScreen> (layout.screen, layout.width);
+                slot.screen->names = [this] (int bank) { return proc.patternNames (bank); };
+                slot.screen->loaded = [this, b] { return proc.loadedPattern (b); };
+                slot.screen->choose = [this, b] (int bank, int index)
+                {
+                    proc.loadPattern (b, bank, index);
+                    juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<RackView> (this)] { if (sp != nullptr) sp->reloadCables(); });
+                };
+                slot.screen->save = [this, b] (int bank, const juce::String& name) { return proc.savePattern (b, bank, name); };
+            }
+            else
+            {
+                slot.tabHost = std::make_unique<BushidoTabHost> (*b, proc, [] {});
+                auto page = std::make_unique<bushido_ui::TabPage> (*slot.tabHost);
+                page->setTab (tabOf (d));
+                slot.faceY = (areaH - bushido_ui::TabPage::kDesignH) * 0.5f;
+                slot.faceH = bushido_ui::TabPage::kDesignH;
+                slot.face = std::move (page);
+            }
+            break;
+        }
+        case DeviceKind::Ronin:
+        {
+            auto* r = static_cast<RoninDevice*> (d);
+            if (d->closed)
+            {
+                std::vector<CompactFace::Item> items;
+                items.push_back ({ CompactFace::Item::Title, juce::String (d->displayName()), 230.0f, {}, {}, [] { return juce::String ("semi-modular voice \xc2\xb7 CLOSED"); } });
+                CompactFace::Item lcd { CompactFace::Item::Lcd, "", 230.0f };
+                lcd.text = [this, r]
+                {
+                    const auto names = proc.roninPresetNames (0);
+                    const int p = r->program();
+                    return p >= 0 && p < names.size() ? names[p] : juce::String ("PRESET");
+                };
+                items.push_back (lcd);
+                const std::pair<const char*, const char*> knobs[] = { { "VCF", "CUTOFF" }, { "VCF", "PEAK" }, { "EG 1", "ATTACK" },
+                                                                      { "EG 1", "RELEASE" }, { "OUTPUT", "MIX" }, { "OUTPUT", "LEVEL" } };
+                for (auto& [sec, lab] : knobs)
+                {
+                    const int k = roninKnob (sec, lab);
+                    if (k < 0)
+                        continue;
+                    CompactFace::Item it { CompactFace::Item::Knob, juce::String (sec) + " " + lab, 96.0f };
+                    it.get = [r, k] { return (double) r->knob (k); };
+                    it.set = [r, k] (double v) { r->setKnob (k, (float) v); };
+                    it.defaultValue = kPanelKnobs[k].valueDefault;
+                    items.push_back (it);
+                }
+                CompactFace::Item fx { CompactFace::Item::Toggle, "EFFECT", 110.0f };
+                fx.get = [r] { return r->effectOn() ? 1.0 : 0.0; };
+                fx.set = [r] (double v) { r->setEffectOn (v > 0.5); };
+                items.push_back (fx);
+                CompactFace::Item meter { CompactFace::Item::Meter, "OUTPUT", 120.0f };
+                meter.get = [r] { return (double) r->meterVolts(); };
+                items.push_back (meter);
+                slot.face = std::make_unique<CompactFace> (std::move (items),
+                                                           CompactFace::Style { juce::Colour (0xff222120), juce::Colour (0xff141312), ink, juce::Colour (0xffd0453a) });
+            }
+            else
+            {
+                auto panel = std::make_unique<RoninPanel> (*r, [] { return 0; }, [] (int) {});
+                slot.panel = panel.get();
+                slot.faceY = (areaH - RoninPanel::kHeight) * 0.5f;
+                slot.faceH = RoninPanel::kHeight;
+                slot.face = std::move (panel);
+                slot.screen = std::make_unique<PatternScreen> (roninScreen(), RoninPanel::kWidth);
+                slot.screen->names = [this] (int bank) { return proc.roninPresetNames (bank); };
+                slot.screen->loaded = [this, r] { return proc.loadedPattern (r); };
+                slot.screen->choose = [this, r] (int bank, int index)
+                {
+                    proc.loadRoninPreset (r, bank, index);
+                    juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<RackView> (this)] { if (sp != nullptr) sp->reloadCables(); });
+                };
+                slot.screen->save = [this, r] (int bank, const juce::String& name) { return proc.saveRoninPreset (r, bank, name); };
+            }
+            break;
+        }
+        case DeviceKind::Origami:
+        {
+            auto* o = static_cast<OrigamiDevice*> (d);
+            slot.origamiAccess = std::make_unique<OrigamiAccess> (*o, proc.rack());
+            auto panel = std::make_unique<OrigamiPanel> (*slot.origamiAccess, d->closed ? OrigamiPanel::Mode::RackClosed : OrigamiPanel::Mode::RackOpen);
+            panel->setPage ((origami::Page) juce::jlimit (0, 3, tabOf (d)));
+            panel->onPageChange = [this, d] (origami::Page p) { tabs[d] = (int) p; };
+            slot.origami = panel.get();
+            slot.face = std::move (panel);
+            break;
+        }
+    }
+    if (slot.screen != nullptr)
+    {
+        slot.topLayer = std::make_unique<juce::Component>();
+        slot.topLayer->setInterceptsMouseClicks (false, true);
+        slot.topLayer->addAndMakeVisible (*slot.screen);
+    }
 }
 
 void RackView::rebuild()
 {
-    if (cableRelay != nullptr)
-        removeMouseListener (cableRelay.get());
-    cableRelay.reset();
     cables.reset();
     slots.clear();
+    spots.clear();
 
     auto& rack = proc.rack();
+    if (selected != nullptr && rack.indexOf (selected) < 0)
+        selected = nullptr;
+    for (auto it = tabs.begin(); it != tabs.end();)
+        it = rack.indexOf (it->first) < 0 ? tabs.erase (it) : std::next (it);
+
     float y = 0.0f;
     for (int i = 0; i < rack.deviceCount(); ++i)
     {
         Device* d = rack.device (i);
-        if (d->kind() != DeviceKind::Bushido && d->kind() != DeviceKind::Ronin)
-            continue;          // interim (phase 3b): RACK I/O and ORIGAMI are drawn by the new rack view (phase 3c)
         auto slot = std::make_unique<Slot>();
         slot->device = d;
         slot->top = y;
+        slot->height = d->folded ? kFoldHeight : unitsFor (*d) * kUnit;
         slot->mount = std::make_unique<Mount> (*this, *d);
         addAndMakeVisible (*slot->mount);
-        if (auto* r = dynamic_cast<RoninDevice*> (d))
-        {
-            auto panel = std::make_unique<RoninPanel> (*r, [this] { return colour; },
-                                                       [this] (int c) { colour = c; if (cables) cables->setColour (c); repaint(); });
-            slot->height = RoninPanel::kHeight;
-            slot->panel = std::move (panel);
-
-            slot->topLayer = std::make_unique<juce::Component>();
-            slot->topLayer->setInterceptsMouseClicks (false, true);
-            slot->screen = std::make_unique<PatternScreen> (roninScreen(), RoninPanel::kWidth);
-            slot->screen->names = [this] (int bank) { return proc.roninPresetNames (bank); };
-            slot->screen->loaded = [this, r] { return proc.loadedPattern (r); };
-            slot->screen->choose = [this, r] (int bank, int index)
-            {
-                proc.loadRoninPreset (r, bank, index);
-                juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<RackView> (this)] { if (sp != nullptr) sp->reloadCables(); });
-            };
-            slot->screen->save = [this, r] (int bank, const juce::String& name) { return proc.saveRoninPreset (r, bank, name); };
-            slot->topLayer->addAndMakeVisible (*slot->screen);
-        }
-        else if (auto* b = dynamic_cast<BushidoDevice*> (d))
-        {
-            auto layout = PanelLayout::fromJson (juce::String::fromUTF8 (BinaryData::bushido_layout_json, BinaryData::bushido_layout_jsonSize));
-            layout.rack = juce::String (d->rackId());          // BUSHIDO#N: one BUSHIDO's jacks among many
-            auto bg = juce::Drawable::createFromImageData (BinaryData::bushido_panel_bg_svg, BinaryData::bushido_panel_bg_svgSize);
-            slot->binding = std::make_unique<BushidoBinding> (*b);
-            slot->height = layout.height;
-            slot->panel = std::make_unique<RackPanel> (layout, std::move (bg), *slot->binding);
-
-            slot->topLayer = std::make_unique<juce::Component>();
-            slot->topLayer->setInterceptsMouseClicks (false, true);
-            slot->screen = std::make_unique<PatternScreen> (layout.screen, layout.width);
-            slot->screen->names = [this] (int bank) { return proc.patternNames (bank); };
-            slot->screen->loaded = [this, b] { return proc.loadedPattern (b); };
-            slot->screen->choose = [this, b] (int bank, int index)
-            {
-                proc.loadPattern (b, bank, index);
-                juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<RackView> (this)] { if (sp != nullptr) sp->reloadCables(); });
-            };
-            slot->screen->save = [this, b] (int bank, const juce::String& name) { return proc.savePattern (b, bank, name); };
-            slot->topLayer->addAndMakeVisible (*slot->screen);
-            slot->swatches = std::make_unique<Swatches> ([this] { return colour; },
-                                                         [this] (int c) { colour = c; if (cables) cables->setColour (c); repaint(); });
-            slot->topLayer->addAndMakeVisible (*slot->swatches);
-        }
-        addChildComponent (*slot->panel);
-        slot->panel->setVisible (! d->folded);
-        y += slot->shown();
+        buildFace (*slot);
+        if (slot->face != nullptr)
+            addAndMakeVisible (*slot->face);
+        slot->strip = std::make_unique<Strip> (*this, *d);
+        addAndMakeVisible (*slot->strip);
+        y += slot->height;
         slots.push_back (std::move (slot));
     }
-    for (auto& s : slots)                    // over every panel and ear, under the cables
+    for (auto& s : slots)
     {
         s->shade = std::make_unique<Shade>();
         addAndMakeVisible (*s->shade);
     }
-
-    // One cable layer over the panels' column. A folded device's panel is not on it: its cables stay in the rack,
-    // hidden until it is opened again.
-    cables = std::make_unique<CableLayer>();
-    cables->setColour (colour);
-    cables->setDesignSize (kPanelWidth, juce::jmax (1.0f, devicesHeight() + kEmptySpace));
-    for (auto& s : slots)
-        if (! s->device->folded)
-            cables->addRack (s->panel.get(), s->top);
-    cables->setPatch (toLayer (proc.rack().cables()));
-    cables->onPatchChanged = [this] (const std::vector<::CableSpec>& c)
-    {
-        auto patch = toRack (c);
-        for (auto& kept : proc.rack().cables())
-            if (cables->jackIndex (juce::String (kept.a)) < 0 || cables->jackIndex (juce::String (kept.b)) < 0)
-                patch.push_back (kept);
-        proc.setCables (patch);
-    };
+    cables = std::make_unique<RackCableLayer> (*this, proc);
     addAndMakeVisible (*cables);
-    cableRelay = std::make_unique<PointerRelay> (*cables);
-    addMouseListener (cableRelay.get(), true);     // cables see the pointer everywhere (hover push-away), as in BUSHIDO's editor
-
     for (auto& s : slots)
         if (s->topLayer != nullptr)
-        {
-            addChildComponent (*s->topLayer);
-            s->topLayer->setVisible (! s->device->folded);
-        }
+            addAndMakeVisible (*s->topLayer);
 
     resized();
     repaint();
@@ -563,21 +873,72 @@ void RackView::rebuild()
         onLayoutChanged();
 }
 
+void RackView::rebuildLater()
+{
+    juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<RackView> (this)] { if (sp != nullptr) sp->rebuild(); });
+}
+
 void RackView::reloadCables()
 {
-    if (cables != nullptr)
-        cables->setPatch (toLayer (proc.rack().cables()));
     for (auto& slot : slots)
+    {
         if (slot->screen != nullptr)
             slot->screen->repaint();
+        slot->strip->repaint();
+    }
+    if (cables != nullptr)
+        cables->refresh();
     repaint();
 }
 
-void RackView::removeDevice (Device* d)
+void RackView::setShowBack (bool back)
 {
-    if (proc.rack().indexOf (d) < 0)
+    if (proc.showBack == back)
         return;
-    proc.removeDevice (d);
+    // Keep the device at the top of the window where it was (JIDAI_RACK_Redesign 3.3: the flip is anchored).
+    auto* port = findParentComponentOfClass<juce::Viewport>();
+    Device* anchor = nullptr;
+    float offset = 0.0f;
+    if (port != nullptr)
+    {
+        const float y = (float) port->getViewPositionY() / juce::jmax (0.001f, scale());
+        for (auto& s : slots)
+            if (y >= s->top && y < s->top + s->height)
+            {
+                anchor = s->device;
+                offset = juce::jmin (y - s->top, kStripHeight);
+            }
+    }
+    proc.showBack = back;
+    rebuild();
+    if (port != nullptr && anchor != nullptr)
+    {
+        const int i = indexOfSlotFor (*anchor);
+        if (i >= 0)
+            port->setViewPosition (0, (int) std::round ((slots[(size_t) i]->top + offset) * scale()));
+    }
+    if (onViewChanged)
+        onViewChanged();
+}
+
+void RackView::setCableMode (int mode)
+{
+    mode = juce::jlimit (0, 3, mode);
+    if (proc.showBack)
+        proc.cableModeBack = mode;
+    else
+        proc.cableModeFront = mode;
+    if (cables != nullptr)
+        cables->refresh();
+    if (onViewChanged)
+        onViewChanged();
+}
+
+void RackView::setClosed (Device* d, bool closed)
+{
+    if (proc.rack().indexOf (d) < 0 || d->kind() == DeviceKind::RackIO || d->closed == closed)
+        return;
+    d->closed = closed;
     rebuild();
 }
 
@@ -589,30 +950,164 @@ void RackView::setFolded (Device* d, bool folded)
     rebuild();
 }
 
+bool RackView::allFolded() const
+{
+    for (auto& s : slots)
+        if (! s->device->folded)
+            return false;
+    return ! slots.empty();
+}
+
+void RackView::foldAll (bool folded)
+{
+    for (int i = 0; i < proc.rack().deviceCount(); ++i)
+        proc.rack().device (i)->folded = folded;
+    rebuild();
+}
+
+void RackView::setTab (Device* d, int tab)
+{
+    if (proc.rack().indexOf (d) < 0)
+        return;
+    tabs[d] = juce::jlimit (0, juce::jmax (0, tabNames (d->kind()).size() - 1), tab);
+    rebuild();
+}
+
+void RackView::removeDevice (Device* d)
+{
+    if (proc.rack().indexOf (d) < 0 || d->kind() == DeviceKind::RackIO)
+        return;
+    proc.removeDevice (d);
+    rebuild();
+}
+
+void RackView::renameDevice (Device* d, const juce::String& name)
+{
+    if (proc.rack().indexOf (d) < 0)
+        return;
+    d->name = name == juce::String (d->title()) ? std::string() : name.toUpperCase().substring (0, 24).toStdString();
+    rebuild();
+}
+
+void RackView::selectDevice (Device* d)
+{
+    if (selected == d)
+        return;
+    selected = d;
+    for (auto& s : slots)
+        s->strip->repaint();
+    if (cables != nullptr)
+        cables->refresh();
+}
+
+void RackView::scrollTo (Device* d)
+{
+    const int i = d != nullptr ? indexOfSlotFor (*d) : -1;
+    if (i >= 0 && onScrollTo)
+        onScrollTo (slotBounds (i));
+}
+
+const RackView::JackSpot* RackView::spotFor (const std::string& id) const
+{
+    for (auto& s : spots)
+        if (s.id == id)
+            return &s;
+    return nullptr;
+}
+
+juce::String RackView::whyHidden (const std::string& id) const
+{
+    Device* d = nullptr;
+    int j = -1;
+    if (! proc.rack().resolve (id, d, j))
+        return "missing";
+    if (d->folded)
+        return "folded";
+    if (proc.showBack)
+        return {};
+    if (d->jacks()[(size_t) j].backOnly)
+        return "back";
+    if (d->closed)
+        return "closed";
+    if (tabOf (d) != 0)
+        return "tab";
+    return {};
+}
+
+void RackView::updateSpots()
+{
+    spots.clear();
+    for (int i = 0; i < (int) slots.size(); ++i)
+    {
+        auto& slot = *slots[(size_t) i];
+        Device* d = slot.device;
+        if (d->folded || slot.face == nullptr)
+            continue;
+        const auto origin = slot.face->getPosition().toFloat();
+        auto add = [&] (int j, juce::Point<float> p, float r)
+        {
+            if (j < 0 || j >= (int) d->jacks().size())
+                return;
+            JackSpot s;
+            s.id = Rack::jackId (*d, j);
+            s.p = origin + p;
+            s.r = r;
+            s.slot = i;
+            s.jack = j;
+            s.role = d->jackRole (j);
+            s.out = d->jacks()[(size_t) j].desc.dir == PortDir::Out;
+            spots.push_back (s);
+        };
+        if (slot.rear != nullptr)
+        {
+            for (int j = 0; j < (int) d->jacks().size(); ++j)
+                add (j, slot.rear->jackCentre (j), slot.rear->jackRadius());
+        }
+        else if (slot.panel != nullptr)
+        {
+            const auto& L = slot.panel->layout();
+            const float ps = (float) slot.panel->getWidth() / juce::jmax (1.0f, L.width);
+            for (auto& jack : L.jacks)
+                add (d->findJack (jack.id.toStdString()), { jack.x * ps, jack.y * ps }, juce::jmax (4.0f, jack.r * ps));
+        }
+        else if (slot.origami != nullptr && slot.origami->mode() == OrigamiPanel::Mode::RackOpen)
+        {
+            for (int k = 0; k < OrigamiPanel::kJackCount; ++k)
+            {
+                const auto c = slot.origami->jackCentre (k);
+                if (c.x > 0.0f || c.y > 0.0f)
+                    add (d->findJack (OrigamiPanel::jackId (k)), c, juce::jmax (4.0f, slot.origami->jackRadius()));
+            }
+        }
+    }
+}
+
 void RackView::resized()
 {
     const float s = scale();
     for (auto& slot : slots)
     {
-        slot->mount->setBounds (slotBounds (indexOfSlotFor (*slot->device)));
-        const auto panel = juce::Rectangle<float> (kMargin * s, slot->top * s, kPanelWidth * s, slot->height * s).toNearestInt();
-        slot->panel->setBounds (panel);
-        // The shadow runs over ears and panel and fades out where the top screws begin.
-        slot->shade->setBounds (juce::Rectangle<float> (kSide * s, slot->top * s, (kDesignWidth - 2.0f * kSide) * s,
-                                                        slot->device->folded ? 10.0f * s : 15.0f * s).toNearestInt());
-        if (slot->topLayer != nullptr)
+        const int i = indexOfSlotFor (*slot->device);
+        slot->mount->setBounds (slotBounds (i));
+        slot->strip->setBounds (stripBounds (i));
+        if (slot->face != nullptr)
         {
-            slot->topLayer->setBounds (panel);
-            slot->screen->placeIn ({ 0, 0, panel.getWidth(), panel.getHeight() });
-            if (slot->swatches != nullptr)
-                slot->swatches->setBounds (juce::Rectangle<float> (1450 * s, 12 * s, 136 * s, 30 * s).toNearestInt());
+            const float top = slot->top + kStripHeight + slot->faceY;
+            const auto r = juce::Rectangle<float> (kMargin * s, top * s, kPanelWidth * s, slot->faceH * s).toNearestInt();
+            slot->face->setBounds (r);
+            if (slot->topLayer != nullptr)
+            {
+                slot->topLayer->setBounds (r);
+                slot->screen->placeIn ({ 0, 0, r.getWidth(), r.getHeight() });
+            }
         }
+        slot->shade->setBounds (juce::Rectangle<float> (kSide * s, slot->top * s, (kDesignWidth - 2.0f * kSide) * s, 10.0f * s).toNearestInt());
     }
+    updateSpots();
     if (cables != nullptr)
     {
-        const float h = juce::jmax (devicesHeight() + kEmptySpace, (float) getHeight() / juce::jmax (0.001f, s));
-        cables->setDesignSize (kPanelWidth, h);                // cables can hang down into the empty rack
-        cables->setBounds (juce::Rectangle<float> (kMargin * s, 0.0f, kPanelWidth * s, h * s).toNearestInt());
+        cables->setBounds (getLocalBounds());
+        cables->refresh();
     }
 }
 
@@ -622,7 +1117,6 @@ void RackView::paint (juce::Graphics& g)
     const auto r = getLocalBounds().toFloat();
     const float emptyTop = devicesHeight() * s;
 
-    // The back of the cabinet, seen through the empty rack space.
     g.setColour (juce::Colour (0xff0e0e10));
     g.fillRect (r);
     const auto interior = juce::Rectangle<float> (kMargin * s, emptyTop, kPanelWidth * s, r.getBottom() - emptyTop);
@@ -630,7 +1124,6 @@ void RackView::paint (juce::Graphics& g)
                                              juce::Colour (0xff0b0b0c), interior.getCentreX(), interior.getBottom(), false));
     g.fillRect (interior);
 
-    // Cabinet walls.
     for (int side = 0; side < 2; ++side)
     {
         const auto wall = side == 0 ? r.withWidth (kSide * s) : r.withTrimmedLeft (r.getWidth() - kSide * s);
@@ -639,8 +1132,6 @@ void RackView::paint (juce::Graphics& g)
         g.setColour (juce::Colour (0xff000000));
         g.drawVerticalLine ((int) (side == 0 ? wall.getRight() - 1.0f : wall.getX()), 0.0f, r.getBottom());
     }
-
-    // Rails, with the three holes of every rack unit. Devices' ears cover them; the empty space shows them.
     for (int side = 0; side < 2; ++side)
     {
         const float x0 = side == 0 ? kSide * s : (kDesignWidth - kMargin) * s;
@@ -649,11 +1140,6 @@ void RackView::paint (juce::Graphics& g)
         steel.addColour (0.5, juce::Colour (0xff47474c));
         g.setGradientFill (steel);
         g.fillRect (rail);
-        g.setColour (juce::Colour (0x30ffffff));
-        g.drawVerticalLine ((int) rail.getX(), 0.0f, r.getBottom());
-        g.setColour (juce::Colour (0xcc000000));
-        g.drawVerticalLine ((int) rail.getRight() - 1, 0.0f, r.getBottom());
-
         const float hw = 13.0f * s, hh = 15.0f * s;
         for (float u = devicesHeight(); u * s < r.getBottom(); u += kUnit)
             for (float f : { 0.143f, 0.5f, 0.857f })
@@ -665,21 +1151,14 @@ void RackView::paint (juce::Graphics& g)
                 g.drawHorizontalLine ((int) hole.getBottom(), hole.getX(), hole.getRight());
             }
     }
-
-    // The bottom unit's shadow on the empty space under it: as short as a device's own top shadow.
-    if (! slots.empty())
-    {
-        const auto shadow = juce::Rectangle<float> (kSide * s, emptyTop, (kDesignWidth - 2.0f * kSide) * s, 15.0f * s);
-        g.setGradientFill (juce::ColourGradient (juce::Colour (0x8c000000), 0, shadow.getY(), juce::Colour (0x00000000), 0, shadow.getBottom(), false));
-        g.fillRect (shadow);
-    }
-    else
-    {
-        g.setColour (juce::Colour (0x88dcd6c2));
-        g.setFont (juce::FontOptions (juce::jmax (12.0f, 24.0f * s)));
-        g.drawText ("Empty rack. Drag BUSHIDO or RONIN in from the device list.", interior.withHeight (juce::jmin (interior.getHeight(), 260.0f * s)),
-                    juce::Justification::centred);
-    }
+    const auto shadow = juce::Rectangle<float> (kSide * s, emptyTop, (kDesignWidth - 2.0f * kSide) * s, 15.0f * s);
+    g.setGradientFill (juce::ColourGradient (juce::Colour (0x8c000000), 0, shadow.getY(), juce::Colour (0x00000000), 0, shadow.getBottom(), false));
+    g.fillRect (shadow);
+    g.setColour (juce::Colour (0x66dcd6c2));
+    g.setFont (font (juce::jmax (11.0f, 17.0f * s)));
+    g.drawText (slots.size() <= 1 ? "Drag a device in from the browser \xc2\xb7 empty rack space"
+                                  : "drop a device here \xc2\xb7 empty rack space",
+                interior.withHeight (juce::jmin (interior.getHeight(), kUnit * s)), juce::Justification::centred);
 }
 
 void RackView::paintOverChildren (juce::Graphics& g)
@@ -688,30 +1167,22 @@ void RackView::paintOverChildren (juce::Graphics& g)
         return;
     float y = 0.0f;
     for (int i = 0; i < insertAt && i < (int) slots.size(); ++i)
-        y += slots[(size_t) i]->shown();
+        y += slots[(size_t) i]->height;
     const float s = scale(), py = y * s;
     const auto line = juce::Rectangle<float> (kSide * s, juce::jmax (0.0f, py - 2.0f), (kDesignWidth - 2.0f * kSide) * s, 4.0f);
-    g.setColour (juce::Colour (0x55eabd2c));
+    g.setColour (kAmber.withAlpha (0.33f));
     g.fillRect (line.expanded (0.0f, 4.0f));
-    g.setColour (juce::Colour (0xffeabd2c));
+    g.setColour (kAmber);
     g.fillRect (line);
 }
 
 void RackView::mouseDown (const juce::MouseEvent& e)
 {
-    // RONIN's meter reads the jack last pressed (RONIN's PatchBayView does this on mouse down on a jack).
-    if (cables == nullptr || e.eventComponent != cables.get())
-        return;
-    const auto p = e.getEventRelativeTo (cables.get()).position / scale();
-    for (auto& slot : slots)
+    if (e.eventComponent == this)
     {
-        auto* r = dynamic_cast<RoninDevice*> (slot->device);
-        if (r == nullptr || r->folded || p.y < slot->top || p.y > slot->top + slot->height)
-            continue;
-        const float py = p.y - slot->top;
-        for (int j = 0; j < kPanelJackCount; ++j)
-            if (std::hypot (kPanelJacks[j].x - p.x, kPanelJacks[j].y - py) < 17.0f)
-                r->setMeterJack (j);
+        selectDevice (nullptr);
+        if (cables != nullptr)
+            cables->selectCable (-1);
     }
 }
 
@@ -727,8 +1198,8 @@ int RackView::insertionIndex (float localY) const
 {
     const float y = localY / juce::jmax (0.001f, scale());
     for (size_t i = 0; i < slots.size(); ++i)
-        if (y < slots[i]->top + slots[i]->shown() * 0.5f)
-            return (int) i;
+        if (y < slots[i]->top + slots[i]->height * 0.5f)
+            return juce::jmax (proc.rack().rackIO() != nullptr ? 1 : 0, (int) i);
     return (int) slots.size();
 }
 
@@ -755,9 +1226,18 @@ void RackView::itemDropped (const SourceDetails& d)
     const auto s = d.description.toString();
     const int at = insertionIndex ((float) d.localPosition.y);
     insertAt = -1;
-    if (s == "add:BUSHIDO" || s == "add:RONIN")
+    const bool route = ! juce::ModifierKeys::getCurrentModifiersRealtime().isShiftDown();     // Shift: no auto-route
+    if (s.startsWith ("add:"))
     {
-        proc.addDevice (s == "add:RONIN" ? DeviceKind::Ronin : DeviceKind::Bushido, at);
+        const auto what = s.fromFirstOccurrenceOf (":", false, false);
+        if (what == "RONIN FX")
+            proc.addDevice (DeviceKind::Ronin, at, route, true);
+        else
+        {
+            DeviceKind kind;
+            if (deviceKindFromName (what.toStdString(), kind) != nullptr && ! (kind == DeviceKind::RackIO && proc.rack().rackIO() != nullptr))
+                proc.addDevice (kind, at, route);
+        }
     }
     else if (s.startsWith ("move:"))
     {
@@ -769,6 +1249,5 @@ void RackView::itemDropped (const SourceDetails& d)
     }
     if (onDropped)
         onDropped (s);
-    // Rebuilt after the drag has finished: the mount that started a move is one of the components replaced.
-    juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<RackView> (this)] { if (sp != nullptr) sp->rebuild(); });
+    rebuildLater();
 }

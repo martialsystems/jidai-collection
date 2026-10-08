@@ -197,6 +197,10 @@ void RackIODevice::prepare (double sampleRate)
 void RackIODevice::setTransport (const Transport& t)
 {
     transport_ = t;
+    viewValid_.store (t.valid, std::memory_order_relaxed);
+    viewPlaying_.store (t.playing, std::memory_order_relaxed);
+    viewBpm_.store (t.bpm, std::memory_order_relaxed);
+    viewPpq_.store (t.ppq, std::memory_order_relaxed);
     in_->transport = t;
     if (t.valid)
         in_->ppq = t.ppq;

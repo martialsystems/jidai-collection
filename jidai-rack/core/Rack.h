@@ -73,7 +73,8 @@ public:
     // Auto-route (3.6): audio outs -> MAIN OUT; ORIGAMI also HOST IN -> its HOST IN; a RONIN directly under a
     // BUSHIDO also CV A -> VCO:V/OCT (or VCO:HZ/V when that row's PITCH LAW is HZ/V LIN) and GATE A -> EG 1:TRIG.
     // Cables are marked autoRouted. Returns how many it made.
-    int autoRoute (Device* device);
+    // asEffect (the browser's RONIN FX card): a RONIN also takes HOST IN at its EXT IN.
+    int autoRoute (Device* device, bool asEffect = false);
     // Migration M5: RACK I/O (made if missing) plus HOST IN -> first RONIN and every RONIN out -> MAIN OUT,
     // reproducing the v2 hidden routing.
     void applyLegacyHostRouting();

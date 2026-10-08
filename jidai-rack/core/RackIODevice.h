@@ -55,7 +55,18 @@ public:
     void setMainLevel (float v) { level_.store (v < 0.0f ? 0.0f : (v > 2.0f ? 2.0f : v)); }
     float meter (int which) const { return meters_[(size_t) (which & 3)].load (std::memory_order_relaxed); }   // in L, in R, out L, out R
     void updateMeters (float inL, float inR, float outL, float outR, int numSamples);
-    const Transport& transport() const { return transport_; }
+    const Transport& transport() const { return transport_; }      // audio thread
+    // The transport as last seen, for the window (any thread).
+    struct TransportView { bool valid = false, playing = false; double bpm = 120.0, ppq = 0.0; };
+    TransportView transportView() const
+    {
+        TransportView v;
+        v.valid = viewValid_.load (std::memory_order_relaxed);
+        v.playing = viewPlaying_.load (std::memory_order_relaxed);
+        v.bpm = viewBpm_.load (std::memory_order_relaxed);
+        v.ppq = viewPpq_.load (std::memory_order_relaxed);
+        return v;
+    }
     float jackVolts (int jack) const;
 
 private:
@@ -66,6 +77,8 @@ private:
     std::atomic<float> level_ { 1.0f };
     std::array<std::atomic<float>, 4> meters_ {};
     Transport transport_;
+    std::atomic<bool> viewValid_ { false }, viewPlaying_ { false };
+    std::atomic<double> viewBpm_ { 120.0 }, viewPpq_ { 0.0 };
     double sampleRate_ = 48000.0;
 };
 

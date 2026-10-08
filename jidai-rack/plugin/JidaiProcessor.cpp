@@ -288,7 +288,7 @@ void JidaiProcessor::refreshLatency()
 
 // ---------------- devices ----------------
 
-Device* JidaiProcessor::addDevice (DeviceKind kind, int position, bool route)
+Device* JidaiProcessor::addDevice (DeviceKind kind, int position, bool route, bool asEffect)
 {
     Device* d = rack_.addDevice (kind, position);
     if (d == nullptr)
@@ -301,7 +301,7 @@ Device* JidaiProcessor::addDevice (DeviceKind kind, int position, bool route)
     if (auto* r = dynamic_cast<RoninDevice*> (d))
         loaded_[r] = { 0, r->program() };
     if (route)
-        rack_.autoRoute (d);
+        rack_.autoRoute (d, asEffect);
     refreshLatency();
     return d;
 }
