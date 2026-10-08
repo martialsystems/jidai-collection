@@ -561,7 +561,7 @@
       <CABLE a="ORIGAMI#1/OUT:OUT R" b="RACK#1/MAIN:OUT R" age="12"/>
     </JIDAIRACK>
   </RACK>
-  <RACK name="Two Voices" category="EDM" about="One BUSHIDO plays two RONINs: row A is the bass on CV A, row C a counter line on CV C (C MODE CV, 0..5 V = five octaves). GATE A fires both envelopes. BUSHIDO's own mixer sums the two voices into ORIGAMI.">
+  <RACK name="Two Voices" category="EDM" about="One BUSHIDO plays two RONINs: row A is the bass on CV A, row C a counter line on CV C (C MODE CV, 0..5 V = five octaves). GATE A fires both envelopes. RONIN 1's MIX sums its own voice (IN 1) and RONIN 2 (IN 2) into its OUTPUT, and the pair plays through ORIGAMI.">
     <JIDAIRACK version="3" browser="1" view="back" cablesFront="HIDE PASS-THRU" cablesBack="ALL" scale="100">
       <DEVICE kind="RACK I/O" number="1" front="open" format="1" level="1"/>
       <DEVICE kind="BUSHIDO" number="1" name="SEQ" front="open" format="1" bypass="0" bank="-1" pattern="-1">
@@ -609,8 +609,8 @@
         <PARAM id="CLOCK:TEMPO" value="0.5"/>
         <PARAM id="CLOCK:SOURCE" value="1"/>
         <PARAM id="MODE:MODE" value="0"/>
-        <PARAM id="MIXER:LEVEL 1" value="0.8"/>
-        <PARAM id="MIXER:LEVEL 2" value="0.6"/>
+        <PARAM id="MIXER:LEVEL 1" value="0.7"/>
+        <PARAM id="MIXER:LEVEL 2" value="0.7"/>
         <PARAM id="CLOCK:DIV" value="0.5"/>
         <PARAM id="CLOCK:EXT SOURCE" value="1"/>
         <PARAM id="CLOCK:SETTLE" value="0"/>
@@ -652,7 +652,7 @@
         <KNOB id="DIV:RATIO SWITCH" value="0"/>
         <KNOB id="INT:TIME" value="0.5"/>
         <KNOB id="MIX:LEVEL 1" value="0.8"/>
-        <KNOB id="MIX:LEVEL 2" value="0.8"/>
+        <KNOB id="MIX:LEVEL 2" value="0.6"/>
         <KNOB id="MIX:LEVEL 3" value="0.8"/>
         <KNOB id="EXT IN:THRESHOLD" value="0.3758"/>
         <KNOB id="EXT IN:RELEASE" value="0.5316"/>
@@ -730,21 +730,21 @@
       </DEVICE>
       <CABLE a="RONIN#1/VCO:SAW" b="RONIN#1/VCF:IN" age="0"/>
       <CABLE a="RONIN#1/VCF:OUT" b="RONIN#1/VCA 1:IN" age="1"/>
-      <CABLE a="RONIN#1/VCA 1:OUT" b="RONIN#1/OUTPUT:WET" age="2"/>
-      <CABLE a="RONIN#1/EG 1:OUT A" b="RONIN#1/VCA 1:ENV" age="3"/>
-      <CABLE a="RONIN#1/EG 1:OUT A" b="RONIN#1/VCF:CUTOFF" age="4"/>
-      <CABLE a="BUSHIDO#1/OUTPUTS:CV A" b="RONIN#1/VCO:V/OCT" age="5"/>
-      <CABLE a="BUSHIDO#1/OUTPUTS:GATE A" b="RONIN#1/EG 1:TRIG" age="6"/>
-      <CABLE a="RONIN#2/VCO:SAW" b="RONIN#2/VCF:IN" age="7"/>
-      <CABLE a="RONIN#2/VCF:OUT" b="RONIN#2/VCA 1:IN" age="8"/>
-      <CABLE a="RONIN#2/VCA 1:OUT" b="RONIN#2/OUTPUT:WET" age="9"/>
-      <CABLE a="RONIN#2/EG 1:OUT A" b="RONIN#2/VCA 1:ENV" age="10"/>
-      <CABLE a="RONIN#2/EG 1:OUT A" b="RONIN#2/VCF:CUTOFF" age="11"/>
-      <CABLE a="BUSHIDO#1/OUTPUTS:CV C" b="RONIN#2/VCO:V/OCT" age="12"/>
-      <CABLE a="BUSHIDO#1/OUTPUTS:GATE A" b="RONIN#2/EG 1:TRIG" age="13"/>
-      <CABLE a="RONIN#1/HOST:OUT L" b="BUSHIDO#1/MIXER:IN 1" age="14"/>
-      <CABLE a="RONIN#2/HOST:OUT L" b="BUSHIDO#1/MIXER:IN 2" age="15"/>
-      <CABLE a="BUSHIDO#1/MIXER:OUT" b="ORIGAMI#1/IN:IN L" age="16"/>
+      <CABLE a="RONIN#1/EG 1:OUT A" b="RONIN#1/VCA 1:ENV" age="2"/>
+      <CABLE a="RONIN#1/EG 1:OUT A" b="RONIN#1/VCF:CUTOFF" age="3"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:CV A" b="RONIN#1/VCO:V/OCT" age="4"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:GATE A" b="RONIN#1/EG 1:TRIG" age="5"/>
+      <CABLE a="RONIN#2/VCO:SAW" b="RONIN#2/VCF:IN" age="6"/>
+      <CABLE a="RONIN#2/VCF:OUT" b="RONIN#2/VCA 1:IN" age="7"/>
+      <CABLE a="RONIN#2/VCA 1:OUT" b="RONIN#2/OUTPUT:WET" age="8"/>
+      <CABLE a="RONIN#2/EG 1:OUT A" b="RONIN#2/VCA 1:ENV" age="9"/>
+      <CABLE a="RONIN#2/EG 1:OUT A" b="RONIN#2/VCF:CUTOFF" age="10"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:CV C" b="RONIN#2/VCO:V/OCT" age="11"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:GATE A" b="RONIN#2/EG 1:TRIG" age="12"/>
+      <CABLE a="RONIN#1/VCA 1:OUT" b="RONIN#1/MIX:IN 1" age="13"/>
+      <CABLE a="RONIN#2/HOST:OUT L" b="RONIN#1/MIX:IN 2" age="14"/>
+      <CABLE a="RONIN#1/MIX:OUT" b="RONIN#1/OUTPUT:WET" age="15"/>
+      <CABLE a="RONIN#1/HOST:OUT L" b="ORIGAMI#1/IN:IN L" age="16"/>
       <CABLE a="ORIGAMI#1/OUT:OUT L" b="RACK#1/MAIN:OUT L" age="17"/>
       <CABLE a="ORIGAMI#1/OUT:OUT R" b="RACK#1/MAIN:OUT R" age="18"/>
     </JIDAIRACK>

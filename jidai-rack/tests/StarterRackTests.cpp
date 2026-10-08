@@ -9,6 +9,7 @@
 
 #include "plugin/JidaiProcessor.h"
 #include "plugin/StarterRacks.h"
+#include "origami/plugin/OrigamiState.h"
 
 #include "UI/PatchBayLogic.h"
 

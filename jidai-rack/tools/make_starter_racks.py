@@ -146,11 +146,12 @@ def to_main(rack, src_l, src_r=None):
     rack.cable(src_r or src_l, "RACK#1/MAIN:OUT R")
 
 
-def ronin_voice(rack, r, pitch=None, gate=None, filter_cv=None):
+def ronin_voice(rack, r, pitch=None, gate=None, filter_cv=None, to_output=True):
     """RONIN as a mono voice: VCO SAW -> VCF -> VCA 1 -> OUTPUT WET, EG 1 opening VCA 1 and the filter."""
     rack.cable(f"{r}/VCO:SAW", f"{r}/VCF:IN")
     rack.cable(f"{r}/VCF:OUT", f"{r}/VCA 1:IN")
-    rack.cable(f"{r}/VCA 1:OUT", f"{r}/OUTPUT:WET")
+    if to_output:
+        rack.cable(f"{r}/VCA 1:OUT", f"{r}/OUTPUT:WET")
     rack.cable(f"{r}/EG 1:OUT A", f"{r}/VCA 1:ENV")
     if filter_cv is None:
         rack.cable(f"{r}/EG 1:OUT A", f"{r}/VCF:CUTOFF")
@@ -257,21 +258,24 @@ def build():
     # 5. TWO VOICES: one BUSHIDO, two RONINs. Row A is the bass (CV A), row C a counter line (C MODE CV, CV C).
     r = Rack("Two Voices", "EDM",
              "One BUSHIDO plays two RONINs: row A is the bass on CV A, row C a counter line on CV C (C MODE CV, "
-             "0..5 V = five octaves). GATE A fires both envelopes. BUSHIDO's own mixer sums the two voices into ORIGAMI.")
+             "0..5 V = five octaves). GATE A fires both envelopes. RONIN 1's MIX sums its own voice (IN 1) and RONIN 2 "
+             "(IN 2) into its OUTPUT, and the pair plays through ORIGAMI.")
     b = r.bushido(name="SEQ",
                   steps_a=semis(0, 0, 0, 7, 0, 0, 3, 0, 0, 0, 10, 0),
                   steps_c=semis(24, 27, 31, 24, 34, 31, 27, 36, 24, 31, 29, 27, span=60),
-                  CH__RANGE_A=0, STEPS__QUANT_A=1, MIXER__LEVEL_1=0.8, MIXER__LEVEL_2=0.6)
+                  CH__RANGE_A=0, STEPS__QUANT_A=1)
     v1 = r.ronin(1, name="BASS", VCO__RANGE=FOOT[16], VCF__CUTOFF=cutoff(220), VCF__PEAK=0.4, VCF__MOD=0.5,
-                 EG_1__ATTACK=0.0, EG_1__DECAY=eg(0.15), EG_1__SUSTAIN=0.3, EG_1__RELEASE=eg(0.05), OUTPUT__LEVEL=0.6)
+                 EG_1__ATTACK=0.0, EG_1__DECAY=eg(0.15), EG_1__SUSTAIN=0.3, EG_1__RELEASE=eg(0.05), OUTPUT__LEVEL=0.6,
+                 MIX__LEVEL_1=0.8, MIX__LEVEL_2=0.6)
     v2 = r.ronin(2, name="COUNTER", VCO__RANGE=FOOT[32], VCF__CUTOFF=cutoff(900), VCF__PEAK=0.3, VCF__MOD=0.45,
                  EG_1__ATTACK=0.0, EG_1__DECAY=eg(0.1), EG_1__SUSTAIN=0.0, EG_1__RELEASE=eg(0.1), OUTPUT__LEVEL=0.6)
     o = r.origami("Warm Bus Glue", name="GLUE")
-    ronin_voice(r, v1, pitch=f"{b}/OUTPUTS:CV A", gate=f"{b}/OUTPUTS:GATE A")
+    ronin_voice(r, v1, pitch=f"{b}/OUTPUTS:CV A", gate=f"{b}/OUTPUTS:GATE A", to_output=False)
     ronin_voice(r, v2, pitch=f"{b}/OUTPUTS:CV C", gate=f"{b}/OUTPUTS:GATE A")
-    r.cable(f"{v1}/HOST:OUT L", f"{b}/MIXER:IN 1")
-    r.cable(f"{v2}/HOST:OUT L", f"{b}/MIXER:IN 2")
-    r.cable(f"{b}/MIXER:OUT", f"{o}/IN:IN L")
+    r.cable(f"{v1}/VCA 1:OUT", f"{v1}/MIX:IN 1")
+    r.cable(f"{v2}/HOST:OUT L", f"{v1}/MIX:IN 2")
+    r.cable(f"{v1}/MIX:OUT", f"{v1}/OUTPUT:WET")
+    r.cable(f"{v1}/HOST:OUT L", f"{o}/IN:IN L")
     to_main(r, f"{o}/OUT:OUT L", f"{o}/OUT:OUT R")
     racks.append(r)
 
