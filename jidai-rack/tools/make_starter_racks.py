@@ -40,6 +40,7 @@ RONIN_KNOB_IDS = {k for k, _ in RONIN_KNOBS}
 # EG times (EG 1 all, EG 2 ATTACK/RELEASE): 1 ms x 60000^k. EG 2 HOLD/DELAY: 1 ms x 10^(4k).
 import math
 FOOT = {32: 0.0, 16: 1 / 3, 8: 2 / 3, 4: 1.0}
+ACC = 0.5  # accent step value on BUSHIDO row C (C MODE CV) for the acid racks
 def cutoff(hz): return round(math.log(hz / 20.0) / math.log(900.0), 4)
 def eg(seconds): return round(math.log(seconds / 0.001) / math.log(60000.0), 4)
 def hold(seconds): return round(math.log10(seconds / 0.001) / 4.0, 4)
@@ -218,6 +219,37 @@ def ronin_voice(rack, r, pitch=None, gate=None, filter_cv=None, to_output=True):
         rack.cable(gate, f"{r}/EG 1:TRIG")
 
 
+# RONIN's ACID factory programs (RONIN docs/presets.md, programs 8, 9 and 12), knob values as stored there.
+ACID_LINE = dict(VCO__RANGE=0.3333, VCF__CUTOFF=0.34, VCF__PEAK=0.85, VCF__MOD=0.72, VCA_1__MOD=0.64,
+                 EG_1__ATTACK=0.063, EG_1__DECAY=0.5184, EG_1__SUSTAIN=0.8, EG_1__RELEASE=0.2723,
+                 EG_2__HOLD=0, EG_2__ATTACK=0.063, EG_2__RELEASE=0.4351, INT__TIME=0.3029)
+ACID_SQUELCH = dict(VCO__RANGE=0.3333, VCF__CUTOFF=0.28, VCF__PEAK=1.0, VCF__MOD=0.88, VCA_1__MOD=0.62,
+                    EG_1__ATTACK=0.063, EG_1__DECAY=0.5649, EG_1__SUSTAIN=0.85, EG_1__RELEASE=0.3556,
+                    EG_2__HOLD=0, EG_2__ATTACK=0.063, EG_2__RELEASE=0.5184, INT__TIME=0.3563)
+ACID_DRIVE = dict(VCO__RANGE=0.3333, VCO__PW=0.35, VCF__CUTOFF=0.4, VCF__PEAK=0.92, VCF__MOD=0.75, VCA_1__MOD=0.6,
+                  EG_1__ATTACK=0.063, EG_1__DECAY=0.5184, EG_1__SUSTAIN=0.8, EG_1__RELEASE=0.2723,
+                  EG_2__HOLD=0, EG_2__ATTACK=0.063, EG_2__RELEASE=0.4351, INT__TIME=0.3029)
+
+
+def acid_voice(rack, r, pitch, gate, accent=None, pulse=False):
+    """RONIN as its ACID programs, driven by a sequencer the way RONIN documents it: pitch into INT IN (INT TIME is
+    the slide) and INT OUT into VCO V/OCT, the gate into EG 1 TRIG (VCA) and EG 2 TRIG (filter snap on VCF CUTOFF),
+    and the accent CV into VCF CUTOFF. The MG/DIV/MIX self-playing pattern is left unpatched."""
+    rack.cable(f"{r}/VCO:SAW", f"{r}/VCF:IN")
+    if pulse:
+        rack.cable(f"{r}/VCO:PULSE", f"{r}/VCF:IN")
+    rack.cable(f"{r}/VCF:OUT", f"{r}/VCA 1:IN")
+    rack.cable(f"{r}/VCA 1:OUT", f"{r}/OUTPUT:WET")
+    rack.cable(f"{r}/EG 1:OUT A", f"{r}/VCA 1:ENV")
+    rack.cable(f"{r}/EG 2:OUT +", f"{r}/VCF:CUTOFF")
+    rack.cable(pitch, f"{r}/INT:IN")
+    rack.cable(f"{r}/INT:OUT", f"{r}/VCO:V/OCT")
+    rack.cable(gate, f"{r}/EG 1:TRIG")
+    rack.cable(gate, f"{r}/EG 2:TRIG")
+    if accent:
+        rack.cable(accent, f"{r}/VCF:CUTOFF")
+
+
 # ---------------------------------------------------------------------------------------------------- the racks
 def build():
     racks = []
@@ -225,44 +257,34 @@ def build():
     # 0. INIT: the empty rack, RACK I/O only (what a new JIDAI RACK opens with).
     racks.append(Rack("INIT", "INIT", "RACK I/O only: the empty rack.", view="front"))
 
-    # 1. ACID LINE: a 12-step line, slides from PORTA A, accents from row C opening the filter through RONIN's MIX.
+    # 1. ACID LINE: RONIN's ACID LINE program played by BUSHIDO: row A pitch through INT (the slide), GATE A into
+    #    EG 1 and EG 2, row C (C MODE CV) as the accent on VCF CUTOFF.
     r = Rack("Acid Line", "ACID",
-             "BUSHIDO plays a 12-step acid line on the host clock (1/16). PORTA A glides every note; row C (C MODE CV) "
-             "is the accent: CV C is mixed with EG 1 in RONIN's MIX and opens the resonant filter further.")
+             "BUSHIDO plays a 12-step acid line on the host clock (1/16) into RONIN's ACID LINE voice: row A's pitch "
+             "goes through RONIN's INT, which slides between notes, GATE A fires EG 1 (VCA) and EG 2 (filter snap), "
+             "and row C (C MODE CV) is the accent on VCF CUTOFF.")
     b = r.bushido(name="ACID SEQ",
                   steps_a=semis(0, 0, 12, 0, 3, 0, 7, 10, 0, 12, 5, 3),
-                  steps_c=[1, 0, 0, 0.8, 0, 0, 1, 0, 0, 0.6, 0, 0.9],
-                  CH__PORTA_A=0.14, CH__RANGE_A=0, STEPS__QUANT_A=1)
-    v = r.ronin(name="ACID BASS", VCO__RANGE=FOOT[16], VCF__CUTOFF=cutoff(170), VCF__PEAK=0.8, VCF__MOD=0.55,
-                EG_1__ATTACK=0.0, EG_1__DECAY=eg(0.18), EG_1__SUSTAIN=0.08, EG_1__RELEASE=eg(0.05),
-                MIX__LEVEL_1=0.8, MIX__LEVEL_2=0.55, OUTPUT__LEVEL=0.7)
-    ronin_voice(r, v, pitch=f"{b}/OUTPUTS:CV A", gate=f"{b}/OUTPUTS:GATE A", filter_cv="mix")
-    r.cable(f"{v}/EG 1:OUT A", f"{v}/MIX:IN 1")
-    r.cable(f"{b}/OUTPUTS:CV C", f"{v}/MIX:IN 2")
-    r.cable(f"{v}/MIX:OUT", f"{v}/VCF:CUTOFF")
+                  steps_c=[ACC, 0, 0, 0.8 * ACC, 0, 0, ACC, 0, 0, 0.6 * ACC, 0, 0.9 * ACC],
+                  CH__RANGE_A=0, STEPS__QUANT_A=1)
+    v = r.ronin(name="ACID BASS", **ACID_LINE)
+    acid_voice(r, v, pitch=f"{b}/OUTPUTS:CV A", gate=f"{b}/OUTPUTS:GATE A", accent=f"{b}/OUTPUTS:CV C")
     to_main(r, f"{v}/HOST:OUT L", f"{v}/HOST:OUT R")
     racks.append(r)
 
-    # 2. ACID FOLD: gate lengths from row C (C MODE TIME: long gates on the slid notes), accents from TRIG jacks
-    #    firing EG 2, which folds harder through ORIGAMI's VC 1.
+    # 2. ACID FOLD: RONIN's ACID SQUELCH program played by BUSHIDO (same wiring as Acid Line), its filter snap (EG 2)
+    #    also folding harder through ORIGAMI's VC 1.
     r = Rack("Acid Fold", "ACID",
-             "A 12-step acid line through ORIGAMI. Row C sets each gate's length (C MODE TIME): the long steps glide "
-             "into the next note with PORTA A. TRIG 1, 6 and 11 are the accents: summed in RONIN's MIX they fire EG 2, "
-             "which opens the filter and folds harder through ORIGAMI's VC 1.")
+             "A 12-step acid line through ORIGAMI. RONIN's ACID SQUELCH voice: row A's pitch slides through INT, "
+             "GATE A fires EG 1 and EG 2, row C (C MODE CV) accents VCF CUTOFF, and EG 2's filter snap also folds "
+             "harder through ORIGAMI's VC 1.")
     b = r.bushido(name="ACID SEQ",
                   steps_a=semis(0, 12, 0, 0, 3, 12, 0, 7, 0, 10, 12, 3),
-                  steps_c=[0.35, 0.95, 0.3, 0.3, 0.95, 0.3, 0.35, 0.3, 0.3, 0.95, 0.3, 0.3],
-                  CH__PORTA_A=0.17, CH__RANGE_A=0, CH__C_MODE=1, STEPS__QUANT_A=1)
-    v = r.ronin(name="ACID BASS", VCO__RANGE=FOOT[16], VCF__CUTOFF=cutoff(150), VCF__PEAK=0.82, VCF__MOD=0.6,
-                EG_1__ATTACK=0.0, EG_1__DECAY=eg(0.22), EG_1__SUSTAIN=0.1, EG_1__RELEASE=eg(0.04),
-                EG_2__HOLD=hold(0.03), EG_2__ATTACK=0.0, EG_2__RELEASE=eg(0.15),
-                MIX__LEVEL_1=1.0, MIX__LEVEL_2=1.0, MIX__LEVEL_3=1.0, OUTPUT__LEVEL=0.7)
+                  steps_c=[ACC, 0, 0, 0, 0.8 * ACC, 0, 0, 0, 0, ACC, 0, 0],
+                  CH__RANGE_A=0, STEPS__QUANT_A=1)
+    v = r.ronin(name="ACID BASS", **ACID_SQUELCH)
     o = r.origami("Acid Squelch Fold", name="ACID FOLD", vc1_src=0, vc1_amt=0.5)
-    ronin_voice(r, v, pitch=f"{b}/OUTPUTS:CV A", gate=f"{b}/OUTPUTS:GATE A", filter_cv="sum")
-    for i, n in enumerate((1, 6, 11)):
-        r.cable(f"{b}/{n}:TRIG", f"{v}/MIX:IN {i + 1}")
-    r.cable(f"{v}/MIX:OUT", f"{v}/EG 2:TRIG")
-    r.cable(f"{v}/EG 2:OUT +", f"{v}/VCF:CUTOFF")
+    acid_voice(r, v, pitch=f"{b}/OUTPUTS:CV A", gate=f"{b}/OUTPUTS:GATE A", accent=f"{b}/OUTPUTS:CV C")
     r.cable(f"{v}/EG 2:OUT +", f"{o}/VC:VC 1")
     r.cable(f"{v}/HOST:OUT L", f"{o}/IN:IN L")
     r.cable(f"{v}/HOST:OUT R", f"{o}/IN:IN R")
@@ -378,7 +400,7 @@ def build():
     #    ORIGAMI folds the bass, which returns into SHOGUN's mix on BASS RET (SHOGUN's own BASS voice is unused).
     r = Rack("Acid Drum Jam", "EDM",
              "Every unit: SHOGUN plays a four-on-the-floor kit clocked from RACK I/O (CLK 1/16 -> CLK IN, RESET -> RST IN). "
-             "BUSHIDO plays a 12-step acid line (PORTA A slides, row C accents) into RONIN's resonant filter, ORIGAMI "
+             "BUSHIDO plays a 12-step acid line into RONIN's ACID DRIVE voice (INT slides, row C accents), ORIGAMI "
              "folds it, and the bass returns into SHOGUN's mix on BASS RET. SHOGUN's MIX goes to the host.")
     sg = r.shogun(name="KIT", pattern="ACID JAM", running=1,
                   params={"CLOCK:SOURCE": shogun_choice("CLOCK:SOURCE", 2), "CLOCK:CLK IN": shogun_choice("CLOCK:CLK IN", 0),
@@ -389,16 +411,11 @@ def build():
                           "OH": (16, drum_steps("..x...x...x...x."))})
     b = r.bushido(name="ACID SEQ",
                   steps_a=semis(0, 0, 12, 0, 3, 0, 7, 10, 0, 12, 5, 3),
-                  steps_c=[1, 0, 0, 0.8, 0, 0, 1, 0, 0, 0.6, 0, 0.9],
-                  CH__PORTA_A=0.14, CH__RANGE_A=0, STEPS__QUANT_A=1)
-    v = r.ronin(name="ACID BASS", VCO__RANGE=FOOT[16], VCF__CUTOFF=cutoff(170), VCF__PEAK=0.8, VCF__MOD=0.55,
-                EG_1__ATTACK=0.0, EG_1__DECAY=eg(0.18), EG_1__SUSTAIN=0.08, EG_1__RELEASE=eg(0.05),
-                MIX__LEVEL_1=0.8, MIX__LEVEL_2=0.55, OUTPUT__LEVEL=0.55)
+                  steps_c=[ACC, 0, 0, 0.8 * ACC, 0, 0, ACC, 0, 0, 0.6 * ACC, 0, 0.9 * ACC],
+                  CH__RANGE_A=0, STEPS__QUANT_A=1)
+    v = r.ronin(name="ACID BASS", OUTPUT__LEVEL=0.55, **ACID_DRIVE)
     o = r.origami("Acid Grit", name="GRIT")
-    ronin_voice(r, v, pitch=f"{b}/OUTPUTS:CV A", gate=f"{b}/OUTPUTS:GATE A", filter_cv="mix")
-    r.cable(f"{v}/EG 1:OUT A", f"{v}/MIX:IN 1")
-    r.cable(f"{b}/OUTPUTS:CV C", f"{v}/MIX:IN 2")
-    r.cable(f"{v}/MIX:OUT", f"{v}/VCF:CUTOFF")
+    acid_voice(r, v, pitch=f"{b}/OUTPUTS:CV A", gate=f"{b}/OUTPUTS:GATE A", accent=f"{b}/OUTPUTS:CV C", pulse=True)
     r.cable("RACK#1/TRANSPORT:CLK 1/16", f"{sg}/CLOCK:CLK IN")
     r.cable("RACK#1/TRANSPORT:RESET", f"{sg}/CLOCK:RST IN")
     r.cable(f"{v}/HOST:OUT L", f"{o}/IN:IN L")

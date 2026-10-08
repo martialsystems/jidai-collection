@@ -201,7 +201,9 @@ void checkCables (JidaiProcessor& p, const juce::XmlElement& state, const juce::
         const auto& A = da->jacks()[(size_t) ja];
         const auto& B = db->jacks()[(size_t) jb];
         check (A.desc.dir == PortDir::Out && B.desc.dir == PortDir::In, what + "goes from an output to an input");
-        check (inputs.insert (c.b).second, what + "is the only cable into its input");
+        // Stacked cables into one input are summed (the acid racks stack EG 2 and the accent on VCF CUTOFF, as
+        // RONIN's own ACID programs do); the same cable twice is a mistake.
+        check (inputs.insert (c.a + " > " + c.b).second, what + "is not patched twice");
         check (info[i].live, what + "carries signal");
         check (info[i].badge == jidai::jcs::Badge::None || info[i].badge == jidai::jcs::Badge::GateToStrig,
                what + "no pitch-law or audio-into-clock warning (JCS R4.3, R14)");

@@ -102,7 +102,7 @@ add_library(jidai_core STATIC
   ${RONIN_DIR}/Source/Modular/Mixer.cpp
   ${RONIN_DIR}/Source/Modular/SampleHold.cpp
   ${RONIN_DIR}/Source/UI/PatchBayLogic.cpp)
-target_include_directories(jidai_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${BUSHIDO_DIR} ${RONIN_DIR}/Source ${SHOGUN_DIR}/engine)
+target_include_directories(jidai_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${BUSHIDO_DIR} ${RONIN_DIR}/Source ${RONIN_DIR}/Source/Modular ${SHOGUN_DIR}/engine)
 target_link_libraries(jidai_core PUBLIC jidai::common origami::dsp)
 set_target_properties(jidai_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
