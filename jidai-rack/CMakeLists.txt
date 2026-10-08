@@ -15,11 +15,15 @@ FetchContent_Declare(JUCE
 # SOURCE_SUBDIR points at a folder with no CMakeLists.txt: fetch the sources, do not add their own projects.
 FetchContent_Declare(bushido
   GIT_REPOSITORY https://github.com/martialsystems/bushido.git
-  GIT_TAG f2311e7c3191ca685d5f75da79a63145b08c9c1d    # Bushido main (PR #2): plate without the mottling ellipses, solid LCD text, wheel passes up
+  # Bushido branch cleanup/neutral-names: neutral names (engine/BushidoModule, assets/bushido_*) and INIT-only patterns.
+  # This commit resolves only once that branch is pushed. If it lands by squash or rebase, re-pin to the merged commit.
+  GIT_TAG 1c8f835003f10d33abf0033c60ab11b14bfb1b2c
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_Declare(ronin
   GIT_REPOSITORY https://github.com/martialsystems/Ronin.git
-  GIT_TAG 51bdeb8ba59d5e007d89bf3f2439942651c0549b    # Ronin main (PR #4): plate without the mottling ellipses
+  # Ronin branch cleanup/neutral-names: neutral names and the INIT-only factory bank.
+  # This commit resolves only once that branch is pushed. If it lands by squash or rebase, re-pin to the merged commit.
+  GIT_TAG 5aebe460e4759796154ba33ac6ff94cfce2db822
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_MakeAvailable(JUCE bushido ronin)
 
@@ -32,7 +36,7 @@ add_library(jidai_core STATIC
   core/Rack.cpp
   core/RoninDevice.cpp
   core/BushidoDevice.cpp
-  ${BUSHIDO_DIR}/engine/Sq10Module.cpp
+  ${BUSHIDO_DIR}/engine/BushidoModule.cpp
   ${RONIN_DIR}/Source/Modular/Module.cpp
   ${RONIN_DIR}/Source/Modular/PatchGraph.cpp
   ${RONIN_DIR}/Source/Modular/ExtIn.cpp
@@ -64,9 +68,9 @@ add_test(NAME rack COMMAND JidaiRackTests)
 # ---- panel art: each instrument's own vector panel and layout ----
 juce_add_binary_data(JidaiPanels
   SOURCES
-    ${BUSHIDO_DIR}/assets/sq10_panel_bg.svg
-    ${BUSHIDO_DIR}/assets/sq10_layout.json
-    ${BUSHIDO_DIR}/assets/sq10_patterns.json
+    ${BUSHIDO_DIR}/assets/bushido_panel_bg.svg
+    ${BUSHIDO_DIR}/assets/bushido_layout.json
+    ${BUSHIDO_DIR}/assets/bushido_patterns.json
     ${BUSHIDO_DIR}/assets/rack_patches.json
     ${RONIN_DIR}/panel/assets/panel_bg.svg)
 

@@ -26,7 +26,7 @@ A full rack in one plugin: VCO, a self-oscillating diode-bridge filter, two VCAs
 ## JIDAI RACK
 
 **BUSHIDO and RONIN in one rack, in one plugin.**
-A rack window in the style of a hardware cabinet: drag devices in from the browser, screw in as many of each as you like, and cable any jack to any other. Both engines are compiled into one VST3 effect and one Standalone app. Each screen has banks A and B. Bank A is that instrument's factory set. Bank B starts with the rack patches LOOP BASS and RING SEED. Source in [`jidai-rack/`](jidai-rack/).
+A rack window in the style of a hardware cabinet: drag devices in from the browser, screw in as many of each as you like, and cable any jack to any other. Both engines are compiled into one VST3 effect and one Standalone app. Each screen has banks A and B. Bank A is that instrument's factory set, cleared for now to one INIT entry. Bank B holds the rack patches (none yet) and your saves. Source in [`jidai-rack/`](jidai-rack/).
 
 ## Better together
 
@@ -40,4 +40,4 @@ VST3 effects. RONIN runs on macOS (universal) and Linux; BUSHIDO builds as VST3,
 
 Copyright © 2026 Martial Systems LLC. All rights reserved. BUSHIDO, RONIN, SHOGUN and the Jidai Collection are products of Martial Systems LLC.
 
-BUSHIDO is inspired by the Korg SQ-10, and RONIN is inspired by the Korg MS-50. Korg, SQ-10 and MS-50 are trademarks of their respective owners. Martial Systems is not affiliated with or endorsed by Korg.
+BUSHIDO and RONIN are inspired by classic Korg gear. Korg is a trademark of its owner. Martial Systems is not affiliated with or endorsed by Korg.

@@ -56,7 +56,7 @@ RoninDevice::RoninDevice()
         knobs_[(size_t) i].store (kPanelKnobs[i].valueDefault);
     }
 
-    // A fresh RONIN is the Voice program: its cables, the default table, and Effect on.
+    // A fresh RONIN is the INIT program: its cables, the default table, and Effect on.
     std::vector<std::pair<int, int>> ignored;
     loadProgram (kDefaultFactoryPreset, ignored);
 }

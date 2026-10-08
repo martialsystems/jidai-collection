@@ -4,7 +4,7 @@
 
 // A device is one instrument in the rack: a BUSHIDO or a RONIN. It owns its engine and puts its units in the
 // rack's one graph. Jacks are named "SECTION:LABEL" inside a device and "RACK#N/SECTION:LABEL" across the rack,
-// where RACK is the instrument's jack prefix (SQ-10 for BUSHIDO, MS-50 for RONIN) and N numbers the instances.
+// where RACK is the instrument's jack prefix (BUSHIDO or RONIN, the device name) and N numbers the instances.
 
 #include "RackGraph.h"
 
@@ -16,7 +16,7 @@ namespace jidai {
 enum class DeviceKind { Bushido, Ronin };
 
 const char* deviceKindName (DeviceKind kind);     // "BUSHIDO", "RONIN"
-const char* deviceKindPrefix (DeviceKind kind);   // "SQ-10", "MS-50"
+const char* deviceKindPrefix (DeviceKind kind);   // "BUSHIDO", "RONIN"
 
 struct JackDesc {
     std::string id;        // SECTION:LABEL

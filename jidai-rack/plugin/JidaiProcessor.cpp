@@ -15,12 +15,12 @@ namespace {
 
 const char* kColourNames[] = { "red", "white", "yellow", "green" };
 
-// The PRESET screen's short names, in factory order. The host program names are the longer set.
-const char* kRoninScreen[] = {
-    "DRY", "NOISE MIXER", "VOICE", "RING", "S&H", "FEEDBACK", "HOLD",
-    "FILTER LOOP", "MG FILTER", "STEP CUTOFF", "RING DRONE", "DELAY BOUNCE", "SELF RING"
-};
-static_assert (sizeof (kRoninScreen) / sizeof (kRoninScreen[0]) == kFactoryPresetCount, "screen names match the factory list");
+// Tests may swap in their own rack patch list. An empty string is the compiled rack_patches.json.
+juce::String& rackPatchesOverride()
+{
+    static juce::String json;
+    return json;
+}
 
 juce::File& userStoreOverride()
 {
@@ -93,17 +93,17 @@ void setRoninKnob (RoninDevice* ronin, const juce::String& id, float value)
         ronin->setKnob (index, value);
 }
 
-// File endpoints are "MS-50/VCO:SAW" and "SQ-10/OUTPUTS:CV A", with no instance number.
+// File endpoints are "RONIN/VCO:SAW" and "BUSHIDO/OUTPUTS:CV A", with no instance number.
 // A user preset stores the jack id alone ("VCO:SAW") so it rebinds to the RONIN that saved it.
 std::string mapEndpoint (const juce::String& raw, RoninDevice* ronin, BushidoDevice* bushido)
 {
     const auto s = raw.trim();
-    if (s.startsWith ("MS-50#") || s.startsWith ("SQ-10#"))
+    if (s.startsWith ("RONIN#") || s.startsWith ("BUSHIDO#"))
         return s.toStdString();
-    if (s.startsWith ("MS-50/"))
-        return ronin == nullptr ? std::string() : ronin->rackId() + "/" + s.substring (6).toStdString();
-    if (s.startsWith ("SQ-10/"))
-        return bushido == nullptr ? std::string() : bushido->rackId() + "/" + s.substring (6).toStdString();
+    if (s.startsWith ("RONIN/"))
+        return ronin == nullptr ? std::string() : ronin->rackId() + "/" + s.fromFirstOccurrenceOf ("/", false, false).toStdString();
+    if (s.startsWith ("BUSHIDO/"))
+        return bushido == nullptr ? std::string() : bushido->rackId() + "/" + s.fromFirstOccurrenceOf ("/", false, false).toStdString();
     if (ronin != nullptr && s.contains (":"))
         return ronin->rackId() + "/" + s.toStdString();
     return {};
@@ -172,18 +172,26 @@ void JidaiProcessor::setUserStoreRootForTest (const juce::File& root)
     userStoreOverride() = root;
 }
 
+void JidaiProcessor::setRackPatchesForTest (const juce::String& json)
+{
+    rackPatchesOverride() = json;
+}
+
 JidaiProcessor::JidaiProcessor()
     : AudioProcessor (BusesProperties()
                           .withInput ("Input", juce::AudioChannelSet::stereo(), true)
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true))
 {
-    const auto d = juce::JSON::parse (juce::String::fromUTF8 (BinaryData::sq10_patterns_json, BinaryData::sq10_patterns_jsonSize));
+    const auto d = juce::JSON::parse (juce::String::fromUTF8 (BinaryData::bushido_patterns_json, BinaryData::bushido_patterns_jsonSize));
     if (auto* list = d["patterns"].getArray())
         for (auto& pv : *list)
             banks_[0].push_back (patternFromVar (pv));
     factoryCount_ = (int) banks_[0].size();
 
-    const auto patches = juce::JSON::parse (juce::String::fromUTF8 (BinaryData::rack_patches_json, BinaryData::rack_patches_jsonSize));
+    const auto patchesJson = rackPatchesOverride().isNotEmpty()
+                                 ? rackPatchesOverride()
+                                 : juce::String::fromUTF8 (BinaryData::rack_patches_json, BinaryData::rack_patches_jsonSize);
+    const auto patches = juce::JSON::parse (patchesJson);
     if (auto* list = patches["patches"].getArray())
         for (auto& pv : *list)
         {
@@ -201,7 +209,7 @@ JidaiProcessor::JidaiProcessor()
             rackPatches_.push_back (std::move (p));
         }
 
-    const auto layout = juce::JSON::parse (juce::String::fromUTF8 (BinaryData::sq10_layout_json, BinaryData::sq10_layout_jsonSize));
+    const auto layout = juce::JSON::parse (juce::String::fromUTF8 (BinaryData::bushido_layout_json, BinaryData::bushido_layout_jsonSize));
     if (auto* controls = layout["controls"].getArray())
         for (auto& c : *controls)
         {
@@ -441,7 +449,7 @@ juce::StringArray JidaiProcessor::roninPresetNames (int bank) const
     juce::StringArray names;
     if (bank == 0)
         for (int i = 0; i < kFactoryPresetCount; ++i)
-            names.add (kRoninScreen[i]);
+            names.add (juce::String (factoryPresetName (i)).toUpperCase());   // the PRESET screen shows the program name
     else if (bank == 1)
         for (auto& p : rackPatches_)
             names.add (p.name);

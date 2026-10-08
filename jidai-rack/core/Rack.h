@@ -20,7 +20,7 @@
 
 namespace jidai {
 
-// A cable as the user patched it: two global jack ids ("MS-50#1/VCO:HZ/V"), in either order.
+// A cable as the user patched it: two global jack ids ("RONIN#1/VCO:HZ/V"), in either order.
 struct CableSpec {
     std::string a, b;
     int color = 0;
