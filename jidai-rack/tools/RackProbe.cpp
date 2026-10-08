@@ -14,6 +14,7 @@
 #include "origami/plugin/OrigamiPanel.h"
 #include "origami/plugin/OrigamiPresets.h"
 #include "core/OrigamiDevice.h"
+#include "core/FloatCompare.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <atomic>
@@ -700,7 +701,7 @@ int main (int argc, char** argv)
             if (ref != big)
             {
                 size_t at = 0;
-                while (at < ref.size() && ref[at] == big[at])
+                while (at < ref.size() && jidai::exactlyEqual (ref[at], big[at]))
                     ++at;
                 std::printf ("  rack %d: 512-sample blocks change the output from sample %d\n", prog + 1, (int) (at / 2));
             }
