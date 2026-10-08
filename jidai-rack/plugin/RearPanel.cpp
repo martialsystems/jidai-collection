@@ -192,7 +192,7 @@ void RearPanel::paint (juce::Graphics& g)
         g.drawText ("LAT " + juce::String (latency ? latency() : 0) + " smp", lp.withTrimmedBottom (lp.getHeight() * 0.45f), juce::Justification::centredBottom);
         g.setFont (font (10.0f * s));
         g.setColour (kAmber.withAlpha (0.7f));
-        g.drawText (u8 ("JCS v1.1 \xc2\xb7 0/5 V gates"), lp.withTrimmedTop (lp.getHeight() * 0.58f), juce::Justification::centredTop);
+        g.drawText ("0/5 V gates", lp.withTrimmedTop (lp.getHeight() * 0.58f), juce::Justification::centredTop);
     }
 
     // Group boxes and sockets.

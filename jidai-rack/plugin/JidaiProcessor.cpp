@@ -982,7 +982,7 @@ void JidaiProcessor::restoreFromXml (const juce::XmlElement& xml)
     if (version < 3)
     {
         rack_.applyLegacyHostRouting();     // M5: RACK I/O, HOST IN -> first RONIN, every RONIN -> MAIN OUT
-        migrationNotice = "Rack from version " + juce::String (version) + " updated to the Jidai Cable Standard.";
+        migrationNotice = "Rack from version " + juce::String (version) + " updated to the current cable levels.";
         if (kept > 0)
             migrationNotice << " " << kept << (kept == 1 ? " cable kept its" : " cables kept their") << " old S-trig inversion.";
     }
