@@ -193,6 +193,37 @@ int main (int argc, char** argv)
         const auto* host = drawnFor (rack, cableIndex (proc, "RONIN#1/HOST:OUT L", "RACK#1/MAIN:OUT L"));
         expect (host != nullptr && host->shown == RackCableLayer::Shown::None, "RONIN HOST OUT > MAIN OUT: both ends back-only, nothing on the front");
         expect (rack.whyHidden ("RACK#1/MAIN:OUT L") == "back", "MAIN OUT is a back-only jack");
+
+        // A pass-through cable (BUSHIDO over RONIN into ORIGAMI, non-adjacent): HIDE PASS-THRU draws stubs with tags
+        // naming the far end; ALL draws the rope; SELECTED dims cables that do not touch the selected device.
+        layer.clearMessage();     // the refusal above times out on screen; the shots below are about the cables
+        proc.rack().connect ("BUSHIDO#1/OUTPUTS:CV B", "ORIGAMI#1/VC:VC 1");
+        proc.sendChangeMessage();
+        pump();
+        layer.refresh();
+        const int pass = cableIndex (proc, "BUSHIDO#1/OUTPUTS:CV B", "ORIGAMI#1/VC:VC 1");
+        const auto* stub = drawnFor (rack, pass);
+        expect (stub != nullptr && stub->shown == RackCableLayer::Shown::Stub && stub->tagA.contains ("ORIGAMI") && stub->tagB.contains ("BUSHIDO"),
+                "HIDE PASS-THRU: a non-adjacent cable is two tagged stubs");
+        snapshot (rack, out.getChildFile ("rack_front_hide_passthru_stubs.png"));
+        rack.setCableMode (JidaiProcessor::CablesAll);
+        layer.refresh();
+        const auto* rope = drawnFor (rack, pass);
+        expect (rope != nullptr && rope->shown == RackCableLayer::Shown::Rope, "ALL: the same cable is a rope");
+        snapshot (rack, out.getChildFile ("rack_front_all.png"));
+        rack.selectDevice (proc.rack().findDevice ("RONIN#1"));
+        rack.setCableMode (JidaiProcessor::CablesSelected);
+        layer.refresh();
+        const auto* dim = drawnFor (rack, pass);
+        const auto* lit = drawnFor (rack, cableIndex (proc, "BUSHIDO#1/OUTPUTS:CV A", "RONIN#1/VCO:V/OCT"));
+        expect (dim != nullptr && lit != nullptr && dim->alpha < 0.2f && lit->alpha > 0.9f, "SELECTED: RONIN's cables stay lit, the rest are dimmed");
+        snapshot (rack, out.getChildFile ("rack_front_selected.png"));
+        proc.rack().disconnect ("BUSHIDO#1/OUTPUTS:CV B", "ORIGAMI#1/VC:VC 1");
+        rack.selectDevice (nullptr);
+        rack.setCableMode (JidaiProcessor::CablesHidePassThru);
+        proc.sendChangeMessage();
+        pump();
+        layer.refresh();
     }
     snapshot (rack, out.getChildFile ("rack_front.png"));
     snapshot (rack, out.getChildFile ("origami_open_in_rack.png"), rack.slotBounds (iO));
