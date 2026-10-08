@@ -48,6 +48,7 @@ def hold(seconds): return round(math.log10(seconds / 0.001) / 4.0, 4)
 # ---------------------------------------------------------------------------------------------------- ORIGAMI
 ORIGAMI_IDS = []
 ORIGAMI_PRESETS = {}
+ORIGAMI_INDEX = {}      # factory-bank position (INIT = 0): the rack saves it as the ORIGAMI program, as the plugin does
 def load_origami(path):
     root = ET.parse(path).getroot()
     assert root.tag == "ORIGAMI_FACTORY"
@@ -57,6 +58,7 @@ def load_origami(path):
             vals[e.get("id")] = e.get("value")
             if e.get("id") not in ORIGAMI_IDS:
                 ORIGAMI_IDS.append(e.get("id"))
+        ORIGAMI_INDEX[p.get("name")] = len(ORIGAMI_PRESETS)
         ORIGAMI_PRESETS[p.get("name")] = vals
 
 def fmt(v):
@@ -138,7 +140,7 @@ class Rack:
         for key, v in changes.items():
             assert key in vals, key
             vals[key] = fmt(v)
-        self.devices.append(("ORIGAMI", number, name, vals))
+        self.devices.append(("ORIGAMI", number, name, (vals, ORIGAMI_INDEX[preset])))
         return f"ORIGAMI#{number}"
 
     def shogun(self, number=1, name="", pattern="", params=None, tracks=None, running=0):
@@ -185,7 +187,8 @@ class Rack:
                 out.append(f'{indent}    <SHOGUN version="2" running="{running}">{text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")}</SHOGUN>')
             else:
                 out.append(f'{indent}  <DEVICE kind="ORIGAMI" number="{number}"{nm} front="open" format="1">')
-                out.append(f'{indent}    <ORIGAMI format="1" unit="ORIGAMI">')
+                vals, program = vals
+                out.append(f'{indent}    <ORIGAMI format="1" unit="ORIGAMI" program="{program}">')
                 for pid in ORIGAMI_IDS:
                     out.append(f'{indent}      <PARAM id="{pid}" value="{vals[pid]}"/>')
                 out.append(f'{indent}    </ORIGAMI>')

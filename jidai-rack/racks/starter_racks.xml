@@ -218,7 +218,7 @@
         <KNOB id="OUTPUT:LEVEL" value="0.7"/>
       </DEVICE>
       <DEVICE kind="ORIGAMI" number="1" name="ACID FOLD" front="open" format="1">
-        <ORIGAMI format="1" unit="ORIGAMI">
+        <ORIGAMI format="1" unit="ORIGAMI" program="2">
           <PARAM id="gain" value="-3"/>
           <PARAM id="vca_depth" value="0"/>
           <PARAM id="vca_source" value="0"/>
@@ -367,7 +367,7 @@
         <KNOB id="OUTPUT:LEVEL" value="0.7"/>
       </DEVICE>
       <DEVICE kind="ORIGAMI" number="1" name="DRIVE" front="open" format="1">
-        <ORIGAMI format="1" unit="ORIGAMI">
+        <ORIGAMI format="1" unit="ORIGAMI" program="8">
           <PARAM id="gain" value="0"/>
           <PARAM id="vca_depth" value="0"/>
           <PARAM id="vca_source" value="0"/>
@@ -513,7 +513,7 @@
         <KNOB id="OUTPUT:LEVEL" value="0.6"/>
       </DEVICE>
       <DEVICE kind="ORIGAMI" number="1" name="BITE" front="open" format="1">
-        <ORIGAMI format="1" unit="ORIGAMI">
+        <ORIGAMI format="1" unit="ORIGAMI" program="6">
           <PARAM id="gain" value="0"/>
           <PARAM id="vca_depth" value="0.5"/>
           <PARAM id="vca_source" value="0"/>
@@ -695,7 +695,7 @@
         <KNOB id="OUTPUT:LEVEL" value="0.6"/>
       </DEVICE>
       <DEVICE kind="ORIGAMI" number="1" name="GLUE" front="open" format="1">
-        <ORIGAMI format="1" unit="ORIGAMI">
+        <ORIGAMI format="1" unit="ORIGAMI" program="24">
           <PARAM id="gain" value="0"/>
           <PARAM id="vca_depth" value="0"/>
           <PARAM id="vca_source" value="0"/>
@@ -848,7 +848,7 @@
         <KNOB id="OUTPUT:LEVEL" value="0.55"/>
       </DEVICE>
       <DEVICE kind="ORIGAMI" number="1" name="STEP FOLD" front="open" format="1">
-        <ORIGAMI format="1" unit="ORIGAMI">
+        <ORIGAMI format="1" unit="ORIGAMI" program="17">
           <PARAM id="gain" value="0"/>
           <PARAM id="vca_depth" value="0"/>
           <PARAM id="vca_source" value="0"/>
@@ -935,7 +935,7 @@
         <KNOB id="OUTPUT:LEVEL" value="0.6"/>
       </DEVICE>
       <DEVICE kind="ORIGAMI" number="1" name="BITE" front="open" format="1">
-        <ORIGAMI format="1" unit="ORIGAMI">
+        <ORIGAMI format="1" unit="ORIGAMI" program="5">
           <PARAM id="gain" value="-3"/>
           <PARAM id="vca_depth" value="0"/>
           <PARAM id="vca_source" value="0"/>
@@ -1085,7 +1085,7 @@
         <KNOB id="OUTPUT:LEVEL" value="0.55"/>
       </DEVICE>
       <DEVICE kind="ORIGAMI" number="1" name="GRIT" front="open" format="1">
-        <ORIGAMI format="1" unit="ORIGAMI">
+        <ORIGAMI format="1" unit="ORIGAMI" program="1">
           <PARAM id="gain" value="-3"/>
           <PARAM id="vca_depth" value="0"/>
           <PARAM id="vca_source" value="0"/>
@@ -1240,7 +1240,7 @@
         <KNOB id="OUTPUT:LEVEL" value="0.5"/>
       </DEVICE>
       <DEVICE kind="ORIGAMI" number="1" name="BUS GLUE" front="open" format="1">
-        <ORIGAMI format="1" unit="ORIGAMI">
+        <ORIGAMI format="1" unit="ORIGAMI" program="12">
           <PARAM id="gain" value="0"/>
           <PARAM id="vca_depth" value="0"/>
           <PARAM id="vca_source" value="0"/>
@@ -1328,7 +1328,7 @@
         <KNOB id="OUTPUT:LEVEL" value="0.7"/>
       </DEVICE>
       <DEVICE kind="ORIGAMI" number="1" name="GLUE" front="open" format="1">
-        <ORIGAMI format="1" unit="ORIGAMI">
+        <ORIGAMI format="1" unit="ORIGAMI" program="24">
           <PARAM id="gain" value="0"/>
           <PARAM id="vca_depth" value="0"/>
           <PARAM id="vca_source" value="0"/>
@@ -1412,7 +1412,7 @@
         <KNOB id="OUTPUT:LEVEL" value="0.7"/>
       </DEVICE>
       <DEVICE kind="ORIGAMI" number="1" name="EDGE" front="open" format="1">
-        <ORIGAMI format="1" unit="ORIGAMI">
+        <ORIGAMI format="1" unit="ORIGAMI" program="25">
           <PARAM id="gain" value="0"/>
           <PARAM id="vca_depth" value="0"/>
           <PARAM id="vca_source" value="0"/>

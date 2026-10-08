@@ -64,11 +64,12 @@ FetchContent_Declare(origami
   GIT_REPOSITORY https://github.com/martialsystems/origami.git
   # origami main 943bba3: factory presets in banks (INIT, RONIN, SHOGUN, BUSHIDO, GENERIC), FMA-safe bit-exact INIT
   # (-ffp-contract=off on ORIGAMI's targets), LEVEL COMP reference fix; f41c9c4 user manual; 16d3029 isnan in clampParam
-  # (clean under the rack's gcc -Wfloat-equal). If it lands elsewhere by squash or rebase, re-pin.
-  GIT_TAG 16d30296790c1d26b9eada50e780cccf79ed14cb)
+  # (clean under the rack's gcc -Wfloat-equal); 8beeeb0 factory preset box on the rack face (the rack compiles
+  # ORIGAMI_PRESET_SOURCES and links origami::factory_data). If it lands elsewhere by squash or rebase, re-pin.
+  GIT_TAG 8beeeb0e9a35582e92552374c63cfa79a1bb704e)
 FetchContent_MakeAvailable(origami)
-if(NOT TARGET origami::dsp OR NOT ORIGAMI_UI_SOURCES)
-  message(FATAL_ERROR "ORIGAMI did not provide origami::dsp and ORIGAMI_UI_SOURCES")
+if(NOT TARGET origami::dsp OR NOT ORIGAMI_UI_SOURCES OR NOT ORIGAMI_PRESET_SOURCES OR NOT TARGET origami::factory_data)
+  message(FATAL_ERROR "ORIGAMI did not provide origami::dsp, ORIGAMI_UI_SOURCES, ORIGAMI_PRESET_SOURCES and origami::factory_data")
 endif()
 set(RONIN_DIR ${ronin_SOURCE_DIR})
 
@@ -136,6 +137,7 @@ set(JIDAI_UI_SOURCES
   plugin/ShogunState.cpp
   plugin/ShogunFace.cpp
   ${ORIGAMI_UI_SOURCES}
+  ${ORIGAMI_PRESET_SOURCES}
   ${BUSHIDO_DIR}/ui/BushidoTabs.cpp
   ${BUSHIDO_DIR}/rack/CableModel.cpp
   ${BUSHIDO_DIR}/ui/Layout.cpp
@@ -171,6 +173,7 @@ target_compile_definitions(JidaiRack PUBLIC
 target_link_libraries(JidaiRack PRIVATE
   jidai_core
   JidaiPanels
+  origami::factory_data
   juce::juce_audio_utils
   PUBLIC
   juce::juce_recommended_config_flags
@@ -183,6 +186,7 @@ target_compile_definitions(JidaiRackProbe PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CU
 target_link_libraries(JidaiRackProbe PRIVATE
   jidai_core
   JidaiPanels
+  origami::factory_data
   juce::juce_audio_utils
   juce::juce_recommended_config_flags)
 add_test(NAME rack_ui COMMAND JidaiRackProbe ${CMAKE_BINARY_DIR}/rack-shots)
@@ -194,6 +198,7 @@ target_compile_definitions(JidaiPresetTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_
 target_link_libraries(JidaiPresetTests PRIVATE
   jidai_core
   JidaiPanels
+  origami::factory_data
   juce::juce_audio_utils
   juce::juce_recommended_config_flags)
 add_test(NAME presets COMMAND JidaiPresetTests)

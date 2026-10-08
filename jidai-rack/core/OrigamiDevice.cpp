@@ -2,6 +2,8 @@
 
 #include "OrigamiDevice.h"
 
+#include <cmath>
+
 namespace jidai {
 
 namespace {
@@ -19,6 +21,8 @@ constexpr JackInfo kJacks[OrigamiDevice::kJackCount] = {
     { "HOST:IN R", PortType::Audio, PortDir::In },
     { "HOST:OUT L", PortType::Audio, PortDir::Out },
     { "HOST:OUT R", PortType::Audio, PortDir::Out },
+    { "SIDECHAIN:SC L", PortType::Audio, PortDir::In },
+    { "SIDECHAIN:SC R", PortType::Audio, PortDir::In },
 };
 }
 
@@ -42,6 +46,25 @@ public:
         in.inR = isConnected[InR] ? value[InR] : (isConnected[InL] ? value[InL] : hostR);
         in.vcaCv = value[VcaCv];
         in.vcaPatched = isConnected[VcaCv];
+        // Sidechain, as in the plugin: mono, feeds VC SOURCE = SIDECHAIN; its follower is the VCA CV unless the
+        // VCA CV jack is patched (a patched jack wins).
+        if (scLive)
+        {
+            const bool l = isConnected[ScL], r = isConnected[ScR];
+            const double s = l && r ? 0.5 * ((double) value[ScL] + (double) value[ScR]) : (double) (l ? value[ScL] : value[ScR]);
+            in.sidechain = s;
+            in.sidechainLive = true;
+            const double pk = std::fabs (s);
+            scFollow += (pk - scFollow) * (pk > scFollow ? scAtk : scRel);
+            if (scFollow < 1e-30) scFollow = 0.0;
+            if (! isConnected[VcaCv])
+            {
+                in.vcaCv = std::fmin (5.0, scFollow);
+                in.vcaPatched = true;
+            }
+        }
+        else
+            scFollow = 0.0;
         for (int i = 0; i < 3; ++i)
         {
             in.vc[i] = value[Vc1 + i];
@@ -54,6 +77,8 @@ public:
     }
 
     origami::OrigamiCore& core;
+    bool scLive = false;                       // set per block (beginBlock)
+    double scAtk = 1.0, scRel = 1.0, scFollow = 0.0;
     float value[kJackCount] {};
     bool isConnected[kJackCount] {};
 };
@@ -81,7 +106,8 @@ OrigamiDevice::~OrigamiDevice() = default;
 std::vector<JackGroup> OrigamiDevice::jackGroups() const
 {
     return { { "INPUT", { InL, InR, VcaCv } }, { "VC (AUDIO RATE OK)", { Vc1, Vc2, Vc3 } },
-             { "OUTPUT", { OutL, OutR } }, { "HOST (NORMALS)", { HostInL, HostInR, HostOutL, HostOutR } } };
+             { "OUTPUT", { OutL, OutR } }, { "HOST (NORMALS)", { HostInL, HostInR, HostOutL, HostOutR } },
+             { "SIDECHAIN", { ScL, ScR } } };
 }
 
 void OrigamiDevice::prepare (double sampleRate)
@@ -99,8 +125,13 @@ void OrigamiDevice::beginBlock()
     if (dirty_.exchange (false))
         syncParams();
     // Once per block: which shaper stages are true wires (jidai-common 1.1.1, never decided per sample).
-    const bool vcPatched[3] { unit_->connected()[Vc1], unit_->connected()[Vc2], unit_->connected()[Vc3] };
-    core_.planBlock (vcPatched, false);
+    const bool* c = unit_->connected();
+    const bool vcPatched[3] { c[Vc1], c[Vc2], c[Vc3] };
+    unit_->scLive = c[ScL] || c[ScR];
+    // The sidechain follower's timing, as the plugin computes it per block (ATTACK / RELEASE in ms).
+    unit_->scAtk = 1.0 - std::exp (-1.0 / (core_.param (origami::kAttack) * 0.001 * sampleRate_));
+    unit_->scRel = 1.0 - std::exp (-1.0 / (core_.param (origami::kRelease) * 0.001 * sampleRate_));
+    core_.planBlock (vcPatched, unit_->scLive);
 }
 
 void OrigamiDevice::syncParams()

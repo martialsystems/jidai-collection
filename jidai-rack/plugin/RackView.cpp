@@ -10,6 +10,7 @@
 #include "ShogunFace.h"
 
 #include "origami/plugin/OrigamiPanel.h"
+#include "origami/plugin/OrigamiPresets.h"
 #include "ui/BushidoTabs.h"
 #include "ui/PatternScreen.h"
 #include "ui/RackPanel.h"
@@ -156,6 +157,31 @@ public:
     int latencySamples() const override { return o.latencySamples(); }
     double sampleRate() const override { return rack.sampleRate(); }
     double stageCurve (int stage, double x) const override { return o.stageCurve (stage, x); }
+    // ORIGAMI's factory bank, the same list as the plugin (origami/plugin/OrigamiPresets.h). Loading sets every
+    // parameter but BYPASS, as the plugin's program change does.
+    int presetCount() const override { return (int) origami::factoryPresets().size(); }
+    juce::String presetName (int i) const override
+    {
+        const auto& b = origami::factoryPresets();
+        return i >= 0 && i < (int) b.size() ? b[(size_t) i].name : juce::String();
+    }
+    juce::String presetBank (int i) const override
+    {
+        const auto& b = origami::factoryPresets();
+        return i >= 0 && i < (int) b.size() ? b[(size_t) i].bank : juce::String();
+    }
+    int currentPreset() const override { return o.program(); }
+    void loadPreset (int i) override
+    {
+        const auto& b = origami::factoryPresets();
+        if (i < 0 || i >= (int) b.size())
+            return;
+        for (int p = 0; p < origami::kParamCount; ++p)
+            if (p != origami::kBypass)
+                o.setParam (p, b[(size_t) i].values[p]);
+        o.setProgram (i);
+        rack.updateLatency();
+    }
     OrigamiDevice& o;
     Rack& rack;
 };

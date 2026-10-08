@@ -10,6 +10,9 @@
 #include "plugin/StarterRacks.h"
 #include "plugin/RearPanel.h"
 #include "plugin/ShogunFace.h"
+#include "origami/plugin/OrigamiPanel.h"
+#include "origami/plugin/OrigamiPresets.h"
+#include "core/OrigamiDevice.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #if JUCE_LINUX
@@ -230,6 +233,34 @@ int main (int argc, char** argv)
         layer.refresh();
     }
     snapshot (rack, out.getChildFile ("rack_front.png"));
+    {
+        // ORIGAMI's factory banks on the rack face: the preset box steps the same list as the plugin.
+        auto* od = dynamic_cast<jidai::OrigamiDevice*> (proc.rack().findDevice ("ORIGAMI#1"));
+        auto* op = dynamic_cast<OrigamiPanel*> (rack.faceComponent (iO));
+        expect (od != nullptr && op != nullptr, "ORIGAMI open face is the ORIGAMI panel");
+        if (od != nullptr && op != nullptr)
+        {
+            double saved[origami::kParamCount];
+            for (int p = 0; p < origami::kParamCount; ++p) saved[p] = od->param (p);
+            const int savedProgram = od->program();
+            const auto& bank = origami::factoryPresets();
+            clickAt (*op, op->presetPartCentre (OrigamiPanel::PresetPart::Next).toInt());
+            pump (5);
+            bool same = od->program() == 1;
+            for (int p = 0; p < origami::kParamCount && same; ++p)
+                same = p == origami::kBypass || std::abs (od->param (p) - bank[1].values[p]) < 1e-9;
+            expect (bank.size() == 33 && same, "ORIGAMI preset box next arrow in the rack loads factory preset 2 of "
+                                                   + juce::String ((int) bank.size()) + " (" + bank[1].displayName() + ")");
+            clickAt (*op, op->presetPartCentre (OrigamiPanel::PresetPart::Prev).toInt());
+            pump (5);
+            expect (od->program() == 0, "ORIGAMI preset box previous arrow steps back to INIT");
+            const auto menu = op->presetMenu();
+            expect (menu.getNumItems() == 5, "ORIGAMI preset menu: INIT and four bank submenus (" + juce::String (menu.getNumItems()) + " items)");
+            for (int p = 0; p < origami::kParamCount; ++p) od->setParam (p, saved[p]);
+            od->setProgram (savedProgram);
+            pump (5);
+        }
+    }
     snapshot (rack, out.getChildFile ("origami_open_in_rack.png"), rack.slotBounds (iO));
 
     // ORIGAMI CLOSED: 1 U, no jacks.

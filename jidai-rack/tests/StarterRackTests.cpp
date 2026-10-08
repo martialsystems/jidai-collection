@@ -11,6 +11,7 @@
 #include "plugin/StarterRacks.h"
 #include "plugin/ShogunState.h"
 #include "origami/plugin/OrigamiState.h"
+#include "origami/plugin/OrigamiPresets.h"
 
 #include "UI/PatchBayLogic.h"
 
@@ -129,6 +130,10 @@ void checkParams (JidaiProcessor& p, const juce::XmlElement& device, const juce:
         {
             double values[origami::kParamCount];
             check (origami::stateFromXml (*oe, values).ok, tag + "ORIGAMI state parses");
+            const int program = oe->getIntAttribute ("program", -1);
+            check (program >= 0 && o->program() == program, tag + "ORIGAMI shows its factory preset " + juce::String (program)
+                                                                 + " (" + (program >= 0 && program < (int) origami::factoryPresets().size()
+                                                                               ? origami::factoryPresets()[(size_t) program].displayName() : juce::String ("?")) + ")");
             for (int i = 0; i < origami::kParamCount; ++i)
             {
                 ++n;

@@ -374,7 +374,7 @@ void testBypass()
     check (b->engine().isRunning(), "BYPASS: the engine keeps running");
 }
 
-// ORIGAMI in the rack runs the same OrigamiCore as the plugin: 12 jacks with JCS ids, WAVE 0 passes a cable's
+// ORIGAMI in the rack runs the same OrigamiCore as the plugin: 14 jacks with JCS ids, WAVE 0 passes a cable's
 // volts bit-exact, the fold acts once WAVE moves, MG -> VC 1 modulates at audio rate, and QUALITY sets latency.
 void testOrigamiDevice()
 {
@@ -382,9 +382,11 @@ void testOrigamiDevice()
     rack.prepare (48000.0, 512);
     auto* r = static_cast<RoninDevice*> (rack.addDevice (DeviceKind::Ronin));
     auto* o = static_cast<OrigamiDevice*> (rack.addDevice (DeviceKind::Origami));
-    check (o != nullptr && o->rackId() == "ORIGAMI#1" && o->jacks().size() == 12, "add ORIGAMI: ORIGAMI#1 with 12 jacks (8 front, 4 HOST on the back)");
+    check (o != nullptr && o->rackId() == "ORIGAMI#1" && o->jacks().size() == 14, "add ORIGAMI: ORIGAMI#1 with 14 jacks (8 front; 4 HOST and 2 SIDECHAIN on the back)");
     check (o->findJack ("HOST:IN L") == OrigamiDevice::HostInL && o->jacks()[OrigamiDevice::HostOutR].backOnly
                && ! o->jacks()[OrigamiDevice::OutR].backOnly, "ORIGAMI HOST jacks are back-only");
+    check (o->findJack ("SIDECHAIN:SC L") == OrigamiDevice::ScL && o->jacks()[OrigamiDevice::ScL].backOnly
+               && o->jacks()[OrigamiDevice::ScR].desc.type == PortType::Audio, "ORIGAMI SIDECHAIN SC L/R: back-only audio inputs");
     check (o->findJack ("IN:IN L") == 0 && o->findJack ("VC:VC 3") == 5 && o->findJack ("OUT:OUT R") == 7, "ORIGAMI jack ids (JCS R6)");
     check (o->jacks()[0].desc.type == PortType::Audio && o->jacks()[3].desc.type == PortType::CV, "roles: IN audio, VC cv");
     check (rack.connect ("RONIN#1/VCO:SAW", "ORIGAMI#1/IN:IN L") == Rack::Check::Ok, "patch VCO SAW -> ORIGAMI IN L");
@@ -418,6 +420,62 @@ void testOrigamiDevice()
     (void) r;
 }
 
+}
+
+// The SIDECHAIN jacks do what the plugin's sidechain bus does: VC SOURCE = SIDECHAIN folds with it (silent while
+// unpatched, so the preset is a plain bypass), and with VCA SOURCE = CV its follower opens the VCA unless the VCA CV
+// jack is patched.
+void testOrigamiSidechain()
+{
+    Rack rack;
+    rack.prepare (48000.0, 64);
+    rack.addDevice (DeviceKind::RackIO);
+    rack.addDevice (DeviceKind::Ronin);
+    auto* o = static_cast<OrigamiDevice*> (rack.addDevice (DeviceKind::Origami));
+    const auto autoRouted = rack.cables();                       // only the cables below
+    for (const auto& c : autoRouted)
+        rack.disconnect (c.a, c.b);
+    check (rack.connect ("RONIN#1/VCO:SAW", "ORIGAMI#1/IN:IN L") == Rack::Check::Ok, "SC test: VCO SAW -> ORIGAMI IN L");
+    o->setParam ("level_comp", 0.0);
+    o->setParam ("vc1_src", 3.0);                                // SIDECHAIN
+    o->setParam ("vc1_amt", 1.0);
+    std::vector<float> host (64, 0.0f);
+    auto block = [&] (float level, int blocks, float* maxDiff, float* peak)
+    {
+        std::fill (host.begin(), host.end(), level);
+        for (int k = 0; k < blocks; ++k)
+        {
+            std::vector<float> l (64), r (64);
+            rack.process (host.data(), host.data(), l.data(), r.data(), 64);
+            const float d = std::fabs (rack.jackVolts ("ORIGAMI#1/OUT:OUT L") - rack.jackVolts ("RONIN#1/VCO:SAW"));
+            if (maxDiff != nullptr) *maxDiff = std::fmax (*maxDiff, d);
+            if (peak != nullptr) *peak = std::fmax (*peak, std::fabs (rack.jackVolts ("ORIGAMI#1/OUT:OUT L")));
+        }
+    };
+    float d0 = 0.0f;
+    block (0.5f, 200, &d0, nullptr);
+    check (d0 == 0.0f, "SIDECHAIN source, SC unpatched: OUT equals IN bit for bit");
+    check (rack.connect ("RACK#1/HOST:IN L", "ORIGAMI#1/SIDECHAIN:SC L") == Rack::Check::Ok, "patch HOST IN L -> SC L");
+    float d1 = 0.0f;
+    block (0.5f, 200, nullptr, nullptr);
+    block (0.5f, 200, &d1, nullptr);
+    check (d1 > 0.5f, "SC L patched and driven: VC 1 SOURCE SIDECHAIN folds (max |OUT - IN| " + std::to_string (d1) + " V)");
+
+    o->setParam ("vc1_amt", 0.0);
+    o->setParam ("vca_source", 1.0);                             // CV
+    o->setParam ("vca_depth", 1.0);
+    float quiet = 0.0f, loud = 0.0f;
+    block (0.0f, 400, nullptr, nullptr);
+    block (0.0f, 200, nullptr, &quiet);
+    block (0.5f, 400, nullptr, nullptr);
+    block (0.5f, 200, nullptr, &loud);
+    check (quiet < 0.01f && loud > 1.0f, "VCA SOURCE CV: the SC follower opens the VCA (silent SC " + std::to_string (quiet)
+                                             + " V, loud SC " + std::to_string (loud) + " V)");
+    check (rack.connect ("RONIN#1/EG 1:OUT A", "ORIGAMI#1/VCA:VCA CV") == Rack::Check::Ok, "patch EG 1 OUT A (idle, 0 V) -> VCA CV");
+    float held = 0.0f;
+    block (0.5f, 400, nullptr, nullptr);
+    block (0.5f, 200, nullptr, &held);
+    check (held < 0.01f, "a patched VCA CV jack wins over the SC follower (" + std::to_string (held) + " V)");
 }
 
 // Latency truth by impulse: HOST IN L through a device's audio path to MAIN OUT L, and HOST IN L straight into
@@ -484,6 +542,7 @@ int main()
     testGateLaw();
     testBypass();
     testOrigamiDevice();
+    testOrigamiSidechain();
     testImpulseAlignment();
     runJcsRackTests (checks, failures);
     runShogunRackTests (checks, failures);

@@ -8,6 +8,7 @@
 #include "UI/PatchBayLogic.h"
 #include "engine/BushidoState.h"
 #include "origami/plugin/OrigamiState.h"
+#include "origami/plugin/OrigamiPresets.h"
 #include "ShogunState.h"
 
 #include <algorithm>
@@ -768,7 +769,10 @@ void JidaiProcessor::getStateInformation (juce::MemoryBlock& dest)
             for (int p = 0; p < origami::kParamCount; ++p)
                 values[p] = o->param (p);
             e->setAttribute ("format", origami::kStateFormat);
-            e->addChildElement (origami::stateToXml (values).release());
+            auto oe = origami::stateToXml (values);
+            if (o->program() >= 0)
+                oe->setAttribute ("program", o->program());      // as the ORIGAMI plugin saves its program
+            e->addChildElement (oe.release());
         }
         if (auto* sg = dynamic_cast<ShogunDevice*> (d))
         {
@@ -907,8 +911,25 @@ void JidaiProcessor::restoreFromXml (const juce::XmlElement& xml)
             {
                 double values[origami::kParamCount];
                 if (origami::stateFromXml (*oe, values).ok)
+                {
                     for (int p = 0; p < origami::kParamCount; ++p)
                         o->setParam (p, values[p]);
+                    // The factory preset shown on the face: the saved choice, or else the preset these values are.
+                    const auto& bank = origami::factoryPresets();
+                    int program = oe->getIntAttribute ("program", -1);
+                    if (program < 0 || program >= (int) bank.size())
+                    {
+                        program = -1;
+                        for (size_t i = 0; i < bank.size() && program < 0; ++i)
+                        {
+                            bool same = true;
+                            for (int p = 0; p < origami::kParamCount && same; ++p)
+                                same = p == origami::kBypass || std::abs (bank[i].values[p] - values[p]) < 1e-9;
+                            program = same ? (int) i : -1;
+                        }
+                    }
+                    o->setProgram (program);
+                }
             }
         if (auto* sg = dynamic_cast<ShogunDevice*> (d))
             if (auto* se = e->getChildByName (jidai::shogunstate::kTag))

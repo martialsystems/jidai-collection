@@ -151,8 +151,8 @@ The full RONIN panel. Every knob and jack works as in the RONIN plugin. See the 
 The full ORIGAMI panel with its four pages and its jack row. See the ORIGAMI manual for every control. In the rack:
 
 - Every jack in the jack row is live, and four HOST jacks on the back route host audio in and out.
-- VC SOURCE **SIDECHAIN** is silent in the rack. Patch a signal into VC 1–3 instead.
-- ORIGAMI's factory presets are in the ORIGAMI plugin. In the rack, the starter racks use their settings.
+- **Preset box.** In the jack row, between VC 1 and VC 2: the same factory presets as the plugin (INIT and the RONIN, SHOGUN, BUSHIDO and GENERIC banks). The arrows step through them all; click the name for a menu grouped by bank. Loading a preset sets every control except BYPASS. The rack remembers the chosen preset with your project.
+- **Sidechain.** Two back-only jacks, **SIDECHAIN › SC L** and **SC R**, are the plugin's sidechain input. If you patch both, ORIGAMI averages them to mono. Any stage whose VC SOURCE is **SIDECHAIN** follows the signal there. With **VCA SOURCE** on **CV**, a follower on the sidechain (timed by ATTACK and RELEASE) drives the VCA, unless a cable is patched into VCA CV, which then wins. With nothing patched into SC, a SIDECHAIN source is silent. The rack counts a sidechain cable as a signal path into ORIGAMI: if it comes from a delayed device (SHOGUN at 2×, for example), a **Δn** tag on the cables into ORIGAMI shows the difference (see 4.5).
 - Latency is 0 samples at QUALITY 1× and 46 samples at 2×. The rack compensates for either.
 
 ### 3.9 SHOGUN in the rack (5.8 U open, 1 U closed, 4 U back)
@@ -439,7 +439,7 @@ The standalone app uses your default audio input and output. Choose devices and 
 | Format | VST3 effect with MIDI input, plus a standalone app |
 | Host I/O | Stereo in (HOST IN), stereo out (MAIN OUT; OUT R follows OUT L when only OUT L is patched), MIDI notes on all channels |
 | Devices | RACK I/O, BUSHIDO, RONIN, RONIN FX, ORIGAMI, SHOGUN. Any number of each except RACK I/O (one). |
-| Jacks per device | RACK I/O 11 · BUSHIDO 25 · RONIN 61 · ORIGAMI 12 · SHOGUN 153 |
+| Jacks per device | RACK I/O 11 · BUSHIDO 25 · RONIN 61 · ORIGAMI 14 · SHOGUN 153 |
 | Heights (open / closed / back) | RACK I/O 1 U · BUSHIDO 3 / 1 / 3 U · RONIN 4 / 1 / 4 U · ORIGAMI 3 / 1 / 1 U · SHOGUN 5.8 / 1 / 4 U |
 | Cable processing | Sample by sample between all devices. Summing inputs. One-sample delay on the newest cable of a loop. |
 | Signal levels | Audio ±5 V. Gates 0/5 V (on above 1.0 V, off below 0.5 V). Pitch 1 V/oct with C3 = 0 V, plus linear Hz/V for RONIN. |
@@ -644,7 +644,7 @@ Every jack of every device, by rear-panel section. "back" marks back-only jacks.
 | OUTPUT | L (audio), R (audio), WET (audio) | – |
 | HOST | IN L (audio, back), IN R (audio, back) | OUT L (audio, back), OUT R (audio, back) |
 
-#### ORIGAMI: 12 jacks
+#### ORIGAMI: 14 jacks
 
 | Group | Inputs | Outputs |
 |---|---|---|
@@ -652,6 +652,7 @@ Every jack of every device, by rear-panel section. "back" marks back-only jacks.
 | VC (AUDIO RATE OK) | VC 1 (CV), VC 2 (CV), VC 3 (CV) | – |
 | OUTPUT | – | OUT L (audio), OUT R (audio) |
 | HOST (NORMALS) | IN L (audio, back), IN R (audio, back) | OUT L (audio, back), OUT R (audio, back) |
+| SIDECHAIN | SC L (audio, back), SC R (audio, back) | – |
 
 #### SHOGUN: 153 jacks
 

@@ -13,6 +13,9 @@
 //   OUT:OUT L, OUT:OUT R        AUDIO out
 //   HOST:IN L, HOST:IN R        AUDIO in, back only: normalled into IN L/R while those are unpatched
 //   HOST:OUT L, HOST:OUT R      AUDIO out, back only: the same signal as OUT L/R (JIDAI_RACK_Redesign.md 3.4)
+//   SIDECHAIN:SC L, SIDECHAIN:SC R  AUDIO in, back only: the plugin's sidechain input. Patched jacks are averaged to
+//                               mono (as the plugin sums its sidechain bus); it feeds VC SOURCE = SIDECHAIN, and its
+//                               follower (ATTACK / RELEASE) drives the VCA when VCA SOURCE = CV and VCA CV is unpatched.
 
 #include "Device.h"
 
@@ -26,7 +29,7 @@ namespace jidai {
 
 class OrigamiDevice : public Device {
 public:
-    enum Jack { InL, InR, VcaCv, Vc1, Vc2, Vc3, OutL, OutR, HostInL, HostInR, HostOutL, HostOutR, kJackCount };
+    enum Jack { InL, InR, VcaCv, Vc1, Vc2, Vc3, OutL, OutR, HostInL, HostInR, HostOutL, HostOutR, ScL, ScR, kJackCount };
     static constexpr int kFrontJacks = 8;
 
     OrigamiDevice();
@@ -52,6 +55,11 @@ public:
     double stageCurve (int stage, double x) const;      // from the UI-side parameter values
 
     float jackVolts (int jack) const;
+
+    // The factory preset last chosen (index into ORIGAMI's factory bank, INIT = 0; -1 = none). The bank itself lives
+    // in the JUCE layer (origami/plugin/OrigamiPresets.h); the device only remembers the choice, as the plugin does.
+    int program() const { return program_.load(); }
+    void setProgram (int index) { program_.store (index); }
     const origami::OrigamiCore& core() const { return core_; }
 
 private:
@@ -61,6 +69,7 @@ private:
     std::array<std::atomic<double>, origami::kParamCount> params_ {};
     std::atomic<bool> dirty_ { true };
     std::atomic<int> latency_ { 0 };
+    std::atomic<int> program_ { 0 };
     double sampleRate_ = 48000.0;
 };
 
