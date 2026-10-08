@@ -57,7 +57,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../jidai-common ${CMAKE_CURRENT_BIN
 # (no SOURCE_SUBDIR): it provides origami::dsp (the DSP core the rack device runs, include "origami/dsp/..."),
 # ORIGAMI_UI_SOURCES (the panel the rack compiles into its JUCE targets, include "origami/plugin/..."), the
 # standalone ORIGAMI plugin, and its tests (ctest origami, origami_plugin).
-# Single jidai-common include path: ORIGAMI vendors jidai-common 1.1.1 (third_party/jidai-common, 24ee621), but it
+# Single jidai-common include path: ORIGAMI vendors jidai-common 1.1.2 (third_party/jidai-common, 8a4b5ae), but it
 # is declared after the add_subdirectory above, so it finds the rack's jidai::common and does not add its own copy
 # (one copy of each header in the binary, as for RONIN).
 FetchContent_Declare(origami
@@ -65,8 +65,9 @@ FetchContent_Declare(origami
   # origami main 943bba3: factory presets in banks (INIT, RONIN, SHOGUN, BUSHIDO, GENERIC), FMA-safe bit-exact INIT
   # (-ffp-contract=off on ORIGAMI's targets), LEVEL COMP reference fix; f41c9c4 user manual; 16d3029 isnan in clampParam
   # (clean under the rack's gcc -Wfloat-equal); 8beeeb0 factory preset box on the rack face (the rack compiles
-  # ORIGAMI_PRESET_SOURCES and links origami::factory_data). If it lands elsewhere by squash or rebase, re-pin.
-  GIT_TAG 8beeeb0e9a35582e92552374c63cfa79a1bb704e)
+  # ORIGAMI_PRESET_SOURCES and links origami::factory_data); bbde745 jidai-common 1.1.2 (WAVE 0 is a true bypass at
+  # any SYM). If it lands elsewhere by squash or rebase, re-pin.
+  GIT_TAG bbde7457b5eb59ba72caf44bee67bb653d86ab49)
 FetchContent_MakeAvailable(origami)
 if(NOT TARGET origami::dsp OR NOT ORIGAMI_UI_SOURCES OR NOT ORIGAMI_PRESET_SOURCES OR NOT TARGET origami::factory_data)
   message(FATAL_ERROR "ORIGAMI did not provide origami::dsp, ORIGAMI_UI_SOURCES, ORIGAMI_PRESET_SOURCES and origami::factory_data")
