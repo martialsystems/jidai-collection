@@ -450,7 +450,33 @@ int main (int argc, char** argv)
             expect (face != nullptr && face->paramKnobCount() >= 50,
                     "SHOGUN MAIN face from SHOGUN's own op table: " + juce::String (face != nullptr ? face->paramKnobCount() : 0) + " parameter controls");
             if (face != nullptr)
+            {
+                // Nothing on the face is inert: the plugin-only keys (scene, mute group, roll, pattern bank, undo/redo)
+                // and the other page tabs are not drawn; the ROLL slot is the clock source key; the arrows step the list.
+                expect (face->inertControlCount() == 0, "SHOGUN face: no inert knobs, keys or toggles ("
+                                                            + juce::String (face->inertControlCount()) + ")");
+                const int src = shogun::findParam ("CLOCK:SOURCE");
+                const auto srcAt = [&] { return shogun::stepIndex (sg->param (src), 3); };
+                expect (srcAt() == shogun::SRC_HOST, "a new rack SHOGUN starts on SRC HOST");
+                clickAt (*face, face->sourceKeyBounds().getCentre());
+                pump (5);
+                const int afterOne = srcAt();
+                clickAt (*face, face->sourceKeyBounds().getCentre());
+                pump (5);
+                const int afterTwo = srcAt();
+                clickAt (*face, face->sourceKeyBounds().getCentre());
+                pump (5);
+                expect (afterOne == shogun::SRC_INT && afterTwo == shogun::SRC_EXT && srcAt() == shogun::SRC_HOST,
+                        "SRC key cycles HOST -> INT -> EXT -> HOST");
+                clickAt (*face, face->programArrowBounds (1).getCentre());
+                pump (5);
+                const int next = sg->program();
+                clickAt (*face, face->programArrowBounds (0).getCentre());
+                pump (5);
+                expect (next == 1 && sg->program() == 0, "KIT arrows step the factory list (next "
+                                                              + juce::String (next) + ", back " + juce::String (sg->program()) + ")");
                 face->setSelectedVoice (shogun::SD);
+            }
             editor->setSize (1964, 1100);
             pump (60);
             snapshot (rack, out.getChildFile ("shogun_front_open.png"));

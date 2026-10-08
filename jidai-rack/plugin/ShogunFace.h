@@ -42,6 +42,12 @@ public:
     int paramKnobCount() const;                                 // MAIN-tab p:<param> controls bound to a parameter
     bool loadProgram (int program);      // a SHOGUN factory program (0 = INIT, then the kits), as the KIT menu does
     void showProgramMenu();
+    bool skDimmed (int field) const;     // a step field that does not apply to the selected voice (drawn dim, no input)
+    // Tests: knobs, keys and toggles drawn on the face that do nothing (must be 0), and a drawn key's bounds by its
+    // label ("SRC" for the clock source key; the top-bar arrows by index: 0/1 KIT ◀ ▶, 2/3 PATTERN ◀ ▶).
+    int inertControlCount() const;
+    juce::Rectangle<int> sourceKeyBounds() const;
+    juce::Rectangle<int> programArrowBounds (int index) const;
 
 private:
     struct Bound { int op, kind, a, b; };

@@ -159,7 +159,7 @@ The full ORIGAMI panel with its four pages and its jack row. See the ORIGAMI man
 
 ![SHOGUN's MAIN page in the rack](images/shogun_front_open.png)
 
-The rack shows SHOGUN's MAIN page. The other page tabs on the panel (VOICE, GRID, MOD, ROUTE, FX/MIX, SEQ/MIDI, GLOBAL) are dimmed: those settings are edited in the SHOGUN plugin. They are still part of a SHOGUN kit or patch, so a kit loads and plays complete.
+The rack shows SHOGUN's MAIN page only. SHOGUN's other pages (VOICE, GRID, MOD, ROUTE, FX/MIX, SEQ/MIDI, GLOBAL) are edited in the SHOGUN plugin. Their settings are still part of a SHOGUN kit or patch, so a kit loads and plays complete.
 
 **Top row**
 
@@ -167,6 +167,8 @@ The rack shows SHOGUN's MAIN page. The other page tabs on the panel (VOICE, GRID
 |---|---|
 | **KIT** display | The factory kit last loaded. Click it, or the PATTERN display, for SHOGUN's factory list: INIT and 21 kits, each with its own pattern. Loading a kit keeps SHOGUN on its current clock source. |
 | **PATTERN** display | The current pattern's name. |
+| **◀ / ▶** (beside KIT or PATTERN) | Loads the previous or next entry in the factory list. The list wraps around. |
+| **⌕** (beside KIT or PATTERN) | Opens the factory list. |
 
 **CLOCK**
 
@@ -181,10 +183,11 @@ The rack shows SHOGUN's MAIN page. The other page tabs on the panel (VOICE, GRID
 | **BAR** | Steps per bar (1–32). |
 | STEP/BAR display | The bar and step being played, with ▶ or ■. |
 | **FILL** | Turns fill mode on and off. |
+| **SRC** | The clock source, shown on the key: **HOST** follows your DAW's transport, **INT** runs on SHOGUN's own TEMPO (start and stop it with ▶), **EXT** steps on pulses at the CLK IN jack. Click for the next source, right-click for the previous one. |
 
-A SHOGUN you add to the rack follows the host transport: it plays while your DAW plays, in time with the song position. Starter racks and loaded SHOGUN patches can instead clock it from its CLK IN jack (see the Acid Drum Jam example).
+A SHOGUN you add to the rack starts on SRC HOST: it plays while your DAW plays, in time with the song position. Switch to EXT to clock it from its CLK IN jack (see the Acid Drum Jam example).
 
-**PERFORM** has FILL (above). In the rack, ROLL, MUTE GRP and SCENE are shown but do nothing.
+**PERFORM** has FILL and SRC (above). The scene, mute-group and roll keys of the SHOGUN plugin, its pattern A/B keys and its undo and redo keys are not part of the rack panel.
 
 **MASTER**
 
@@ -197,7 +200,7 @@ A SHOGUN you add to the rack follows the host transport: it plays while your DAW
 
 **VOICES**
 
-One column per voice: BD1, BD2, SD, RS, CP, CL, MA, CB, CH, OH, CY, LTC, MTC, HTC (drums), then LEAD and BASS (synths). Each column has three knobs, mostly TUNE (or FILTER, or CUTOFF and RESO on the synths), DECAY and LEVEL. A dimmed knob marked — has no function on that voice. Click a voice's name key to select its track for the step editor and hear the voice once.
+One column per voice: BD1, BD2, SD, RS, CP, CL, MA, CB, CH, OH, CY, LTC, MTC, HTC (drums), then LEAD and BASS (synths). Each column has three knobs, mostly TUNE (or FILTER, or CUTOFF and RESO on the synths), DECAY and LEVEL. Where a voice has no such knob, the space is left empty. Click a voice's name key to select its track for the step editor and hear the voice once.
 
 **STEPS**
 
@@ -217,8 +220,10 @@ One column per voice: BD1, BD2, SD, RS, CP, CL, MA, CB, CH, OH, CY, LTC, MTC, HT
 | **RATCHET** | Repeats within the step. |
 | **PROB** | Chance that the step plays. |
 | **MICRO** | Small timing offset, earlier or later. |
-| **BEND** | Pitch bend of the step, on the voices that support it. |
+| **BEND** | Pitch bend of the step, on BD1, BD2, SD and the three toms. |
 | **NOTE** | The note, on the LEAD and BASS tracks. |
+
+A step-lock knob that doesn't apply to the selected track (BEND on the other voices, NOTE on any drum) is dimmed and doesn't respond.
 | **COPY / PASTE** | Copies the selected track's steps and length, and pastes them into another track. |
 | **CLEAR** | Clears the selected track. |
 | **RANDOM** | Turns steps on at random on the selected track. |
@@ -299,6 +304,8 @@ Hold **Shift** while adding to skip the automatic cables.
 
 Some devices delay their output: ORIGAMI at QUALITY 2× (46 samples) and SHOGUN at 2× or 4× oversampling (23 or 26 samples). The rack works out the delay on every path into MAIN OUT, delays the faster paths to line up with the slowest, and reports the total to your DAW. Cables into MAIN OUT show an amber **+n comp** tag when a path is delayed to match, and a **Δn** tag shows where paths into one input arrive at different times. The header's LAT shows the total.
 
+A SHOGUN **RET** jack feeds audio into SHOGUN's mix through its oversampled output stage, so at 2× or 4× a signal patched into RET reaches SHOGUN's MIX twice SHOGUN's delay later (46 or 52 samples), while SHOGUN's own voices arrive after the single delay (23 or 26). The rack counts the longer path for MAIN OUT, but inside SHOGUN's mix the returned signal sits behind the drums. To keep an external voice tight with the drums, patch it to MAIN OUT next to SHOGUN's MIX and let the rack line them up.
+
 ---
 
 ## 5. MIDI and host sync
@@ -356,8 +363,8 @@ Twelve complete racks, every connection made with cables on the jacks. All of th
 | EDM | Two Voices | BUSHIDO, 2 × RONIN, ORIGAMI | One sequencer plays two synths: row A is the bass, row C a counter line. RONIN 1's MIX sums both voices, and the pair plays through ORIGAMI. |
 | EDM | Stepped Fold | BUSHIDO, RONIN, ORIGAMI | BUSHIDO sequences the fold as well as the notes: row C sets ORIGAMI's VC 1 on every step, and step 5's trigger kicks VC 3 once a loop. |
 | EDM | MIDI Fold Synth | RONIN, ORIGAMI | Play RONIN from your DAW through RACK I/O's MIDI jacks (note, gate, velocity), through ORIGAMI. |
-| EDM | Acid Drum Jam | SHOGUN, BUSHIDO, RONIN, ORIGAMI | Every device: SHOGUN plays a four-on-the-floor kit clocked from RACK I/O's transport jacks. A BUSHIDO acid line plays RONIN's ACID DRIVE sound through ORIGAMI, and the bass returns into SHOGUN's mix. |
-| EDM | Full EDM Jam | SHOGUN, BUSHIDO, RONIN, ORIGAMI | Every device, host-clocked: SHOGUN plays kick, clap, hats, open hat, a tom fill and a lead riff on its LEAD synth. BUSHIDO's 8-step bass on RONIN returns into SHOGUN, and SHOGUN's whole mix runs through ORIGAMI. |
+| EDM | Acid Drum Jam | SHOGUN, BUSHIDO, RONIN, ORIGAMI | Every device: SHOGUN plays a four-on-the-floor kit clocked from RACK I/O's transport jacks. A BUSHIDO acid line plays RONIN's ACID DRIVE sound through ORIGAMI. Drums and bass meet at MAIN OUT, lined up to the sample. |
+| EDM | Full EDM Jam | SHOGUN, BUSHIDO, RONIN, ORIGAMI | Every device, host-clocked: SHOGUN plays kick, clap, hats, open hat, a tom fill and a lead riff on its LEAD synth. SHOGUN's whole mix runs through ORIGAMI. BUSHIDO's 8-step bass on RONIN joins at MAIN OUT, lined up with the drums. |
 | FX | Filter Fold FX | RONIN, ORIGAMI | An insert effect: your track through RONIN's resonant filter swept by its MG, then through ORIGAMI. |
 | FX | Tempo Gate FX | RONIN, ORIGAMI | A tempo-synced gate: CLK 1/16 fires RONIN's envelope on every sixteenth note, chopping your track through VCA 1. ORIGAMI folds the result. Runs while the DAW plays. |
 
@@ -569,14 +576,14 @@ Try this: turn RONIN's INT TIME down for a dry line with no slide, or up for a s
 | RACK I/O › RESET | SHOGUN › CLOCK RST IN | Restarts SHOGUN's pattern when the DAW starts. |
 | BUSHIDO › CV A, GATE A, CV C | RONIN › INT IN, EG 1 TRIG and EG 2 TRIG, VCF CUTOFF | The acid line, wired as in Acid Line. RONIN mixes its saw and pulse into the filter, as in its ACID DRIVE program. |
 | RONIN › HOST OUT L | ORIGAMI › IN L | The bass through the folder (IN R follows IN L). |
-| ORIGAMI › OUT L | SHOGUN › BASS RET | The folded bass returns into SHOGUN's mix. |
-| SHOGUN › MIX L/R | RACK I/O › MAIN OUT L/R | Drums and bass to the DAW. |
+| ORIGAMI › OUT L/R | RACK I/O › MAIN OUT L/R | The folded bass to the DAW. |
+| SHOGUN › MIX L/R | RACK I/O › MAIN OUT L/R | The drums to the DAW. |
 
-The header's LAT shows the time alignment at work: the ORIGAMI (at 2×) and SHOGUN delays add up along the bass path, and the rack compensates for them.
+The header's LAT (46) shows the time alignment at work: ORIGAMI runs at QUALITY 2× and delays the bass by 46 samples, SHOGUN at 2× delays the drums by 23, so the rack delays the drums by another 23 (the **+23 comp** tags on the SHOGUN cables). Drums and bass reach MAIN OUT together.
 
 ### Worked example 3: Full EDM Jam
 
-**RACKS ▾ › EDM › Full EDM Jam**: SHOGUN follows the host transport directly (no clock cables needed), RONIN's bass returns into SHOGUN on BASS RET, and SHOGUN's MIX L/R go through ORIGAMI IN L/R to MAIN OUT. BUSHIDO's step 9 TRIG is patched into its own RESET input, which makes an 8-step loop from its 12 steps.
+**RACKS ▾ › EDM › Full EDM Jam**: SHOGUN follows the host transport directly (no clock cables needed), SHOGUN's MIX L/R go through ORIGAMI IN L/R to MAIN OUT, and RONIN's HOST OUT L/R go straight to MAIN OUT. SHOGUN at 2× delays the drums by 23 samples, so the rack delays the bass by 23 to match (LAT 23). BUSHIDO's step 9 TRIG is patched into its own RESET input, which makes an 8-step loop from its 12 steps.
 
 ![Full EDM Jam, back](images/starter_full_edm_jam_back.png)
 

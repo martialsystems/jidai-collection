@@ -243,8 +243,18 @@ juce::String paramDisplay(int id, float u) {
 enum B {
     B_NONE, B_PARAM, B_DISP, B_SEL, B_STEP, B_PLAYLED, B_STEPNUM, B_SK, B_TAB, B_TABTEXT, B_RUN, B_RST, B_RUNLED,
     B_POS, B_KIT, B_PATTERN, B_CPU, B_CPULED, B_CLIPLED, B_METER, B_TITLE, B_TRACKINFO, B_TRACKSCALE, B_TRK, B_PAGE,
-    B_COPY, B_PASTE, B_CLEAR, B_RANDOM, B_OFF, B_STATIC
+    B_COPY, B_PASTE, B_CLEAR, B_RANDOM, B_OFF, B_STATIC,
+    B_SOURCE, B_PROG_PREV, B_PROG_NEXT, B_PROG_LIST   // rack-only: CLOCK:SOURCE key, factory-list arrows by the KIT/PATTERN displays
 };
+
+// SHOGUN plugin keys with no engine behind them (scene / mute-group / roll performance keys, pattern bank A/B, undo
+// and redo): the rack face does not draw them, so nothing on its panel is inert. The ROLL slot carries the clock
+// source key instead.
+bool hiddenKey (const juce::String& text)
+{
+    return text == "MUTE GRP" || text == "SCENE A" || text == "A" || text == "B"
+        || text == u8 ("\xE2\x86\xB6") || text == u8 ("\xE2\x86\xB7");
+}
 
 } // namespace
 
@@ -276,6 +286,25 @@ void ShogunFace::buildBindings()
         if (o.tab != 0)
             continue;
         const juce::String bind = u8 (o.bind);
+        const juce::String text = u8 (o.text);
+        if (o.kind == KEY && hiddenKey (text) && bind.isEmpty())
+            continue;
+        if (o.kind == KEY && text == "ROLL" && bind.isEmpty())
+        {
+            bounds_.push_back ({ i, B_SOURCE, findParam ("CLOCK:SOURCE"), -1 });
+            continue;
+        }
+        // Top bar, beside the KIT and PATTERN displays: previous / next factory entry and the list itself.
+        if (o.kind == KEY && o.y < 20.0f && (text == u8 ("\xE2\x97\x80") || text == u8 ("\xE2\x96\xB6") || text == u8 ("\xE2\x8C\x95")))
+        {
+            const int k = text == u8 ("\xE2\x97\x80") ? B_PROG_PREV : (text == u8 ("\xE2\x96\xB6") ? B_PROG_NEXT : B_PROG_LIST);
+            bounds_.push_back ({ i, k, -1, -1 });
+            continue;
+        }
+        // Only the MAIN page is in the rack: the other page tabs are not drawn (the pages are in the SHOGUN plugin),
+        // nor are the "off" placeholder knobs.
+        if (bind == "off" || ((bind.startsWith ("tab:") || bind.startsWith ("tabtext:")) && bind.fromFirstOccurrenceOf (":", false, false).getIntValue() != 0))
+            continue;
         if (bind.isEmpty())
         {
             staticOps_.push_back (i);
@@ -448,8 +477,7 @@ void ShogunFace::paintOp (juce::Graphics& g, int opIndex, const Bound* b)
                 case 7: fill = st.tie ? AMB.getARGB() : 0; break;
                 default: break;
             }
-            dim = (b->a == 6 || b->a == 7) ? isDrum (selVoice_)
-                                           : (b->a == 5 ? ! (selVoice_ <= SD || (selVoice_ >= LTC && selVoice_ <= HTC)) : false);
+            dim = skDimmed (b->a);
             break;
         }
         case B_TAB:
@@ -494,6 +522,10 @@ void ShogunFace::paintOp (juce::Graphics& g, int opIndex, const Bound* b)
             break;
         }
         case B_PAGE: fill = b->a == page_ ? GRN.getARGB() : 0; break;
+        case B_SOURCE:
+            t = "SRC " + paramDisplay (b->a, (float) device_.param (b->a));
+            fill = 0;
+            break;
         case B_OFF: dim = true; break;
         default: break;
     }
@@ -541,6 +573,51 @@ void ShogunFace::paintOp (juce::Graphics& g, int opIndex, const Bound* b)
     }
 }
 
+int ShogunFace::inertControlCount() const
+{
+    auto control = [] (int kind) { return kind == KNOB || kind == KEY || kind == TOGGLE; };
+    int n = 0;
+    for (int i : staticOps_)
+        n += control (kOps[i].kind) ? 1 : 0;
+    for (const auto& b : bounds_)
+        if (control (kOps[b.op].kind))
+            n += (b.kind == B_STATIC || b.kind == B_OFF || b.kind == B_NONE || (b.kind == B_PARAM && b.a < 0)) ? 1 : 0;
+    return n;
+}
+
+static juce::Rectangle<int> opRect (const LayoutOp& o, const juce::AffineTransform& t)
+{
+    return juce::Rectangle<float> (o.x, o.y, o.w, o.h).transformedBy (t).getSmallestIntegerContainer();
+}
+
+juce::Rectangle<int> ShogunFace::sourceKeyBounds() const
+{
+    for (const auto& b : bounds_)
+        if (b.kind == B_SOURCE)
+            return opRect (kOps[b.op], toPanel());
+    return {};
+}
+
+juce::Rectangle<int> ShogunFace::programArrowBounds (int index) const
+{
+    int seen = 0;
+    for (const auto& b : bounds_)
+        if (b.kind == B_PROG_PREV || b.kind == B_PROG_NEXT)
+            if (seen++ == index)
+                return opRect (kOps[b.op], toPanel());
+    return {};
+}
+
+bool ShogunFace::skDimmed (int field) const
+{
+    // NOTE and TIE are synth-only; BEND applies to the pitched drums (BD1, BD2, SD and the toms).
+    if (field == 6 || field == 7)
+        return isDrum (selVoice_);
+    if (field == 5)
+        return ! (selVoice_ <= SD || (selVoice_ >= LTC && selVoice_ <= HTC));
+    return false;
+}
+
 // The KIT and PATTERN displays open SHOGUN's factory list: INIT, then the kits (each loads its own pattern).
 void ShogunFace::showProgramMenu()
 {
@@ -580,10 +657,13 @@ int ShogunFace::findBound (juce::Point<float> p) const
         }
         if (! hit)
             continue;
+        if (it->kind == B_SK && skDimmed (it->a))
+            continue;   // dimmed for this voice: not an input
         switch (it->kind)
         {
             case B_PARAM: case B_SEL: case B_STEP: case B_SK: case B_RUN: case B_RST: case B_TRK: case B_PAGE:
             case B_COPY: case B_PASTE: case B_CLEAR: case B_RANDOM: case B_DISP: case B_KIT: case B_PATTERN:
+            case B_SOURCE: case B_PROG_PREV: case B_PROG_NEXT: case B_PROG_LIST:
                 return (int) std::distance (bounds_.begin(), it.base()) - 1;
             default: break;
         }
@@ -643,7 +723,21 @@ void ShogunFace::mouseDown (const juce::MouseEvent& e)
             break;
         }
         case B_KIT:
-        case B_PATTERN: showProgramMenu(); return;
+        case B_PATTERN:
+        case B_PROG_LIST: showProgramMenu(); return;
+        case B_PROG_PREV:
+        case B_PROG_NEXT:
+        {
+            const int n = jidai::shogunstate::programCount();
+            loadProgram ((device_.program() + (b.kind == B_PROG_PREV ? n - 1 : 1)) % n);
+            return;
+        }
+        case B_SOURCE:
+        {
+            const int i = (stepIndex (device_.param (b.a), 3) + (e.mods.isRightButtonDown() ? 2 : 1)) % 3;
+            device_.setParam (b.a, stepU (i, 3));
+            break;
+        }
         case B_RUN: device_.requestRun (! device_.running()); break;
         case B_RST: device_.requestRestart(); break;
         case B_TRK: selVoice_ = (selVoice_ + (b.a < 0 ? kVoices - 1 : 1)) % kVoices; break;
