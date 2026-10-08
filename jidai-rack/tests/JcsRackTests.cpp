@@ -622,6 +622,57 @@ void testRestNoLatch()
 
 }
 
+// A RONIN jack in the rack has the role RONIN itself declares for the port (Modular/Port.h portRole, what RONIN's
+// patch bay colours by), so a cable keeps its colour and glyph between RONIN and the rack. The one exception is an
+// output that already carries S-trig volts (EXT IN GATE), which is S-TRIG in the rack.
+void testRoninRoles()
+{
+    using jidai::jcs::Role;
+    Rack rack;
+    Device* d = rack.addDevice (DeviceKind::Ronin);
+    int withUnit = 0, same = 0;
+    std::string bad;
+    for (int j = 0; j < (int) d->jacks().size(); ++j)
+    {
+        const JackDesc& jack = d->jacks()[(size_t) j];
+        if (jack.unit == nullptr)
+            continue;
+        ++withUnit;
+        // RONIN declares EXT IN GATE as a plain gate, but it outputs S-trig volts: the rack keeps it S-TRIG (below).
+        const PortDesc pd = jack.unit->port (jack.port);
+        const Role declared = pd.strigVolts ? Role::STrig : portRole (pd);
+        if (d->jackRole (j) == declared && rack.jackRole ("RONIN#1/" + jack.id) == declared)
+            ++same;
+        else
+            bad += " " + jack.id;
+    }
+    check (withUnit > 50 && same == withUnit, "RONIN rack roles = RONIN's declared port roles (" + std::to_string (same) + "/"
+                                                  + std::to_string (withUnit) + ")" + bad);
+    const struct { const char* id; Role want; } expect[] = {
+        { "DIV:IN", Role::GateClk }, { "DIV:/2", Role::GateClk }, { "DIV:/4", Role::GateClk }, { "S&H:CLOCK", Role::GateClk },
+        { "MG:TRI", Role::CV }, { "MG:SAW", Role::CV }, { "MG:INV SAW", Role::CV }, { "MG:PULSE", Role::CV },
+        { "VCO:HZ/V", Role::HzvLin }, { "VCO:V/OCT", Role::VOct }, { "EG 1:TRIG", Role::STrig }, { "EG 2:TRIG", Role::STrig },
+        { "VCO:SAW", Role::Audio }, { "S&H:OUT", Role::CV }, { "EG 2:DELAY", Role::GateClk }, { "EXT IN:GATE", Role::STrig },
+    };
+    for (const auto& e : expect)
+        check (rack.jackRole (std::string ("RONIN#1/") + e.id) == e.want,
+               std::string ("RONIN ") + e.id + " is " + jidai::jcs::roleInfo (e.want).name);
+    // The cable colour is the source jack's role.
+    rack.connect ("RONIN#1/DIV:/2", "RONIN#1/S&H:CLOCK");
+    rack.connect ("RONIN#1/MG:TRI", "RONIN#1/VCF:CUTOFF");
+    Role divCable = Role::Audio, mgCable = Role::Audio;
+    for (size_t i = 0; i < rack.cables().size(); ++i)
+    {
+        if (rack.cables()[i].a == "RONIN#1/DIV:/2") divCable = rack.cableInfo()[i].role;
+        if (rack.cables()[i].a == "RONIN#1/MG:TRI") mgCable = rack.cableInfo()[i].role;
+    }
+    check (divCable == Role::GateClk && mgCable == Role::CV, "RONIN cables: DIV /2 is a GATE/CLK cable, MG TRI a CV cable");
+    // DIV /2 is a CV-type output, so a cable into EG 1 TRIG carries its volts as written: no "converted" badge.
+    rack.connect ("RONIN#1/DIV:/4", "RONIN#1/EG 1:TRIG");
+    check (rack.cables().back().a == "RONIN#1/DIV:/4" && rack.cableInfo().back().badge == jidai::jcs::Badge::None,
+           "RONIN DIV /4 -> EG 1 TRIG: GATE/CLK colour, no conversion badge (none happens)");
+}
+
 void runJcsRackTests (int& checks, int& failures)
 {
     gChecks = &checks;
@@ -632,4 +683,5 @@ void runJcsRackTests (int& checks, int& failures)
     testRackIO();
     testAutoRouteAndBushidoDefaults();
     testRestNoLatch();
+    testRoninRoles();
 }

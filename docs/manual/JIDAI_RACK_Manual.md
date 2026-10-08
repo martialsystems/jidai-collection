@@ -630,13 +630,13 @@ Every jack of every device, by rear-panel section. "back" marks back-only jacks.
 | VCF | IN (audio), CUTOFF (CV) | OUT (audio) |
 | VCA 1 | IN (audio), ENV (CV) | OUT (audio) |
 | VCA 2 | IN (CV), CV (CV) | OUT (CV) |
-| MG | FM (CV), PWM (CV) | TRI (audio), SAW (audio), INV SAW (audio), PULSE (audio) |
+| MG | FM (CV), PWM (CV) | TRI (CV), SAW (CV), INV SAW (CV), PULSE (CV) |
 | EG 1 | TRIG (S-trig) | OUT A (CV), OUT B (CV), OUT C (CV) |
 | EG 2 | TRIG (S-trig) | OUT + (CV), OUT − (CV), DELAY (gate) |
 | NOISE | – | WHITE (audio), PINK (audio) |
-| S&H | IN (audio), CLOCK (CV) | OUT (CV) |
+| S&H | IN (audio), CLOCK (gate) | OUT (CV) |
 | RING | A (CV), B (CV) | OUT (CV) |
-| DIV | IN (CV) | /2 (CV), /4 (CV) |
+| DIV | IN (gate) | /2 (gate), /4 (gate) |
 | INV | IN (CV) | OUT (CV) |
 | INT | IN (CV) | OUT (CV) |
 | MIX | IN 1 (audio), IN 2 (audio), IN 3 (audio) | OUT (audio) |

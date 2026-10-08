@@ -607,6 +607,10 @@ void Rack::rebuild()
         const int outJack = aOut ? ja : jb, inJack = aOut ? jb : ja;
         info_[idx].role = outDev->jackRole (outJack);
         info_[idx].badge = jidai::jcs::cableBadge (info_[idx].role, inDev->jackRole (inJack));
+        // "gate converted to S-trig" only where the graph converts: a Gate-type output that is not already S-trig.
+        // A GATE/CLK-role jack of CV type (RONIN DIV, S&H CLOCK) passes its volts as written.
+        if (info_[idx].badge == jidai::jcs::Badge::GateToStrig && (out.desc.type != PortType::Gate || out.desc.strigVolts))
+            info_[idx].badge = jidai::jcs::Badge::None;
         GraphCable gc { out.unit, out.port, in.unit, in.port };
         gc.legacyInvert = c.legacyInvert;
         graphCables.push_back (gc);
