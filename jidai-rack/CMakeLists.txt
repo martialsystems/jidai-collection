@@ -3,9 +3,10 @@ project(JidaiRack VERSION 0.1.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# One binary, two engines. BUSHIDO and RONIN are compiled from their own repositories at pinned commits;
+# One binary. BUSHIDO, RONIN and ORIGAMI are compiled from their own repositories at pinned commits;
 # neither plugin is hosted inside the other. To build against local checkouts instead, pass
 # -DFETCHCONTENT_SOURCE_DIR_BUSHIDO=/path/to/bushido -DFETCHCONTENT_SOURCE_DIR_RONIN=/path/to/ronin
+# and -DFETCHCONTENT_SOURCE_DIR_ORIGAMI=/path/to/origami
 # (and -DFETCHCONTENT_SOURCE_DIR_JUCE=/path/to/JUCE for an existing JUCE 8.0.4 checkout).
 include(FetchContent)
 FetchContent_Declare(JUCE
@@ -17,7 +18,8 @@ FetchContent_Declare(bushido
   GIT_REPOSITORY https://github.com/martialsystems/bushido.git
   # Bushido branch redesign/bushido (PR #4): JCS v1.1 engine, rack/PitchLaw.h over the vendored jidai-common, no retired-prefix aliases.
   # Pushed to origin on that branch. If it lands by squash or rebase, re-pin to the merged commit.
-  GIT_TAG 5ce7e2f7635e351cb7b3b5f888ab52ce773d9507
+  # c565c33: warnings-only fix on top of 5ce7e2f (float-equal and int-to-float under the rack's flags; same object code).
+  GIT_TAG c565c3344d18026ad79b3340e8561fc25f00d324
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_Declare(ronin
   GIT_REPOSITORY https://github.com/martialsystems/Ronin.git
@@ -36,8 +38,22 @@ set(BUSHIDO_DIR ${bushido_SOURCE_DIR})
 enable_testing()
 set(JIDAI_COMMON_TESTS ON CACHE BOOL "" FORCE)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../jidai-common ${CMAKE_CURRENT_BINARY_DIR}/jidai-common)
-# ORIGAMI: its DSP core (shared by the standalone effect and the rack device), the plugin, and its tests.
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../origami ${CMAKE_CURRENT_BINARY_DIR}/origami)
+# ORIGAMI: its own repository (https://github.com/martialsystems/origami), pinned by commit. Its CMakeLists is added
+# (no SOURCE_SUBDIR): it provides origami::dsp (the DSP core the rack device runs, include "origami/dsp/..."),
+# ORIGAMI_UI_SOURCES (the panel the rack compiles into its JUCE targets, include "origami/plugin/..."), the
+# standalone ORIGAMI plugin, and its tests (ctest origami, origami_plugin).
+# Single jidai-common include path: ORIGAMI vendors jidai-common 1.1.1 (third_party/jidai-common, 24ee621), but it
+# is declared after the add_subdirectory above, so it finds the rack's jidai::common and does not add its own copy
+# (one copy of each header in the binary, as for RONIN).
+FetchContent_Declare(origami
+  GIT_REPOSITORY https://github.com/martialsystems/origami.git
+  # origami main: history split from this repo's origami/ (redesign/jidai 540999b), src/origami layout,
+  # jidai-common 1.1.1 (24ee621) vendored, standalone CMake. If it lands elsewhere by squash or rebase, re-pin.
+  GIT_TAG e3dc73232d16de7b3aadee0761bcfc34cfe627a6)
+FetchContent_MakeAvailable(origami)
+if(NOT TARGET origami::dsp OR NOT ORIGAMI_UI_SOURCES)
+  message(FATAL_ERROR "ORIGAMI did not provide origami::dsp and ORIGAMI_UI_SOURCES")
+endif()
 set(RONIN_DIR ${ronin_SOURCE_DIR})
 
 # ---- rack core: no JUCE. The rack graph, the devices, and both engines' DSP. ----
