@@ -48,12 +48,14 @@ FetchContent_Declare(shogun
   # fbc2563: no dead panel keys (KIT/PATTERN arrows and search, A/B, undo/redo, SRC; FILL, scenes, mute groups, lanes
   # removed). 5c999a5: jidai-common 1.1.2 vendored, manual; CLOCK:FILL IN and MOD:LANE A removed from engine/ports.h
   # (151 ports = its ROUTE bay = the rack's jacks); saved cables on them are dropped and reported (shogun::kRemovedPorts).
-  # 5d80135 (frozen head): LEAD/BASS CV AMT scales the pitch CV into the voice (1.0 = exact 1 V/oct), MOD matrix scroll.
+  # 5d80135: LEAD/BASS CV AMT scales the pitch CV into the voice (1.0 = exact 1 V/oct), MOD matrix scroll.
+  # 720a0ae (final): FP contraction off on all its targets, compiler options guarded (MSVC), JUCE_DIR paths, plugin
+  # teardown hardening (no message posts from the audio thread); engine/shogun.cpp and PanelLayout.inc unchanged.
   # The rack compiles only engine/shogun.cpp, against
   # its own jidai-common (single include path; SHOGUN's vendored copy is not used) and reads plugin/Source/PanelLayout.inc
   # for the MAIN face. SHOGUN's alias shim (shogun::resolvePort) stays SHOGUN-local.
   # Pushed to origin on that branch. If it lands by squash or rebase, re-pin to the merged commit.
-  GIT_TAG 5d801359e2baf01c8c50e0c42077ec4eb171b5f0
+  GIT_TAG 720a0ae311003e6c28ccd76aa901045be3b175f8
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_MakeAvailable(JUCE bushido ronin shogun)
 set(SHOGUN_DIR ${shogun_SOURCE_DIR})
