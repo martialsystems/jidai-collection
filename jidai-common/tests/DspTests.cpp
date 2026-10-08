@@ -104,6 +104,7 @@ void testAdaa()
     w.wire = true;                  // planned as a wire for this block
     w.process (0.5, 0.0, 0.0, 4.0);
     check (w.process (0.25, 0.0, 0.0, 4.0) == 0.25, "a stage planned as a wire has no ADAA delay");
+    check (w.process (-0.7, 0.0, 0.83, 4.0) == -0.7 && w.wire, "a wire with a = 0 stays a wire for any symmetry (1.1.2: y = x at a = 0)");
     AdaaStage u;                    // not planned: a = b = 0 on a sample keeps the ADAA (half-sample average)
     u.process (0.5, 0.0, 0.0, 4.0);
     check (std::fabs (u.process (0.25, 0.0, 0.0, 4.0) - 0.375) < 1e-15, "an unplanned stage at a = b = 0 stays ADAA: (x[n] + x[n-1]) / 2");
@@ -140,7 +141,7 @@ void testSkipPerBlock()
     check (newJump < 1.2 * sineStep, "modulated through 0: no discontinuity (step stays at the signal slope)");
     check (oldJump > newJump, "the old per-sample skip shows a larger step (the toggled half-sample delay)");
 
-    // planBlock: steady, a = b = 0 and no VC depth -> wire; a live VC with depth, or a ramp -> ADAA.
+    // planBlock: steady, a = 0 and no VC > AMT depth -> wire (any SYM); a live VC with AMT depth, or a ramp -> ADAA.
     TripleShaper ts;
     ShaperControls c;                                         // WAVE 0, all trims 0
     ts.planBlock (c, true, false);
@@ -154,12 +155,107 @@ void testSkipPerBlock()
     c.macro = 0.3;                                            // c1 = 0.6, c2 = 0.1, c3 = 0
     ts.planBlock (c, true, false);
     check (! ts.stageIsWire (0) && ! ts.stageIsWire (1) && ts.stageIsWire (2), "WAVE 0.3: stage 3 (amount 0) is the only wire");
+    c.sym[2] = 0.4; c.modSym[2] = -0.2;
+    ts.planBlock (c, true, false);
+    check (ts.stageIsWire (2) && ts.runningStages() == 2 && ts.groupDelay() == 1.0, "WAVE 0.3 with SYM 3: stage 3 is still a wire (1.1.2); two stages run, 1 sample of group delay");
+    c = ShaperControls();
+    c.sym[0] = 0.5; c.sym[1] = -0.3; c.sym[2] = 1.0; c.vcToSym[0] = 0.7;
+    ts.planBlock (c, true, true);
+    check (ts.stageIsWire (0) && ts.stageIsWire (1) && ts.stageIsWire (2) && ts.groupDelay() == 0.0, "WAVE 0, any SYM, a live VC with SYM depth only: every stage a wire");
+    c.vcToAmt[0] = 0.1;
+    ts.planBlock (c, true, true);
+    check (! ts.stageIsWire (0) && ts.stageIsWire (1), "a live VC with AMT depth keeps its stage's ADAA");
     // A wrong plan (a control left 0 mid-block) falls back to ADAA instead of ignoring the control.
     AdaaStage w;
     w.wire = true;
     w.process (0.1, 0.0, 0.0, 4.0);
     const double y = w.process (0.2, 0.5, 0.0, 4.0);
     check (! w.wire && std::fabs (y - 0.2) > 1e-6, "a nonzero amount on a planned wire is shaped, and the plan is dropped");
+}
+
+// 1.1.2: AMT 0 is transparent. With every stage's amount at 0 (WAVE 0 or a negative trim cancelling it), any SYM
+// (static, modulated per sample, or from a live VC > SYM) leaves the signal bit-identical, through the shaper alone
+// (1x) and between the halfbands at 2x and 4x (the chain equals the same chain without the shaper, bit for bit).
+void testAmtZeroTransparent()
+{
+    for (int M : { 1, 2, 4 })
+    {
+        for (int variant = 0; variant < 3; ++variant)
+        {
+            TripleShaper ts;
+            ShaperControls c;
+            if (variant == 1) { c.macro = 0.2; c.trim[0] = -0.4; }                 // stage 1: 0.4 - 0.4 = 0
+            c.sym[0] = 0.37; c.sym[1] = -0.81; c.sym[2] = 1.0;
+            c.vcToSym[0] = 0.5; c.vcToSym[2] = -1.0;
+            const bool live[3] = { true, true, true };
+            ts.planBlock (c, true, live);
+            Upsampler2x upA, upB[2], refA, refB[2];
+            Downsampler2x dnA, dnB[2], rdA, rdB[2];
+            Rng r;
+            bool exact = true;
+            for (int n = 0; n < 6000 && exact; ++n)
+            {
+                if (n % 256 == 0) ts.planBlock (c, true, live);
+                const double x = 0.9 * std::sin (2.0 * kPi * 997.0 * n / 48000.0) + 0.1 * (r.uni() - 0.5);
+                const double vc[3] = { r.uni() * 2.0 - 1.0, 0.0, std::sin (n * 0.01) };
+                if (variant == 2) c.modSym[1] = std::sin (n * 0.003);                  // SYM moving every sample
+                auto shape = [&] (double u) { return ts.process (u, c, vc); };
+                if (M == 1) { exact = shape (x) == x; continue; }
+                double u0, u1, r0, r1;
+                upA.process (x, u0, u1);
+                refA.process (x, r0, r1);
+                double y, yr;
+                if (M == 2)
+                {
+                    const double w0 = shape (u0);
+                    const double w1 = shape (u1);
+                    y = dnA.process (w0, w1);
+                    yr = rdA.process (r0, r1);
+                }
+                else
+                {
+                    double q[4], qr[4];
+                    upB[0].process (u0, q[0], q[1]); upB[0].process (u1, q[2], q[3]);
+                    refB[0].process (r0, qr[0], qr[1]); refB[0].process (r1, qr[2], qr[3]);
+                    for (double& v : q) v = shape (v);
+                    const double h0 = dnB[0].process (q[0], q[1]);
+                    const double h1 = dnB[0].process (q[2], q[3]);
+                    y = dnA.process (h0, h1);
+                    const double g0 = rdB[0].process (qr[0], qr[1]);
+                    const double g1 = rdB[0].process (qr[2], qr[3]);
+                    yr = rdA.process (g0, g1);
+                }
+                exact = y == yr;
+            }
+            check (exact && ts.groupDelay() == 0.0, "AMT 0 + SYM is bit-transparent at " + std::to_string (M) + "x (variant "
+                                                        + std::to_string (variant) + ": " + (variant == 0 ? "WAVE 0" : variant == 1 ? "trim cancels WAVE" : "SYM moving per sample") + ")");
+        }
+    }
+}
+
+// The ADAA's group delay: half a sample per running stage at the rate it runs at. groupDelay() reports it for the
+// plan; the small-signal impulse response's centroid measures it (a linear stage under ADAA is a two-tap average).
+void testGroupDelay()
+{
+    for (double wave : { 0.25, 0.5, 1.0 })
+    {
+        TripleShaper ts;
+        ShaperControls c;
+        c.macro = wave;
+        ts.planBlock (c, true, false);
+        double sum = 0.0, moment = 0.0;
+        const double amp = 1.0e-4;                                   // small signal: the stages are linear here
+        for (int n = 0; n < 16; ++n)
+        {
+            const double y = ts.process (n == 2 ? amp : 0.0, c, 0.0);
+            sum += y;
+            moment += y * (double) (n - 2);
+        }
+        const double centroid = moment / sum;
+        std::printf ("  WAVE %.2f: %d stages run, groupDelay %.1f, measured %.4f samples\n", wave, ts.runningStages(), ts.groupDelay(), centroid);
+        check (std::fabs (centroid - ts.groupDelay()) < 1e-3, "group delay at WAVE " + std::to_string (wave) + ": reported "
+                                                                    + std::to_string (ts.groupDelay()) + ", measured " + std::to_string (centroid));
+    }
 }
 
 void testMacro()
@@ -174,8 +270,10 @@ void testMacro()
     check (k.isBypass (true), "defaults are a true bypass");
     k.vcToAmt[1] = 0.3;
     check (k.isBypass (false) && ! k.isBypass (true), "a VC depth only counts when a VC source is live");
-    k.vcToAmt[1] = 0.0; k.sym[2] = 0.01;
-    check (! k.isBypass (false), "any SYM leaves bypass");
+    k.vcToAmt[1] = 0.0; k.sym[2] = 0.01; k.modSym[0] = -0.4; k.vcToSym[1] = 0.9;
+    check (k.isBypass (true), "SYM alone (sym, modSym, a live VC > SYM) stays a true bypass (1.1.2: AMT 0 is transparent)");
+    k.trim[2] = 0.01;
+    check (! k.isBypass (false), "any amount trim leaves bypass");
     // Exact migration from the single-stage WAVE (SHOGUN 4.6): m = w/2, WAVE 2 = -(w - 0.5) for w > 0.5.
     double worst = 0.0;
     for (int v = 0; v <= 127; ++v)
@@ -304,6 +402,8 @@ int main()
     testHalfband();
     testAliasing();
     testSkipPerBlock();
+    testAmtZeroTransparent();
+    testGroupDelay();
     std::printf ("%d checks, %d failed\n%s\n", checks, failures, failures == 0 ? "JIDAI DSP TESTS PASS" : "JIDAI DSP TESTS FAIL");
     return failures == 0 ? 0 : 1;
 }

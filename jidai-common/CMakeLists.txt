@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(JidaiCommon VERSION 1.1.1 LANGUAGES CXX)
+project(JidaiCommon VERSION 1.1.2 LANGUAGES CXX)
 
 # Header-only C++17: the Jidai Cable Standard v1.1 helpers and the shared DSP blocks.
 # Other repos vendor include/jidai (copy, subtree or FetchContent) and add include/ to their include path,

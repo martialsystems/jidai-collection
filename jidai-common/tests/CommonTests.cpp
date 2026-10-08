@@ -301,7 +301,12 @@ void testJackIds()
     check (r.aliased && r.id == "LEAD:NOTE" && r.conversion.law == AliasLaw::Lin55ToVoct, "resolve gives the canonical id and its law");
     check (near (r.conversion.convert (2.0), std::log2 (2.0) - 1.25, 0.0) && near (r.conversion.convert (2.0), pitch::lin55ToVoct (2.0), 0.0),
            "Lin55ToVoct: V' = log2 V - 1.25");
-    check (near (r.conversion.convert (0.0), -5.0, 0.0), "Lin55ToVoct: 0 V and below go to the -5 V rail");
+    const double floorV = std::log2 (1.0e-3) - 1.25;
+    check (near (r.conversion.convert (0.0), floorV, 0.0) && near (pitch::lin55ToVoct (-3.0), floorV, 0.0)
+               && near (pitch::lin55ToVoct (std::nan ("")), floorV, 0.0) && near (pitch::lin55ToVoct (5.0e-4), floorV, 0.0),
+           "Lin55ToVoct (1.1.2): V floored at 1 mV: 0 V, negative, NaN and 0.5 mV give log2(1e-3) - 1.25 = -11.216 V");
+    check (near (pitch::lin55ToVoct (2.0e-3), std::log2 (2.0e-3) - 1.25, 0.0) && near (pitch::lin55ToVoct (1.0e-3), floorV, 0.0),
+           "Lin55ToVoct: above the floor unchanged (2 mV), at it exact (1 mV)");
     const auto pass = laws.resolve ("LEAD:GATE");
     check (! pass.aliased && pass.id == "LEAD:GATE" && pass.conversion.identity() && near (pass.conversion.convert (3.3), 3.3, 0.0), "unknown ids pass through with the identity law");
     AliasTable more;
