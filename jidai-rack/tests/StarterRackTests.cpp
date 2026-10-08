@@ -83,9 +83,13 @@ std::map<std::string, std::string> paramsOf (const juce::XmlElement& device)
         for (auto* e : o->getChildWithTagNameIterator ("PARAM"))
             out["origami:" + e->getStringAttribute ("id").toStdString()] = e->getStringAttribute ("value").toStdString();
     if (auto* s = device.getChildByName ("SHOGUN"))
-        if (auto* params = juce::JSON::parse (s->getAllSubText())["params"].getDynamicObject())
-            for (const auto& kv : params->getProperties())
+    {
+        const juce::var patch = juce::JSON::parse (s->getAllSubText());   // keep the parsed tree alive while iterating
+        const juce::var params = patch["params"];
+        if (auto* obj = params.getDynamicObject())
+            for (const auto& kv : obj->getProperties())
                 out["shogun:" + kv.name.toString().toStdString()] = kv.value.toString().toStdString();
+    }
     return out;
 }
 
