@@ -24,7 +24,7 @@ A stereo effect with three folding stages under one WAVE macro. Each stage has i
 
 ## JIDAI RACK
 
-**BUSHIDO, RONIN and ORIGAMI in one rack, in one plugin.**
+**BUSHIDO, RONIN, ORIGAMI and SHOGUN in one rack, in one plugin.**
 
 JIDAI RACK is a rack cabinet in a plugin window. Drag devices in from the browser, screw in as many of each as you like, and cable any jack to any other.
 
@@ -37,7 +37,9 @@ JIDAI RACK is a rack cabinet in a plugin window. Drag devices in from the browse
 - **Smart insert.** A new device is wired up for you: audio outputs go to MAIN OUT, an ORIGAMI takes the host input, and a RONIN under a BUSHIDO gets pitch and gate. Hold Shift while adding to skip this.
 - **Role colours.** Cables take the colour of the signal they carry (audio, 1 V/oct, gate, CV and so on), and a badge warns when a cable joins mismatched pitch laws.
 - **Your patches carry over.** Racks saved by earlier versions load and convert automatically, BUSHIDO and RONIN settings included, and the header shows a notice of what changed.
-- **Presets.** BUSHIDO's and RONIN's screens each have banks A and B of up to 999 entries. Save your own patches into bank B.
+- **Presets.** BUSHIDO's and RONIN's screens each have banks A and B of up to 999 entries. Save your own patches into bank B. SHOGUN's KIT display opens its factory kits.
+- **Starter racks.** The RACKS menu in the header loads ready-patched racks, grouped as INIT, ACID, EDM and FX.
+- **Manual.** The full user manual is in [`docs/manual/`](docs/manual/JIDAI_RACK_Manual.md) (Markdown and PDF).
 
 ### Devices in the rack
 
@@ -47,6 +49,7 @@ JIDAI RACK is a rack cabinet in a plugin window. Drag devices in from the browse
 | RONIN | Voice | 4 U | A full RONIN, any number of them. |
 | RONIN FX | Effect | 4 U | A RONIN that takes the host input at its EXT IN. |
 | ORIGAMI | Effect | 3 U | The full ORIGAMI, with VC and VCA CV jacks. |
+| SHOGUN | Drums | 5.8 U | The drum machine, with every voice's jacks on the back. Follows the host transport. |
 | RACK I/O | Utility | 1 U | One per rack, always at the top. |
 
 ## Quick start
@@ -58,7 +61,7 @@ JIDAI RACK is a rack cabinet in a plugin window. Drag devices in from the browse
 
 ## Build
 
-Needs CMake 3.22 or later and a C++20 compiler. JUCE 8.0.4 and the BUSHIDO, RONIN and ORIGAMI sources are downloaded at pinned commits during configure.
+Needs CMake 3.22 or later and a C++20 compiler. JUCE 8.0.4 and the BUSHIDO, RONIN, ORIGAMI and SHOGUN sources are downloaded at pinned commits during configure.
 
 ```sh
 cmake -S jidai-rack -B build -G Ninja -DCMAKE_BUILD_TYPE=Release

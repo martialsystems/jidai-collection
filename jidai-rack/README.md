@@ -1,13 +1,13 @@
 # JIDAI RACK
 
-**BUSHIDO, RONIN and ORIGAMI in one rack, in one plugin.**
+**BUSHIDO, RONIN, ORIGAMI and SHOGUN in one rack, in one plugin.**
 
-JIDAI RACK puts the Jidai Collection in a single rack cabinet. Every device is compiled into one binary, so cables run sample by sample between all of them. This page covers using the rack and building it. For an overview of the collection, see the [main README](../README.md).
+JIDAI RACK puts the Jidai Collection in a single rack cabinet. Every device is compiled into one binary, so cables run sample by sample between all of them. This page covers using the rack and building it. For an overview of the collection, see the [main README](../README.md). The user manual is in [`../docs/manual/`](../docs/manual/JIDAI_RACK_Manual.md).
 
 ## The window
 
-- **Header.** FRONT and BACK, the four cable views, FOLD ALL, the rack's total latency (LAT), and the UI scale. The window opens at 1200 x 672 and can shrink to 960 x 540. The rack scrolls.
-- **Device browser.** The column on the left, with a search box at the top. Devices are grouped as SEQUENCER (BUSHIDO), VOICE (RONIN), EFFECT (RONIN FX, ORIGAMI) and UTILITY (RACK I/O). Each card shows how many of that device are already in the rack. Drag a card onto the rack to add a device where you drop it, or click it to add one at the bottom. The button at the top right collapses the browser to a thin strip.
+- **Header.** FRONT and BACK, the four cable views, FOLD ALL, the RACKS menu of starter racks, the rack's total latency (LAT), and the UI scale. The window opens at 1200 x 672 and can shrink to 960 x 540. The rack scrolls.
+- **Device browser.** The column on the left, with a search box at the top. Devices are grouped as SEQUENCER (BUSHIDO), VOICE (RONIN), DRUMS (SHOGUN), EFFECT (RONIN FX, ORIGAMI) and UTILITY (RACK I/O). Each card shows how many of that device are already in the rack. Drag a card onto the rack to add a device where you drop it, or click it to add one at the bottom. The button at the top right collapses the browser to a thin strip.
 - **The rack.** Devices sit between two rails, top to bottom. Each one has a tab strip with its fold button, name, OPEN/CLOSED, its page tabs, its latency, BYPASS and a remove button. Drag a device by its strip to move it. Drag it back onto the browser, or press its remove button, to take it out.
 
 ## Devices
@@ -20,6 +20,7 @@ JIDAI RACK puts the Jidai Collection in a single rack cabinet. Every device is c
 - **BUSHIDO** (3 U): the 3 x 12 step sequencer.
 - **RONIN** (4 U): the semi-modular synthesizer. **RONIN FX** is the same device with the DAW's audio patched into its EXT IN.
 - **ORIGAMI** (3 U): the stereo triple wave folder.
+- **SHOGUN** (5.8 U open, 4 U on the back): the drum machine. A new SHOGUN follows the host transport. Click its KIT display for the factory kits.
 
 When you add a device, the rack patches it for you. Audio outputs go to MAIN OUT, an ORIGAMI takes HOST IN, and a RONIN placed directly under a BUSHIDO gets row A's pitch and gate. Hold Shift while adding to place a device without cables.
 
@@ -44,17 +45,18 @@ When you add a device, the rack patches it for you. Audio outputs go to MAIN OUT
 - **Latency compensation.** Each path into MAIN OUT is delayed to match the slowest one, and the rack reports that total to the DAW.
 - **RONIN** runs at its standard rate in the rack so its jacks stay sample-accurate with the other devices. The standalone RONIN plugin keeps its 2x HQ mode.
 - **ORIGAMI** reports 0 samples at QUALITY 1x and 46 at 2x. The rack compensates for both.
+- **SHOGUN** reports 0, 23 or 26 samples at oversampling 1x, 2x or 4x.
 - **BUSHIDO's MIDI** still runs inside the rack, but the rack has no MIDI output port yet.
 
 ## Presets and saved racks
 
-BUSHIDO's and RONIN's screens each have banks A and B with up to 999 entries. Bank A is that instrument's factory set. Bank B holds the rack patches and your saves, and SAVE stores the panel as the next entry in the lit bank.
+BUSHIDO's and RONIN's screens each have banks A and B with up to 999 entries. Bank A is that instrument's factory set. Bank B holds the rack patches and your saves, and SAVE stores the panel as the next entry in the lit bank. SHOGUN's factory kits open from its KIT display. The RACKS menu loads the starter racks.
 
 Racks saved by earlier versions load and convert automatically. The old host routing becomes a RACK I/O with matching cables, and BUSHIDO and RONIN settings move to their current formats. The header then shows a notice of what changed. A rack saved by a newer version is not loaded.
 
 ## Build
 
-Needs CMake 3.22 or later and a C++20 compiler. JUCE 8.0.4 and the BUSHIDO, RONIN and ORIGAMI sources are downloaded at pinned commits during configure.
+Needs CMake 3.22 or later and a C++20 compiler. JUCE 8.0.4 and the BUSHIDO, RONIN, ORIGAMI and SHOGUN sources are downloaded at pinned commits during configure.
 
 ```sh
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -71,9 +73,9 @@ ctest --test-dir build --output-on-failure    # on Linux: xvfb-run -a ctest ...
 | `JidaiCommonTests`, `JidaiDspTests`, `JidaiHeaderHygiene` (`common`, `dsp`, `headers`) | The shared jidai-common library. |
 | `OrigamiTests`, `OrigamiPluginTests` (`origami`, `origami_plugin`) | ORIGAMI, built from its own repository. |
 
-To build against local checkouts, pass `-DFETCHCONTENT_SOURCE_DIR_JUCE=…`, `-DFETCHCONTENT_SOURCE_DIR_BUSHIDO=…`, `-DFETCHCONTENT_SOURCE_DIR_RONIN=…` and `-DFETCHCONTENT_SOURCE_DIR_ORIGAMI=…`.
+To build against local checkouts, pass `-DFETCHCONTENT_SOURCE_DIR_JUCE=…`, `-DFETCHCONTENT_SOURCE_DIR_BUSHIDO=…`, `-DFETCHCONTENT_SOURCE_DIR_RONIN=…`, `-DFETCHCONTENT_SOURCE_DIR_ORIGAMI=…` and `-DFETCHCONTENT_SOURCE_DIR_SHOGUN=…`.
 
-BUSHIDO, RONIN and ORIGAMI each carry their own copy of jidai-common. The rack compiles all three against the copy in [`../jidai-common`](../jidai-common), so the binary has one copy of each header.
+BUSHIDO, RONIN, ORIGAMI and SHOGUN each carry their own copy of jidai-common. The rack compiles all four against the copy in [`../jidai-common`](../jidai-common), so the binary has one copy of each header.
 
 **Smoke test.** `"JIDAI RACK" --smoke out.wav` runs one second of the default rack on the default audio output and writes it to `out.wav`. With no output device it prints `SMOKE SKIP` and exits 0.
 
