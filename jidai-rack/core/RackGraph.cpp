@@ -2,6 +2,9 @@
 
 #include "RackGraph.h"
 
+#include "jidai/jcs/Detect.h"
+#include "jidai/jcs/Graph.h"
+
 #include <algorithm>
 
 namespace jidai {
@@ -38,23 +41,58 @@ struct RackGraph::Snapshot {
         int sourcePort = -1;
         int dest = -1;
         int destPort = -1;
-        bool feedback = false;
-        bool delayed = false;
+        bool delayed = false;          // R9 feedback cable: one sample late
         float held = 0.0f;
         bool sourcePlain = false;
         bool destPlain = false;
         bool sourceGate = false;
         bool sourceStrig = false;
         bool destGate = false;
+        bool destStrig = false;
+        bool legacyInvert = false;
+        jidai::jcs::Schmitt schmitt;   // R3 reading of a 0/5 V gate into an S-trig input
+        std::vector<float> ring;       // R11 compensation delay line
+        int ringPos = 0;
+
+        float convert (float v) noexcept
+        {
+            if (legacyInvert)
+            {
+                // The v2 rack law (S-15 into every non-plain input), kept per cable by migration M3.
+                if (! destPlain)
+                {
+                    if (sourceGate && ! destGate && ! sourceStrig)
+                        v = v >= 0.5f ? 0.0f : 5.0f;
+                }
+                else if (! sourcePlain && sourceGate)
+                    v = sourceStrig ? (v < 1.5f ? 5.0f : 0.0f) : (v >= 0.5f ? 5.0f : 0.0f);
+                return v;
+            }
+            if (! sourceGate || sourceStrig)
+                return v;                                   // raw volts; an S-trig source passes as written
+            if (destStrig)
+            {
+                bool high = v >= 0.5f;
+                if (sourcePlain)
+                {
+                    schmitt.process (v);
+                    high = schmitt.high;
+                }
+                return jidai::jcs::strigVoltsFor (high);    // 0 V held, +5 V released
+            }
+            if (! sourcePlain)
+                return v >= 0.5f ? jidai::jcs::kGateHigh : jidai::jcs::kGateLow;      // R2 levels on the cable
+            return v;
+        }
     };
 
     std::vector<Unit*> units;
     std::vector<std::vector<PortDesc>> ports;     // cached port descriptions, [unit][port]
     std::vector<std::vector<char>> patched;       // [unit][port]
+    std::vector<std::vector<char>> strig;         // [unit][port] S-trig inputs
     std::vector<std::vector<int>> incoming;       // [unit] -> edge indices, oldest first
     std::vector<Edge> edges;
     std::vector<int> order;
-    std::vector<char> again;
 
     void clearInputs (int unit)
     {
@@ -63,6 +101,7 @@ struct RackGraph::Snapshot {
         bool* connected = u->connected();
         const auto& desc = ports[(size_t) unit];
         const auto& isPatched = patched[(size_t) unit];
+        const auto& isStrig = strig[(size_t) unit];
         for (size_t port = 0; port < desc.size(); ++port)
         {
             if (desc[port].dir != PortDir::In)
@@ -71,37 +110,27 @@ struct RackGraph::Snapshot {
                 continue;
             }
             connected[port] = isPatched[port] != 0;
-            if (! isPatched[port])
-            {
-                if (desc[port].type == PortType::Gate)
-                    continue;
-                value[port] = desc[port].rest;
-                continue;
-            }
-            value[port] = 0.0f;
+            if (isPatched[port])
+                value[port] = 0.0f;
+            else
+                value[port] = isStrig[port] ? jidai::jcs::kStrigRest : desc[port].rest;   // R10: no latching
         }
     }
 
-    void contribute (int unit, bool includeZeroDelayFeedback)
+    void contribute (int unit)
     {
         float* value = units[(size_t) unit]->values();
         for (int index : incoming[(size_t) unit])
         {
-            const Edge& e = edges[(size_t) index];
-            const bool zeroDelayFeedback = e.feedback && ! e.delayed;
-            if (zeroDelayFeedback && ! includeZeroDelayFeedback)
-                continue;
+            Edge& e = edges[(size_t) index];
             float v = e.delayed ? e.held : units[(size_t) e.source]->values()[e.sourcePort];
-            if (! e.destPlain)
+            v = e.convert (v);
+            if (! e.ring.empty())
             {
-                // S-15: logic 1 is held and contributes 0 V. Logic 0 is released and contributes +5 V.
-                if (e.sourceGate && ! e.destGate && ! e.sourceStrig)
-                    v = v >= 0.5f ? 0.0f : 5.0f;
-            }
-            else if (! e.sourcePlain && e.sourceGate)
-            {
-                // A RONIN gate into a BUSHIDO input: high is 5 V.
-                v = e.sourceStrig ? (v < 1.5f ? 5.0f : 0.0f) : (v >= 0.5f ? 5.0f : 0.0f);
+                const float out = e.ring[(size_t) e.ringPos];
+                e.ring[(size_t) e.ringPos] = v;
+                e.ringPos = (e.ringPos + 1) % (int) e.ring.size();
+                v = out;
             }
             value[e.destPort] += v;
         }
@@ -113,19 +142,27 @@ void RackGraph::SnapshotDeleter::operator() (Snapshot* s) const { delete s; }
 RackGraph::RackGraph() : active_ (new Snapshot()) {}
 RackGraph::~RackGraph() = default;
 
-RackGraph::SnapshotPtr RackGraph::build (const std::vector<Unit*>& units, const std::vector<GraphCable>& cables)
+RackGraph::SnapshotPtr RackGraph::build (const std::vector<Unit*>& units, const std::vector<GraphCable>& cables,
+                                         const std::vector<OrderEdge>& orderEdges, std::vector<signed char>* status)
 {
+    if (status != nullptr)
+        status->assign (cables.size(), -1);
+    std::vector<size_t> keptFrom;
     SnapshotPtr snap (new Snapshot());
     const int n = (int) units.size();
     snap->units = units;
     snap->ports.resize ((size_t) n);
     snap->patched.resize ((size_t) n);
+    snap->strig.resize ((size_t) n);
     snap->incoming.resize ((size_t) n);
     for (int u = 0; u < n; ++u)
     {
         const int count = units[(size_t) u]->numPorts();
         for (int p = 0; p < count; ++p)
+        {
             snap->ports[(size_t) u].push_back (units[(size_t) u]->port (p));
+            snap->strig[(size_t) u].push_back (units[(size_t) u]->strigInput (p) ? 1 : 0);
+        }
         snap->patched[(size_t) u].assign ((size_t) count, 0);
     }
 
@@ -135,8 +172,9 @@ RackGraph::SnapshotPtr RackGraph::build (const std::vector<Unit*>& units, const 
         return it == units.end() ? -1 : (int) (it - units.begin());
     };
 
-    for (const auto& c : cables)
+    for (size_t ci = 0; ci < cables.size(); ++ci)
     {
+        const auto& c = cables[ci];
         const int s = indexOf (c.source);
         const int d = indexOf (c.dest);
         if (s < 0 || d < 0)
@@ -161,90 +199,38 @@ RackGraph::SnapshotPtr RackGraph::build (const std::vector<Unit*>& units, const 
         e.sourceGate = sd.type == PortType::Gate;
         e.sourceStrig = sd.strigVolts;
         e.destGate = dd.type == PortType::Gate;
-        snap->edges.push_back (e);
+        e.destStrig = snap->strig[(size_t) d][(size_t) c.destPort] != 0;
+        e.legacyInvert = c.legacyInvert;
+        if (c.delay > 0)
+            e.ring.assign ((size_t) c.delay, 0.0f);
+        snap->edges.push_back (std::move (e));
+        keptFrom.push_back (ci);
     }
 
-    // Walk oldest to newest. An edge is feedback when it closes on the edges kept so far.
-    // Only the newest feedback edge is delayed. The kept edges stay a DAG.
-    std::vector<std::vector<int>> keptNext ((size_t) n);
-    auto keptReaches = [&] (int from, int target)
+    // R9: every loop-closing cable is delayed one sample; one topological order, each unit once.
+    std::vector<jidai::jcs::GraphEdge> fixed, graphEdges;
+    for (const auto& o : orderEdges)
     {
-        std::vector<char> seen ((size_t) n, 0);
-        std::vector<int> queue { from };
-        seen[(size_t) from] = 1;
-        for (size_t head = 0; head < queue.size(); ++head)
-        {
-            for (int next : keptNext[(size_t) queue[head]])
-            {
-                if (next == target)
-                    return true;
-                if (! seen[(size_t) next])
-                {
-                    seen[(size_t) next] = 1;
-                    queue.push_back (next);
-                }
-            }
-        }
-        return false;
-    };
-
-    int newestFeedback = -1;
+        const int a = indexOf (o.before), b = indexOf (o.after);
+        if (a >= 0 && b >= 0)
+            fixed.push_back ({ a, b });
+    }
+    for (const auto& e : snap->edges)
+        graphEdges.push_back ({ e.source, e.dest });
+    const auto feedback = jidai::jcs::classifyFeedback (n, fixed, graphEdges);
     for (size_t i = 0; i < snap->edges.size(); ++i)
     {
-        auto& e = snap->edges[i];
-        const bool closes = e.source == e.dest || keptReaches (e.dest, e.source);
-        e.feedback = closes;
-        if (closes)
-            newestFeedback = (int) i;
-        else
-            keptNext[(size_t) e.source].push_back (e.dest);
+        snap->edges[i].delayed = feedback[i] != 0;
+        if (status != nullptr)
+            (*status)[keptFrom[i]] = feedback[i] != 0 ? 1 : 0;
     }
-    if (newestFeedback >= 0)
-        snap->edges[(size_t) newestFeedback].delayed = true;
+    snap->order = jidai::jcs::runOrder (n, fixed, graphEdges, feedback);
 
-    // Run order: Kahn's algorithm over the non-feedback edges, then any unit left unplaced.
-    std::vector<std::vector<int>> adjacent ((size_t) n);
-    std::vector<int> indegree ((size_t) n, 0);
-    for (const auto& e : snap->edges)
-    {
-        if (e.feedback || e.source == e.dest)
-            continue;
-        auto& list = adjacent[(size_t) e.source];
-        if (std::find (list.begin(), list.end(), e.dest) != list.end())
-            continue;
-        list.push_back (e.dest);
-        ++indegree[(size_t) e.dest];
-    }
-    std::vector<int> queue;
-    for (int u = 0; u < n; ++u)
-        if (indegree[(size_t) u] == 0)
-            queue.push_back (u);
-    for (size_t head = 0; head < queue.size(); ++head)
-    {
-        const int u = queue[head];
-        snap->order.push_back (u);
-        for (int d : adjacent[(size_t) u])
-            if (--indegree[(size_t) d] == 0)
-                queue.push_back (d);
-    }
-    if ((int) snap->order.size() < n)
-    {
-        std::vector<char> placed ((size_t) n, 0);
-        for (int u : snap->order)
-            placed[(size_t) u] = 1;
-        for (int u = 0; u < n; ++u)
-            if (! placed[(size_t) u])
-                snap->order.push_back (u);
-    }
-
-    snap->again.assign ((size_t) n, 0);
     for (size_t i = 0; i < snap->edges.size(); ++i)
     {
         const auto& e = snap->edges[i];
         snap->patched[(size_t) e.dest][(size_t) e.destPort] = 1;
         snap->incoming[(size_t) e.dest].push_back ((int) i);
-        if (e.feedback && ! e.delayed)
-            snap->again[(size_t) e.dest] = 1;
     }
     return snap;
 }
@@ -255,17 +241,20 @@ void RackGraph::install (SnapshotPtr next)
         next.reset (new Snapshot());
     for (auto& e : next->edges)
     {
-        if (! e.delayed)
-            continue;
         for (const auto& old : active_->edges)
         {
-            if (! old.delayed)
-                continue;
             if (active_->units[(size_t) old.source] != next->units[(size_t) e.source] || old.sourcePort != e.sourcePort)
                 continue;
             if (active_->units[(size_t) old.dest] != next->units[(size_t) e.dest] || old.destPort != e.destPort)
                 continue;
-            e.held = old.held;
+            if (e.delayed && old.delayed)
+                e.held = old.held;
+            e.schmitt = old.schmitt;
+            if (! e.ring.empty() && e.ring.size() == old.ring.size())
+            {
+                e.ring = old.ring;          // message thread: allocation is fine here
+                e.ringPos = old.ringPos;
+            }
             break;
         }
     }
@@ -275,25 +264,12 @@ void RackGraph::install (SnapshotPtr next)
 void RackGraph::process()
 {
     Snapshot& s = *active_;
-    const int n = (int) s.units.size();
-    for (int u = 0; u < n; ++u)
-        s.clearInputs (u);
-
     for (int u : s.order)
     {
-        s.contribute (u, false);
-        s.units[(size_t) u]->processSample();
-    }
-
-    for (int u : s.order)
-    {
-        if (! s.again[(size_t) u])
-            continue;
         s.clearInputs (u);
-        s.contribute (u, true);
+        s.contribute (u);
         s.units[(size_t) u]->processSample();
     }
-
     for (auto& e : s.edges)
         if (e.delayed)
             e.held = s.units[(size_t) e.source]->values()[e.sourcePort];
@@ -318,6 +294,15 @@ bool RackGraph::cableIsDelayed (int index) const
     if (index < 0 || index >= (int) active_->edges.size())
         return false;
     return active_->edges[(size_t) index].delayed;
+}
+
+int RackGraph::unitRunsPerSample() const
+{
+    std::vector<int> runs (active_->units.size(), 0);
+    int most = 0;
+    for (int u : active_->order)
+        most = std::max (most, ++runs[(size_t) u]);
+    return most;
 }
 
 } // namespace jidai

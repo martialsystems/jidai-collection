@@ -2,13 +2,14 @@
 
 #include "BushidoDevice.h"
 
-#include "rack/HzPerVolt.h"
+#include <algorithm>
+
 
 namespace jidai {
 
 // The BUSHIDO engine as one graph unit. Port types follow the web rack (web/bushido_dsp.js):
-// inputs read raw volts, so they are CV (MIXER IN 1/2 are Audio); GATE and TRIG outputs are 0/5 V logic, typed Gate,
-// so RONIN's S-15 law turns them into S-trig volts when they feed a RONIN CV or audio input.
+// inputs read raw volts, so they are CV (MIXER IN 1/2 are Audio); GATE and TRIG outputs are 0/5 V gates, typed Gate,
+// so a cable from them into an S-trig input (RONIN EG TRIG) is converted per JCS R3s.
 class BushidoDevice::EngineUnit : public Unit {
 public:
     static constexpr int kMaxJacks = 32;
@@ -92,34 +93,41 @@ void BushidoDevice::prepare (double sampleRate)
 void BushidoDevice::beginBlock()
 {
     noteCount_ = 0;
+    blockStart_ = sq.samplesProcessed();
 }
 
-void BushidoDevice::collectMidi (int sampleInBlock)
+void BushidoDevice::setTransport (const Transport& t)
 {
-    auto add = [this, sampleInBlock] (int channel, int note, bool on)
+    rack::Transport rt;
+    rt.valid = t.valid;
+    rt.playing = t.playing;
+    rt.bpm = t.bpm;
+    rt.ppq = t.ppq;
+    rt.samplePos = t.samplePosition;
+    sq.setTransport (rt);
+}
+
+jidai::jcs::Role BushidoDevice::jackRole (int jack) const
+{
+    if (jack == BushidoModule::CV_A || jack == BushidoModule::CV_B)
+        return sq.law (jack == BushidoModule::CV_A ? 0 : 1) == rack::pitch::Law::HzvLin ? jidai::jcs::Role::HzvLin
+                                                                                       : jidai::jcs::Role::VOct;
+    return Device::jackRole (jack);
+}
+
+void BushidoDevice::collectMidi (int)
+{
+    BushidoModule::GateEvent ev[8];
+    const int count = sq.takeGateEvents (ev, 8);
+    auto emit = [this] (const BushidoMidiOut::Msg& m)
     {
         if (noteCount_ < kMaxNoteEvents)
-            notes_[(size_t) noteCount_++] = { sampleInBlock, channel, note, on };
+            notes_[(size_t) noteCount_++] = { (int) std::max (0LL, m.sample - blockStart_), m.channel, m.note, m.on, m.velocity };
     };
-    for (int ch = 0; ch < 2; ++ch)
-    {
-        const float* v = unit_->value;
-        const bool high = ! bypass_.load (std::memory_order_relaxed) && v[ch == 0 ? BushidoModule::GATE_A : BushidoModule::GATE_B] > 1.0f;
-        if (high && ! gatePrev_[ch])
-        {
-            if (midiNote_[ch] >= 0)
-                add (ch + 1, midiNote_[ch], false);
-            midiNote_[ch] = rack::hzv::midiNote (v[ch == 0 ? BushidoModule::CV_A : BushidoModule::CV_B]);
-            if (midiNote_[ch] >= 0)
-                add (ch + 1, midiNote_[ch], true);
-        }
-        else if (! high && gatePrev_[ch] && midiNote_[ch] >= 0)
-        {
-            add (ch + 1, midiNote_[ch], false);
-            midiNote_[ch] = -1;
-        }
-        gatePrev_[ch] = high;
-    }
+    if (bypass_.load (std::memory_order_relaxed))
+        midiOut_.allOff (sq.samplesProcessed() - 1, emit);
+    else
+        midiOut_.handle (sq, ev, count, emit);
 }
 
 int BushidoDevice::paramIndex (const std::string& id) const

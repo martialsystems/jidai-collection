@@ -113,7 +113,7 @@ int runSmoke (const juce::File& wav)
         return 1;
     }
     writer.reset();
-    std::printf ("SMOKE PASS: wrote %s, %d samples, peak %.4f\n", wav.getFullPathName().toRawUTF8(), got, recorder.taken.getMagnitude (0, got));
+    std::printf ("SMOKE PASS: wrote %s, %d samples, peak %.4f\n", wav.getFullPathName().toRawUTF8(), got, (double) recorder.taken.getMagnitude (0, got));
     return 0;
 }
 

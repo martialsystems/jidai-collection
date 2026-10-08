@@ -1,9 +1,12 @@
 // Copyright (c) 2026 Martial Systems LLC. All rights reserved.
 
 #include "RoninDevice.h"
+#include "core/FloatCompare.h"
 
 #include "Modular/EffectSwitch.h"
+#include "Modular/PatchState.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace jidai {
@@ -17,7 +20,45 @@ public:
     float* values() override { return module.portValue; }
     bool* connected() override { return module.inputConnected; }
     void processSample() override { module.processSample(); }
+    // JCS R3s: RONIN marks its S-trig inputs itself (PortDesc::strigInput: EG 1 TRIG and EG 2 TRIG only).
+    bool strigInput (int p) const override { return p >= 0 && p < module.numPorts() && module.port (p).strigInput; }
     Module& module;
+};
+
+// HOST:IN L/R -> EXT IN's host input (volts / 5 = host units). IN R is normalled to IN L.
+class RoninDevice::HostInUnit : public Unit {
+public:
+    explicit HostInUnit (ExtIn& e) : ext (e) {}
+    int numPorts() const override { return 2; }
+    PortDesc port (int i) const override { return { i == 0 ? kHostInL : kHostInR, PortType::Audio, PortDir::In }; }
+    float* values() override { return value; }
+    bool* connected() override { return isConnected; }
+    void processSample() override
+    {
+        const float l = value[0], r = isConnected[1] ? value[1] : value[0];
+        ext.setHostSample (l * 0.2f, r * 0.2f);
+    }
+    ExtIn& ext;
+    float value[2] {};
+    bool isConnected[2] {};
+};
+
+// OUTPUT's host buffer -> HOST:OUT L/R (host units x 5 = volts).
+class RoninDevice::HostOutUnit : public Unit {
+public:
+    explicit HostOutUnit (OutputModule& o) : out (o) {}
+    int numPorts() const override { return 2; }
+    PortDesc port (int i) const override { return { i == 0 ? kHostOutL : kHostOutR, PortType::Audio, PortDir::Out }; }
+    float* values() override { return value; }
+    bool* connected() override { return isConnected; }
+    void processSample() override
+    {
+        value[0] = out.hostLeft() * 5.0f;
+        value[1] = out.hostRight() * 5.0f;
+    }
+    OutputModule& out;
+    float value[2] {};
+    bool isConnected[2] {};
 };
 
 RoninDevice::RoninDevice()
@@ -31,6 +72,10 @@ RoninDevice::RoninDevice()
         moduleUnits_.push_back (std::make_unique<ModuleUnit> (*m));
         units_.push_back (moduleUnits_.back().get());
     }
+    hostIn_ = std::make_unique<HostInUnit> (extIn);
+    hostOut_ = std::make_unique<HostOutUnit> (output);
+    units_.insert (units_.begin(), hostIn_.get());      // first, so a free choice of order keeps it before EXT IN
+    units_.push_back (hostOut_.get());
 
     for (int i = 0; i < kPanelJackCount; ++i)
     {
@@ -39,7 +84,7 @@ RoninDevice::RoninDevice()
         j.id = std::string (rec.section) + ":" + rec.label;
         if (rec.module >= 1 && rec.module <= kModules && rec.dir >= 0)
         {
-            j.unit = units_[(size_t) (rec.module - 1)];
+            j.unit = moduleUnits_[(size_t) (rec.module - 1)].get();
             j.port = rec.port;
             j.desc = j.unit->port (rec.port);
         }
@@ -47,6 +92,18 @@ RoninDevice::RoninDevice()
         {
             j.desc.dir = rec.dir == 1 ? PortDir::Out : PortDir::In;
         }
+        jacks_.push_back (j);
+    }
+
+    // The back-only HOST jacks, after the panel jacks (panel jack indices stay RONIN's own).
+    for (int i = 0; i < 4; ++i)
+    {
+        JackDesc j;
+        j.unit = i < 2 ? (Unit*) hostIn_.get() : (Unit*) hostOut_.get();
+        j.port = i % 2;
+        j.desc = j.unit->port (j.port);
+        j.id = j.desc.name;
+        j.backOnly = true;
         jacks_.push_back (j);
     }
 
@@ -62,6 +119,26 @@ RoninDevice::RoninDevice()
 }
 
 RoninDevice::~RoninDevice() = default;
+
+jidai::jcs::Role RoninDevice::jackRole (int jack) const
+{
+    if (jack < 0 || jack >= (int) jacks_.size() || jacks_[(size_t) jack].unit == nullptr)
+        return Device::jackRole (jack);
+    // RONIN's declared role, no exceptions (EXT IN GATE, which carries S-trig volts, is declared S-TRIG by RONIN).
+    return portRole (jacks_[(size_t) jack].desc);
+}
+
+std::vector<const Unit*> RoninDevice::latencyUnits() const
+{
+    return { moduleUnits_[1].get() };
+}
+
+std::vector<OrderEdge> RoninDevice::orderEdges() const
+{
+    return { { hostIn_.get(), moduleUnits_[0].get() },        // HOST IN before EXT IN
+             { moduleUnits_[1].get(), hostOut_.get() } };     // OUTPUT before HOST OUT
+}
+
 
 Module* RoninDevice::moduleAt (int index)
 {
@@ -107,7 +184,7 @@ void RoninDevice::beginBlock()
     {
         const float v = knobs_[(size_t) i].load();
         const FaceKnob f = face_[(size_t) i];
-        if (! force && v == applied_[(size_t) i] && f != FaceKnob::OutputMix)
+        if (! force && exactlyEqual (v, applied_[(size_t) i]) && f != FaceKnob::OutputMix)
             continue;
         applied_[(size_t) i] = v;
         switch (f)
@@ -151,6 +228,53 @@ void RoninDevice::beginBlock()
                 break;
         }
     }
+    vco.setTriShape (triShape_.load() == 1 ? Vco::TriShape::Parabola : Vco::TriShape::Triangle);
+}
+
+RoninDevice::Format1Report RoninDevice::migrateFormat1 (const std::vector<std::pair<std::string, std::string>>& vcfInCables)
+{
+    Format1Report report;
+    // M-R1: the EG time knobs keep their segment durations under the new 1 ms .. 60 s real-time law.
+    auto migrate = [this, &report] (const char* section, const char* label, bool attack)
+    {
+        const int k = panelKnobIndex (section, label);
+        if (k < 0)
+            return;
+        const double old = (double) knob (k);
+        if (attack && patchstate::attackStalledInV1 (old))
+            report.attackWasStalled = true;
+        setKnob (k, (float) (attack ? patchstate::migrateEgAttack (old) : patchstate::migrateEgDecayRelease (old)));
+        ++report.egKnobs;
+    };
+    migrate ("EG 1", "ATTACK", true);
+    migrate ("EG 1", "DECAY", false);
+    migrate ("EG 1", "RELEASE", false);
+    migrate ("EG 2", "ATTACK", true);
+    migrate ("EG 2", "RELEASE", false);
+    // M-R2: a saved patch keeps the parabola triangle it was made with.
+    setTriShape (1);
+    // M-R5: drive-pull cutoff compensation, only for one direct VCO SAW or PULSE cable into VCF IN.
+    if (vcfInCables.size() == 1)
+    {
+        const auto& src = vcfInCables.front().first;
+        const double level = src == "VCO:SAW" ? 2.5 : (src == "VCO:PULSE" ? 5.0 : 0.0);
+        if (level > 0.0)
+        {
+            const int k = panelKnobIndex ("VCF", "CUTOFF");
+            if (k >= 0)
+            {
+                report.cutoffBefore = (double) knob (k);
+                report.cutoffAfter = patchstate::compensateCutoff (report.cutoffBefore, level);
+                setKnob (k, (float) report.cutoffAfter);
+                report.cutoffCompensated = true;
+            }
+        }
+        else
+            report.cutoffUnknown = true;
+    }
+    else if (vcfInCables.size() > 1)
+        report.cutoffUnknown = true;
+    return report;
 }
 
 bool RoninDevice::loadProgram (int index, std::vector<std::pair<int, int>>& cables)
@@ -161,6 +285,7 @@ bool RoninDevice::loadProgram (int index, std::vector<std::pair<int, int>>& cabl
 
     // RONIN's applyProgramParameters: one default table, with each program's overrides.
     effectOn_.store (factoryPresetEffect (index));
+    triShape_.store (0);     // a factory program starts on the true TRIANGLE (M-R2)
     const FactoryProgramKnobs k = factoryProgramKnobs (index);
     setFace (FaceKnob::VcfCutoff, k.vcfCutoff);
     setFace (FaceKnob::VcfPeak, k.vcfPeak);

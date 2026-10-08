@@ -1,0 +1,1461 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- JIDAI RACK starter racks. Copyright (c) 2026 Martial Systems LLC. All rights reserved.
+     Written by tools/make_starter_racks.py. Each RACK holds one complete rack state (JIDAIRACK version 3). -->
+<JIDAI_STARTER_RACKS version="1">
+  <RACK name="INIT" category="INIT" about="RACK I/O only: the empty rack.">
+    <JIDAIRACK version="3" browser="1" view="front" cablesFront="HIDE PASS-THRU" cablesBack="ALL" scale="100">
+      <DEVICE kind="RACK I/O" number="1" front="open" format="1" level="1"/>
+    </JIDAIRACK>
+  </RACK>
+  <RACK name="Acid Line" category="ACID" about="BUSHIDO plays a 12-step acid line on the host clock (1/16) into RONIN's ACID LINE voice: row A's pitch goes through RONIN's INT, which slides between notes, GATE A fires EG 1 (VCA) and EG 2 (filter snap), and row C (C MODE CV) is the accent on VCF CUTOFF.">
+    <JIDAIRACK version="3" browser="1" view="back" cablesFront="HIDE PASS-THRU" cablesBack="ALL" scale="100">
+      <DEVICE kind="RACK I/O" number="1" front="open" format="1" level="1"/>
+      <DEVICE kind="BUSHIDO" number="1" name="ACID SEQ" front="open" format="1" bypass="0" bank="-1" pattern="-1">
+        <PARAM id="A:1" value="0"/>
+        <PARAM id="A:2" value="0"/>
+        <PARAM id="A:3" value="1"/>
+        <PARAM id="A:4" value="0"/>
+        <PARAM id="A:5" value="0.25"/>
+        <PARAM id="A:6" value="0"/>
+        <PARAM id="A:7" value="0.583333"/>
+        <PARAM id="A:8" value="0.833333"/>
+        <PARAM id="A:9" value="0"/>
+        <PARAM id="A:10" value="1"/>
+        <PARAM id="A:11" value="0.416667"/>
+        <PARAM id="A:12" value="0.25"/>
+        <PARAM id="B:1" value="0.5"/>
+        <PARAM id="B:2" value="0.5"/>
+        <PARAM id="B:3" value="0.5"/>
+        <PARAM id="B:4" value="0.5"/>
+        <PARAM id="B:5" value="0.5"/>
+        <PARAM id="B:6" value="0.5"/>
+        <PARAM id="B:7" value="0.5"/>
+        <PARAM id="B:8" value="0.5"/>
+        <PARAM id="B:9" value="0.5"/>
+        <PARAM id="B:10" value="0.5"/>
+        <PARAM id="B:11" value="0.5"/>
+        <PARAM id="B:12" value="0.5"/>
+        <PARAM id="C:1" value="0.5"/>
+        <PARAM id="C:2" value="0"/>
+        <PARAM id="C:3" value="0"/>
+        <PARAM id="C:4" value="0.4"/>
+        <PARAM id="C:5" value="0"/>
+        <PARAM id="C:6" value="0"/>
+        <PARAM id="C:7" value="0.5"/>
+        <PARAM id="C:8" value="0"/>
+        <PARAM id="C:9" value="0"/>
+        <PARAM id="C:10" value="0.3"/>
+        <PARAM id="C:11" value="0"/>
+        <PARAM id="C:12" value="0.45"/>
+        <PARAM id="CH:PORTA A" value="0"/>
+        <PARAM id="CH:PORTA B" value="0"/>
+        <PARAM id="CH:RANGE A" value="0"/>
+        <PARAM id="CH:RANGE B" value="1"/>
+        <PARAM id="CH:C MODE" value="0"/>
+        <PARAM id="CLOCK:TEMPO" value="0.5"/>
+        <PARAM id="CLOCK:SOURCE" value="1"/>
+        <PARAM id="MODE:MODE" value="0"/>
+        <PARAM id="MIXER:LEVEL 1" value="0.7"/>
+        <PARAM id="MIXER:LEVEL 2" value="0.7"/>
+        <PARAM id="CLOCK:DIV" value="0.5"/>
+        <PARAM id="CLOCK:EXT SOURCE" value="1"/>
+        <PARAM id="CLOCK:SETTLE" value="0"/>
+        <PARAM id="CLOCK:TRIG MODE" value="0"/>
+        <PARAM id="STEPS:LAW A" value="0"/>
+        <PARAM id="STEPS:LAW B" value="0"/>
+        <PARAM id="STEPS:QUANT A" value="1"/>
+        <PARAM id="STEPS:QUANT B" value="0"/>
+        <PARAM id="MIDI:CH A" value="0"/>
+        <PARAM id="MIDI:CH B" value="0.06666666666666667"/>
+        <PARAM id="MIDI:VEL A" value="0"/>
+        <PARAM id="MIDI:VEL B" value="0"/>
+      </DEVICE>
+      <DEVICE kind="RONIN" number="1" name="ACID BASS" front="open" format="2" program="0" effect="1" triShape="triangle">
+        <KNOB id="VCO:RANGE" value="0.3333"/>
+        <KNOB id="VCO:FINE" value="0.5"/>
+        <KNOB id="VCO:PW" value="0.5"/>
+        <KNOB id="VCO:FM 1" value="0"/>
+        <KNOB id="VCO:FM 2" value="0"/>
+        <KNOB id="VCF:CUTOFF" value="0.34"/>
+        <KNOB id="VCF:PEAK" value="0.85"/>
+        <KNOB id="VCF:MOD" value="0.72"/>
+        <KNOB id="VCA 1:INITIAL" value="0"/>
+        <KNOB id="VCA 1:MOD" value="0.64"/>
+        <KNOB id="VCA 1:LOW CUT" value="0"/>
+        <KNOB id="VCA 2:INITIAL" value="0"/>
+        <KNOB id="VCA 2:MOD" value="1"/>
+        <KNOB id="MG:RATE" value="0.5"/>
+        <KNOB id="MG:PW" value="0.5"/>
+        <KNOB id="EG 1:ATTACK" value="0.063"/>
+        <KNOB id="EG 1:DECAY" value="0.5184"/>
+        <KNOB id="EG 1:SUSTAIN" value="0.8"/>
+        <KNOB id="EG 1:RELEASE" value="0.2723"/>
+        <KNOB id="EG 2:HOLD" value="0"/>
+        <KNOB id="EG 2:DELAY" value="0"/>
+        <KNOB id="EG 2:ATTACK" value="0.063"/>
+        <KNOB id="EG 2:RELEASE" value="0.4351"/>
+        <KNOB id="S&amp;H:RATE" value="0.5"/>
+        <KNOB id="DIV:RATIO SWITCH" value="0"/>
+        <KNOB id="INT:TIME" value="0.3029"/>
+        <KNOB id="MIX:LEVEL 1" value="0.8"/>
+        <KNOB id="MIX:LEVEL 2" value="0.8"/>
+        <KNOB id="MIX:LEVEL 3" value="0.8"/>
+        <KNOB id="EXT IN:THRESHOLD" value="0.3758"/>
+        <KNOB id="EXT IN:RELEASE" value="0.5316"/>
+        <KNOB id="OUTPUT:MIX" value="1"/>
+        <KNOB id="OUTPUT:LEVEL" value="0.7"/>
+      </DEVICE>
+      <CABLE a="RONIN#1/VCO:SAW" b="RONIN#1/VCF:IN" age="0"/>
+      <CABLE a="RONIN#1/VCF:OUT" b="RONIN#1/VCA 1:IN" age="1"/>
+      <CABLE a="RONIN#1/VCA 1:OUT" b="RONIN#1/OUTPUT:WET" age="2"/>
+      <CABLE a="RONIN#1/EG 1:OUT A" b="RONIN#1/VCA 1:ENV" age="3"/>
+      <CABLE a="RONIN#1/EG 2:OUT +" b="RONIN#1/VCF:CUTOFF" age="4"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:CV A" b="RONIN#1/INT:IN" age="5"/>
+      <CABLE a="RONIN#1/INT:OUT" b="RONIN#1/VCO:V/OCT" age="6"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:GATE A" b="RONIN#1/EG 1:TRIG" age="7"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:GATE A" b="RONIN#1/EG 2:TRIG" age="8"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:CV C" b="RONIN#1/VCF:CUTOFF" age="9"/>
+      <CABLE a="RONIN#1/HOST:OUT L" b="RACK#1/MAIN:OUT L" age="10"/>
+      <CABLE a="RONIN#1/HOST:OUT R" b="RACK#1/MAIN:OUT R" age="11"/>
+    </JIDAIRACK>
+  </RACK>
+  <RACK name="Acid Fold" category="ACID" about="A 12-step acid line through ORIGAMI. RONIN's ACID SQUELCH voice: row A's pitch slides through INT, GATE A fires EG 1 and EG 2, row C (C MODE CV) accents VCF CUTOFF, and EG 2's filter snap also folds harder through ORIGAMI's VC 1.">
+    <JIDAIRACK version="3" browser="1" view="back" cablesFront="HIDE PASS-THRU" cablesBack="ALL" scale="100">
+      <DEVICE kind="RACK I/O" number="1" front="open" format="1" level="1"/>
+      <DEVICE kind="BUSHIDO" number="1" name="ACID SEQ" front="open" format="1" bypass="0" bank="-1" pattern="-1">
+        <PARAM id="A:1" value="0"/>
+        <PARAM id="A:2" value="1"/>
+        <PARAM id="A:3" value="0"/>
+        <PARAM id="A:4" value="0"/>
+        <PARAM id="A:5" value="0.25"/>
+        <PARAM id="A:6" value="1"/>
+        <PARAM id="A:7" value="0"/>
+        <PARAM id="A:8" value="0.583333"/>
+        <PARAM id="A:9" value="0"/>
+        <PARAM id="A:10" value="0.833333"/>
+        <PARAM id="A:11" value="1"/>
+        <PARAM id="A:12" value="0.25"/>
+        <PARAM id="B:1" value="0.5"/>
+        <PARAM id="B:2" value="0.5"/>
+        <PARAM id="B:3" value="0.5"/>
+        <PARAM id="B:4" value="0.5"/>
+        <PARAM id="B:5" value="0.5"/>
+        <PARAM id="B:6" value="0.5"/>
+        <PARAM id="B:7" value="0.5"/>
+        <PARAM id="B:8" value="0.5"/>
+        <PARAM id="B:9" value="0.5"/>
+        <PARAM id="B:10" value="0.5"/>
+        <PARAM id="B:11" value="0.5"/>
+        <PARAM id="B:12" value="0.5"/>
+        <PARAM id="C:1" value="0.5"/>
+        <PARAM id="C:2" value="0"/>
+        <PARAM id="C:3" value="0"/>
+        <PARAM id="C:4" value="0"/>
+        <PARAM id="C:5" value="0.4"/>
+        <PARAM id="C:6" value="0"/>
+        <PARAM id="C:7" value="0"/>
+        <PARAM id="C:8" value="0"/>
+        <PARAM id="C:9" value="0"/>
+        <PARAM id="C:10" value="0.5"/>
+        <PARAM id="C:11" value="0"/>
+        <PARAM id="C:12" value="0"/>
+        <PARAM id="CH:PORTA A" value="0"/>
+        <PARAM id="CH:PORTA B" value="0"/>
+        <PARAM id="CH:RANGE A" value="0"/>
+        <PARAM id="CH:RANGE B" value="1"/>
+        <PARAM id="CH:C MODE" value="0"/>
+        <PARAM id="CLOCK:TEMPO" value="0.5"/>
+        <PARAM id="CLOCK:SOURCE" value="1"/>
+        <PARAM id="MODE:MODE" value="0"/>
+        <PARAM id="MIXER:LEVEL 1" value="0.7"/>
+        <PARAM id="MIXER:LEVEL 2" value="0.7"/>
+        <PARAM id="CLOCK:DIV" value="0.5"/>
+        <PARAM id="CLOCK:EXT SOURCE" value="1"/>
+        <PARAM id="CLOCK:SETTLE" value="0"/>
+        <PARAM id="CLOCK:TRIG MODE" value="0"/>
+        <PARAM id="STEPS:LAW A" value="0"/>
+        <PARAM id="STEPS:LAW B" value="0"/>
+        <PARAM id="STEPS:QUANT A" value="1"/>
+        <PARAM id="STEPS:QUANT B" value="0"/>
+        <PARAM id="MIDI:CH A" value="0"/>
+        <PARAM id="MIDI:CH B" value="0.06666666666666667"/>
+        <PARAM id="MIDI:VEL A" value="0"/>
+        <PARAM id="MIDI:VEL B" value="0"/>
+      </DEVICE>
+      <DEVICE kind="RONIN" number="1" name="ACID BASS" front="open" format="2" program="0" effect="1" triShape="triangle">
+        <KNOB id="VCO:RANGE" value="0.3333"/>
+        <KNOB id="VCO:FINE" value="0.5"/>
+        <KNOB id="VCO:PW" value="0.5"/>
+        <KNOB id="VCO:FM 1" value="0"/>
+        <KNOB id="VCO:FM 2" value="0"/>
+        <KNOB id="VCF:CUTOFF" value="0.28"/>
+        <KNOB id="VCF:PEAK" value="1"/>
+        <KNOB id="VCF:MOD" value="0.88"/>
+        <KNOB id="VCA 1:INITIAL" value="0"/>
+        <KNOB id="VCA 1:MOD" value="0.62"/>
+        <KNOB id="VCA 1:LOW CUT" value="0"/>
+        <KNOB id="VCA 2:INITIAL" value="0"/>
+        <KNOB id="VCA 2:MOD" value="1"/>
+        <KNOB id="MG:RATE" value="0.5"/>
+        <KNOB id="MG:PW" value="0.5"/>
+        <KNOB id="EG 1:ATTACK" value="0.063"/>
+        <KNOB id="EG 1:DECAY" value="0.5649"/>
+        <KNOB id="EG 1:SUSTAIN" value="0.85"/>
+        <KNOB id="EG 1:RELEASE" value="0.3556"/>
+        <KNOB id="EG 2:HOLD" value="0"/>
+        <KNOB id="EG 2:DELAY" value="0"/>
+        <KNOB id="EG 2:ATTACK" value="0.063"/>
+        <KNOB id="EG 2:RELEASE" value="0.5184"/>
+        <KNOB id="S&amp;H:RATE" value="0.5"/>
+        <KNOB id="DIV:RATIO SWITCH" value="0"/>
+        <KNOB id="INT:TIME" value="0.3563"/>
+        <KNOB id="MIX:LEVEL 1" value="0.8"/>
+        <KNOB id="MIX:LEVEL 2" value="0.8"/>
+        <KNOB id="MIX:LEVEL 3" value="0.8"/>
+        <KNOB id="EXT IN:THRESHOLD" value="0.3758"/>
+        <KNOB id="EXT IN:RELEASE" value="0.5316"/>
+        <KNOB id="OUTPUT:MIX" value="1"/>
+        <KNOB id="OUTPUT:LEVEL" value="0.7"/>
+      </DEVICE>
+      <DEVICE kind="ORIGAMI" number="1" name="ACID FOLD" front="open" format="1">
+        <ORIGAMI format="1" unit="ORIGAMI" program="2">
+          <PARAM id="gain" value="-3"/>
+          <PARAM id="vca_depth" value="0"/>
+          <PARAM id="vca_source" value="0"/>
+          <PARAM id="wave" value="0.3"/>
+          <PARAM id="emph" value="4"/>
+          <PARAM id="sym" value="0"/>
+          <PARAM id="stage1" value="0"/>
+          <PARAM id="stage2" value="0"/>
+          <PARAM id="stage3" value="0"/>
+          <PARAM id="mix" value="1"/>
+          <PARAM id="level" value="0"/>
+          <PARAM id="level_comp" value="1"/>
+          <PARAM id="bypass" value="0"/>
+          <PARAM id="sym1" value="0"/>
+          <PARAM id="sym2" value="0"/>
+          <PARAM id="sym3" value="0"/>
+          <PARAM id="vc1_amt" value="0.5"/>
+          <PARAM id="vc2_amt" value="0"/>
+          <PARAM id="vc3_amt" value="0"/>
+          <PARAM id="vc1_sym" value="0"/>
+          <PARAM id="vc2_sym" value="0"/>
+          <PARAM id="vc3_sym" value="0"/>
+          <PARAM id="vc1_src" value="0"/>
+          <PARAM id="vc2_src" value="0"/>
+          <PARAM id="vc3_src" value="0"/>
+          <PARAM id="attack" value="0.5"/>
+          <PARAM id="release" value="60"/>
+          <PARAM id="cv_scale" value="1"/>
+          <PARAM id="vca_law" value="0"/>
+          <PARAM id="quality" value="0"/>
+        </ORIGAMI>
+      </DEVICE>
+      <CABLE a="RONIN#1/VCO:SAW" b="RONIN#1/VCF:IN" age="0"/>
+      <CABLE a="RONIN#1/VCF:OUT" b="RONIN#1/VCA 1:IN" age="1"/>
+      <CABLE a="RONIN#1/VCA 1:OUT" b="RONIN#1/OUTPUT:WET" age="2"/>
+      <CABLE a="RONIN#1/EG 1:OUT A" b="RONIN#1/VCA 1:ENV" age="3"/>
+      <CABLE a="RONIN#1/EG 2:OUT +" b="RONIN#1/VCF:CUTOFF" age="4"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:CV A" b="RONIN#1/INT:IN" age="5"/>
+      <CABLE a="RONIN#1/INT:OUT" b="RONIN#1/VCO:V/OCT" age="6"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:GATE A" b="RONIN#1/EG 1:TRIG" age="7"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:GATE A" b="RONIN#1/EG 2:TRIG" age="8"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:CV C" b="RONIN#1/VCF:CUTOFF" age="9"/>
+      <CABLE a="RONIN#1/EG 2:OUT +" b="ORIGAMI#1/VC:VC 1" age="10"/>
+      <CABLE a="RONIN#1/HOST:OUT L" b="ORIGAMI#1/IN:IN L" age="11"/>
+      <CABLE a="RONIN#1/HOST:OUT R" b="ORIGAMI#1/IN:IN R" age="12"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT L" b="RACK#1/MAIN:OUT L" age="13"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT R" b="RACK#1/MAIN:OUT R" age="14"/>
+    </JIDAIRACK>
+  </RACK>
+  <RACK name="Driving Bass" category="EDM" about="An 8-step rolling 16th bass, one bar of 4/4 on the host clock: TRIG 9 patched into RESET makes BUSHIDO's 12 steps an 8-step loop. RONIN plays a short saw with a little resonance; ORIGAMI adds drive that keeps the low end clean.">
+    <JIDAIRACK version="3" browser="1" view="back" cablesFront="HIDE PASS-THRU" cablesBack="ALL" scale="100">
+      <DEVICE kind="RACK I/O" number="1" front="open" format="1" level="1"/>
+      <DEVICE kind="BUSHIDO" number="1" name="BASS SEQ" front="open" format="1" bypass="0" bank="-1" pattern="-1">
+        <PARAM id="A:1" value="0"/>
+        <PARAM id="A:2" value="0"/>
+        <PARAM id="A:3" value="1"/>
+        <PARAM id="A:4" value="0"/>
+        <PARAM id="A:5" value="0"/>
+        <PARAM id="A:6" value="1"/>
+        <PARAM id="A:7" value="0"/>
+        <PARAM id="A:8" value="0.833333"/>
+        <PARAM id="A:9" value="0"/>
+        <PARAM id="A:10" value="0"/>
+        <PARAM id="A:11" value="0"/>
+        <PARAM id="A:12" value="0"/>
+        <PARAM id="B:1" value="0.5"/>
+        <PARAM id="B:2" value="0.5"/>
+        <PARAM id="B:3" value="0.5"/>
+        <PARAM id="B:4" value="0.5"/>
+        <PARAM id="B:5" value="0.5"/>
+        <PARAM id="B:6" value="0.5"/>
+        <PARAM id="B:7" value="0.5"/>
+        <PARAM id="B:8" value="0.5"/>
+        <PARAM id="B:9" value="0.5"/>
+        <PARAM id="B:10" value="0.5"/>
+        <PARAM id="B:11" value="0.5"/>
+        <PARAM id="B:12" value="0.5"/>
+        <PARAM id="C:1" value="0.5"/>
+        <PARAM id="C:2" value="0.5"/>
+        <PARAM id="C:3" value="0.5"/>
+        <PARAM id="C:4" value="0.5"/>
+        <PARAM id="C:5" value="0.5"/>
+        <PARAM id="C:6" value="0.5"/>
+        <PARAM id="C:7" value="0.5"/>
+        <PARAM id="C:8" value="0.5"/>
+        <PARAM id="C:9" value="0.5"/>
+        <PARAM id="C:10" value="0.5"/>
+        <PARAM id="C:11" value="0.5"/>
+        <PARAM id="C:12" value="0.5"/>
+        <PARAM id="CH:PORTA A" value="0"/>
+        <PARAM id="CH:PORTA B" value="0"/>
+        <PARAM id="CH:RANGE A" value="0"/>
+        <PARAM id="CH:RANGE B" value="1"/>
+        <PARAM id="CH:C MODE" value="0"/>
+        <PARAM id="CLOCK:TEMPO" value="0.5"/>
+        <PARAM id="CLOCK:SOURCE" value="1"/>
+        <PARAM id="MODE:MODE" value="0"/>
+        <PARAM id="MIXER:LEVEL 1" value="0.7"/>
+        <PARAM id="MIXER:LEVEL 2" value="0.7"/>
+        <PARAM id="CLOCK:DIV" value="0.5"/>
+        <PARAM id="CLOCK:EXT SOURCE" value="1"/>
+        <PARAM id="CLOCK:SETTLE" value="0"/>
+        <PARAM id="CLOCK:TRIG MODE" value="0"/>
+        <PARAM id="STEPS:LAW A" value="0"/>
+        <PARAM id="STEPS:LAW B" value="0"/>
+        <PARAM id="STEPS:QUANT A" value="1"/>
+        <PARAM id="STEPS:QUANT B" value="0"/>
+        <PARAM id="MIDI:CH A" value="0"/>
+        <PARAM id="MIDI:CH B" value="0.06666666666666667"/>
+        <PARAM id="MIDI:VEL A" value="0"/>
+        <PARAM id="MIDI:VEL B" value="0"/>
+      </DEVICE>
+      <DEVICE kind="RONIN" number="1" name="BASS" front="open" format="2" program="0" effect="1" triShape="triangle">
+        <KNOB id="VCO:RANGE" value="0.3333333333333333"/>
+        <KNOB id="VCO:FINE" value="0.5"/>
+        <KNOB id="VCO:PW" value="0.5"/>
+        <KNOB id="VCO:FM 1" value="0"/>
+        <KNOB id="VCO:FM 2" value="0"/>
+        <KNOB id="VCF:CUTOFF" value="0.3771"/>
+        <KNOB id="VCF:PEAK" value="0.35"/>
+        <KNOB id="VCF:MOD" value="0.5"/>
+        <KNOB id="VCA 1:INITIAL" value="0"/>
+        <KNOB id="VCA 1:MOD" value="0.85"/>
+        <KNOB id="VCA 1:LOW CUT" value="0"/>
+        <KNOB id="VCA 2:INITIAL" value="0"/>
+        <KNOB id="VCA 2:MOD" value="1"/>
+        <KNOB id="MG:RATE" value="0.5"/>
+        <KNOB id="MG:PW" value="0.5"/>
+        <KNOB id="EG 1:ATTACK" value="0"/>
+        <KNOB id="EG 1:DECAY" value="0.4351"/>
+        <KNOB id="EG 1:SUSTAIN" value="0.25"/>
+        <KNOB id="EG 1:RELEASE" value="0.3091"/>
+        <KNOB id="EG 2:HOLD" value="0.3"/>
+        <KNOB id="EG 2:DELAY" value="0"/>
+        <KNOB id="EG 2:ATTACK" value="0.2079"/>
+        <KNOB id="EG 2:RELEASE" value="0.39"/>
+        <KNOB id="S&amp;H:RATE" value="0.5"/>
+        <KNOB id="DIV:RATIO SWITCH" value="0"/>
+        <KNOB id="INT:TIME" value="0.5"/>
+        <KNOB id="MIX:LEVEL 1" value="0.8"/>
+        <KNOB id="MIX:LEVEL 2" value="0.8"/>
+        <KNOB id="MIX:LEVEL 3" value="0.8"/>
+        <KNOB id="EXT IN:THRESHOLD" value="0.3758"/>
+        <KNOB id="EXT IN:RELEASE" value="0.5316"/>
+        <KNOB id="OUTPUT:MIX" value="1"/>
+        <KNOB id="OUTPUT:LEVEL" value="0.7"/>
+      </DEVICE>
+      <DEVICE kind="ORIGAMI" number="1" name="DRIVE" front="open" format="1">
+        <ORIGAMI format="1" unit="ORIGAMI" program="8">
+          <PARAM id="gain" value="0"/>
+          <PARAM id="vca_depth" value="0"/>
+          <PARAM id="vca_source" value="0"/>
+          <PARAM id="wave" value="0.35"/>
+          <PARAM id="emph" value="0"/>
+          <PARAM id="sym" value="0"/>
+          <PARAM id="stage1" value="0"/>
+          <PARAM id="stage2" value="0"/>
+          <PARAM id="stage3" value="-0.4"/>
+          <PARAM id="mix" value="0.6"/>
+          <PARAM id="level" value="0"/>
+          <PARAM id="level_comp" value="1"/>
+          <PARAM id="bypass" value="0"/>
+          <PARAM id="sym1" value="0"/>
+          <PARAM id="sym2" value="0"/>
+          <PARAM id="sym3" value="0"/>
+          <PARAM id="vc1_amt" value="0"/>
+          <PARAM id="vc2_amt" value="0"/>
+          <PARAM id="vc3_amt" value="0"/>
+          <PARAM id="vc1_sym" value="0"/>
+          <PARAM id="vc2_sym" value="0"/>
+          <PARAM id="vc3_sym" value="0"/>
+          <PARAM id="vc1_src" value="0"/>
+          <PARAM id="vc2_src" value="0"/>
+          <PARAM id="vc3_src" value="0"/>
+          <PARAM id="attack" value="1"/>
+          <PARAM id="release" value="80"/>
+          <PARAM id="cv_scale" value="1"/>
+          <PARAM id="vca_law" value="0"/>
+          <PARAM id="quality" value="0"/>
+        </ORIGAMI>
+      </DEVICE>
+      <CABLE a="RONIN#1/VCO:SAW" b="RONIN#1/VCF:IN" age="0"/>
+      <CABLE a="RONIN#1/VCF:OUT" b="RONIN#1/VCA 1:IN" age="1"/>
+      <CABLE a="RONIN#1/VCA 1:OUT" b="RONIN#1/OUTPUT:WET" age="2"/>
+      <CABLE a="RONIN#1/EG 1:OUT A" b="RONIN#1/VCA 1:ENV" age="3"/>
+      <CABLE a="RONIN#1/EG 1:OUT A" b="RONIN#1/VCF:CUTOFF" age="4"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:CV A" b="RONIN#1/VCO:V/OCT" age="5"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:GATE A" b="RONIN#1/EG 1:TRIG" age="6"/>
+      <CABLE a="BUSHIDO#1/9:TRIG" b="BUSHIDO#1/INPUTS:RESET" age="7"/>
+      <CABLE a="RONIN#1/HOST:OUT L" b="ORIGAMI#1/IN:IN L" age="8"/>
+      <CABLE a="RONIN#1/HOST:OUT R" b="ORIGAMI#1/IN:IN R" age="9"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT L" b="RACK#1/MAIN:OUT L" age="10"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT R" b="RACK#1/MAIN:OUT R" age="11"/>
+    </JIDAIRACK>
+  </RACK>
+  <RACK name="Pluck Lead" category="EDM" about="An 8-step pluck lead on the host clock (TRIG 9 -&gt; RESET). Row A spans RANGE 5 V, quantized to semitones; RONIN's pulse wave has its width moved by the MG, and a fast EG 1 plucks the filter. ORIGAMI adds bite.">
+    <JIDAIRACK version="3" browser="1" view="back" cablesFront="HIDE PASS-THRU" cablesBack="ALL" scale="100">
+      <DEVICE kind="RACK I/O" number="1" front="open" format="1" level="1"/>
+      <DEVICE kind="BUSHIDO" number="1" name="LEAD SEQ" front="open" format="1" bypass="0" bank="-1" pattern="-1">
+        <PARAM id="A:1" value="0.2"/>
+        <PARAM id="A:2" value="0.316667"/>
+        <PARAM id="A:3" value="0.4"/>
+        <PARAM id="A:4" value="0.316667"/>
+        <PARAM id="A:5" value="0.25"/>
+        <PARAM id="A:6" value="0.4"/>
+        <PARAM id="A:7" value="0.366667"/>
+        <PARAM id="A:8" value="0.316667"/>
+        <PARAM id="A:9" value="0"/>
+        <PARAM id="A:10" value="0"/>
+        <PARAM id="A:11" value="0"/>
+        <PARAM id="A:12" value="0"/>
+        <PARAM id="B:1" value="0.5"/>
+        <PARAM id="B:2" value="0.5"/>
+        <PARAM id="B:3" value="0.5"/>
+        <PARAM id="B:4" value="0.5"/>
+        <PARAM id="B:5" value="0.5"/>
+        <PARAM id="B:6" value="0.5"/>
+        <PARAM id="B:7" value="0.5"/>
+        <PARAM id="B:8" value="0.5"/>
+        <PARAM id="B:9" value="0.5"/>
+        <PARAM id="B:10" value="0.5"/>
+        <PARAM id="B:11" value="0.5"/>
+        <PARAM id="B:12" value="0.5"/>
+        <PARAM id="C:1" value="0.5"/>
+        <PARAM id="C:2" value="0.5"/>
+        <PARAM id="C:3" value="0.5"/>
+        <PARAM id="C:4" value="0.5"/>
+        <PARAM id="C:5" value="0.5"/>
+        <PARAM id="C:6" value="0.5"/>
+        <PARAM id="C:7" value="0.5"/>
+        <PARAM id="C:8" value="0.5"/>
+        <PARAM id="C:9" value="0.5"/>
+        <PARAM id="C:10" value="0.5"/>
+        <PARAM id="C:11" value="0.5"/>
+        <PARAM id="C:12" value="0.5"/>
+        <PARAM id="CH:PORTA A" value="0"/>
+        <PARAM id="CH:PORTA B" value="0"/>
+        <PARAM id="CH:RANGE A" value="1"/>
+        <PARAM id="CH:RANGE B" value="1"/>
+        <PARAM id="CH:C MODE" value="0"/>
+        <PARAM id="CLOCK:TEMPO" value="0.5"/>
+        <PARAM id="CLOCK:SOURCE" value="1"/>
+        <PARAM id="MODE:MODE" value="0"/>
+        <PARAM id="MIXER:LEVEL 1" value="0.7"/>
+        <PARAM id="MIXER:LEVEL 2" value="0.7"/>
+        <PARAM id="CLOCK:DIV" value="0.5"/>
+        <PARAM id="CLOCK:EXT SOURCE" value="1"/>
+        <PARAM id="CLOCK:SETTLE" value="0"/>
+        <PARAM id="CLOCK:TRIG MODE" value="0"/>
+        <PARAM id="STEPS:LAW A" value="0"/>
+        <PARAM id="STEPS:LAW B" value="0"/>
+        <PARAM id="STEPS:QUANT A" value="1"/>
+        <PARAM id="STEPS:QUANT B" value="0"/>
+        <PARAM id="MIDI:CH A" value="0"/>
+        <PARAM id="MIDI:CH B" value="0.06666666666666667"/>
+        <PARAM id="MIDI:VEL A" value="0"/>
+        <PARAM id="MIDI:VEL B" value="0"/>
+      </DEVICE>
+      <DEVICE kind="RONIN" number="1" name="PLUCK" front="open" format="2" program="0" effect="1" triShape="triangle">
+        <KNOB id="VCO:RANGE" value="0.6666666666666666"/>
+        <KNOB id="VCO:FINE" value="0.5"/>
+        <KNOB id="VCO:PW" value="0.5"/>
+        <KNOB id="VCO:FM 1" value="0"/>
+        <KNOB id="VCO:FM 2" value="0"/>
+        <KNOB id="VCF:CUTOFF" value="0.5"/>
+        <KNOB id="VCF:PEAK" value="0.45"/>
+        <KNOB id="VCF:MOD" value="0.6"/>
+        <KNOB id="VCA 1:INITIAL" value="0"/>
+        <KNOB id="VCA 1:MOD" value="0.85"/>
+        <KNOB id="VCA 1:LOW CUT" value="0"/>
+        <KNOB id="VCA 2:INITIAL" value="0"/>
+        <KNOB id="VCA 2:MOD" value="1"/>
+        <KNOB id="MG:RATE" value="0.35"/>
+        <KNOB id="MG:PW" value="0.5"/>
+        <KNOB id="EG 1:ATTACK" value="0"/>
+        <KNOB id="EG 1:DECAY" value="0.4492"/>
+        <KNOB id="EG 1:SUSTAIN" value="0"/>
+        <KNOB id="EG 1:RELEASE" value="0.4351"/>
+        <KNOB id="EG 2:HOLD" value="0.3"/>
+        <KNOB id="EG 2:DELAY" value="0"/>
+        <KNOB id="EG 2:ATTACK" value="0.2079"/>
+        <KNOB id="EG 2:RELEASE" value="0.39"/>
+        <KNOB id="S&amp;H:RATE" value="0.5"/>
+        <KNOB id="DIV:RATIO SWITCH" value="0"/>
+        <KNOB id="INT:TIME" value="0.5"/>
+        <KNOB id="MIX:LEVEL 1" value="0.8"/>
+        <KNOB id="MIX:LEVEL 2" value="0.8"/>
+        <KNOB id="MIX:LEVEL 3" value="0.8"/>
+        <KNOB id="EXT IN:THRESHOLD" value="0.3758"/>
+        <KNOB id="EXT IN:RELEASE" value="0.5316"/>
+        <KNOB id="OUTPUT:MIX" value="1"/>
+        <KNOB id="OUTPUT:LEVEL" value="0.6"/>
+      </DEVICE>
+      <DEVICE kind="ORIGAMI" number="1" name="BITE" front="open" format="1">
+        <ORIGAMI format="1" unit="ORIGAMI" program="6">
+          <PARAM id="gain" value="0"/>
+          <PARAM id="vca_depth" value="0.5"/>
+          <PARAM id="vca_source" value="0"/>
+          <PARAM id="wave" value="0.35"/>
+          <PARAM id="emph" value="0"/>
+          <PARAM id="sym" value="0"/>
+          <PARAM id="stage1" value="0"/>
+          <PARAM id="stage2" value="0"/>
+          <PARAM id="stage3" value="0"/>
+          <PARAM id="mix" value="1"/>
+          <PARAM id="level" value="0"/>
+          <PARAM id="level_comp" value="1"/>
+          <PARAM id="bypass" value="0"/>
+          <PARAM id="sym1" value="0"/>
+          <PARAM id="sym2" value="0"/>
+          <PARAM id="sym3" value="0"/>
+          <PARAM id="vc1_amt" value="0.3"/>
+          <PARAM id="vc2_amt" value="0"/>
+          <PARAM id="vc3_amt" value="0"/>
+          <PARAM id="vc1_sym" value="0"/>
+          <PARAM id="vc2_sym" value="0"/>
+          <PARAM id="vc3_sym" value="0"/>
+          <PARAM id="vc1_src" value="2"/>
+          <PARAM id="vc2_src" value="0"/>
+          <PARAM id="vc3_src" value="0"/>
+          <PARAM id="attack" value="0.5"/>
+          <PARAM id="release" value="60"/>
+          <PARAM id="cv_scale" value="1"/>
+          <PARAM id="vca_law" value="0"/>
+          <PARAM id="quality" value="0"/>
+        </ORIGAMI>
+      </DEVICE>
+      <CABLE a="RONIN#1/VCO:PULSE" b="RONIN#1/VCF:IN" age="0"/>
+      <CABLE a="RONIN#1/MG:TRI" b="RONIN#1/VCO:PWM" age="1"/>
+      <CABLE a="RONIN#1/VCF:OUT" b="RONIN#1/VCA 1:IN" age="2"/>
+      <CABLE a="RONIN#1/VCA 1:OUT" b="RONIN#1/OUTPUT:WET" age="3"/>
+      <CABLE a="RONIN#1/EG 1:OUT A" b="RONIN#1/VCA 1:ENV" age="4"/>
+      <CABLE a="RONIN#1/EG 1:OUT A" b="RONIN#1/VCF:CUTOFF" age="5"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:CV A" b="RONIN#1/VCO:V/OCT" age="6"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:GATE A" b="RONIN#1/EG 1:TRIG" age="7"/>
+      <CABLE a="BUSHIDO#1/9:TRIG" b="BUSHIDO#1/INPUTS:RESET" age="8"/>
+      <CABLE a="RONIN#1/HOST:OUT L" b="ORIGAMI#1/IN:IN L" age="9"/>
+      <CABLE a="RONIN#1/HOST:OUT R" b="ORIGAMI#1/IN:IN R" age="10"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT L" b="RACK#1/MAIN:OUT L" age="11"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT R" b="RACK#1/MAIN:OUT R" age="12"/>
+    </JIDAIRACK>
+  </RACK>
+  <RACK name="Two Voices" category="EDM" about="One BUSHIDO plays two RONINs: row A is the bass on CV A, row C a counter line on CV C (C MODE CV, 0..5 V = five octaves). GATE A fires both envelopes. RONIN 1's MIX sums its own voice (IN 1) and RONIN 2 (IN 2) into its OUTPUT, and the pair plays through ORIGAMI.">
+    <JIDAIRACK version="3" browser="1" view="back" cablesFront="HIDE PASS-THRU" cablesBack="ALL" scale="100">
+      <DEVICE kind="RACK I/O" number="1" front="open" format="1" level="1"/>
+      <DEVICE kind="BUSHIDO" number="1" name="SEQ" front="open" format="1" bypass="0" bank="-1" pattern="-1">
+        <PARAM id="A:1" value="0"/>
+        <PARAM id="A:2" value="0"/>
+        <PARAM id="A:3" value="0"/>
+        <PARAM id="A:4" value="0.583333"/>
+        <PARAM id="A:5" value="0"/>
+        <PARAM id="A:6" value="0"/>
+        <PARAM id="A:7" value="0.25"/>
+        <PARAM id="A:8" value="0"/>
+        <PARAM id="A:9" value="0"/>
+        <PARAM id="A:10" value="0"/>
+        <PARAM id="A:11" value="0.833333"/>
+        <PARAM id="A:12" value="0"/>
+        <PARAM id="B:1" value="0.5"/>
+        <PARAM id="B:2" value="0.5"/>
+        <PARAM id="B:3" value="0.5"/>
+        <PARAM id="B:4" value="0.5"/>
+        <PARAM id="B:5" value="0.5"/>
+        <PARAM id="B:6" value="0.5"/>
+        <PARAM id="B:7" value="0.5"/>
+        <PARAM id="B:8" value="0.5"/>
+        <PARAM id="B:9" value="0.5"/>
+        <PARAM id="B:10" value="0.5"/>
+        <PARAM id="B:11" value="0.5"/>
+        <PARAM id="B:12" value="0.5"/>
+        <PARAM id="C:1" value="0.4"/>
+        <PARAM id="C:2" value="0.45"/>
+        <PARAM id="C:3" value="0.516667"/>
+        <PARAM id="C:4" value="0.4"/>
+        <PARAM id="C:5" value="0.566667"/>
+        <PARAM id="C:6" value="0.516667"/>
+        <PARAM id="C:7" value="0.45"/>
+        <PARAM id="C:8" value="0.6"/>
+        <PARAM id="C:9" value="0.4"/>
+        <PARAM id="C:10" value="0.516667"/>
+        <PARAM id="C:11" value="0.483333"/>
+        <PARAM id="C:12" value="0.45"/>
+        <PARAM id="CH:PORTA A" value="0"/>
+        <PARAM id="CH:PORTA B" value="0"/>
+        <PARAM id="CH:RANGE A" value="0"/>
+        <PARAM id="CH:RANGE B" value="1"/>
+        <PARAM id="CH:C MODE" value="0"/>
+        <PARAM id="CLOCK:TEMPO" value="0.5"/>
+        <PARAM id="CLOCK:SOURCE" value="1"/>
+        <PARAM id="MODE:MODE" value="0"/>
+        <PARAM id="MIXER:LEVEL 1" value="0.7"/>
+        <PARAM id="MIXER:LEVEL 2" value="0.7"/>
+        <PARAM id="CLOCK:DIV" value="0.5"/>
+        <PARAM id="CLOCK:EXT SOURCE" value="1"/>
+        <PARAM id="CLOCK:SETTLE" value="0"/>
+        <PARAM id="CLOCK:TRIG MODE" value="0"/>
+        <PARAM id="STEPS:LAW A" value="0"/>
+        <PARAM id="STEPS:LAW B" value="0"/>
+        <PARAM id="STEPS:QUANT A" value="1"/>
+        <PARAM id="STEPS:QUANT B" value="0"/>
+        <PARAM id="MIDI:CH A" value="0"/>
+        <PARAM id="MIDI:CH B" value="0.06666666666666667"/>
+        <PARAM id="MIDI:VEL A" value="0"/>
+        <PARAM id="MIDI:VEL B" value="0"/>
+      </DEVICE>
+      <DEVICE kind="RONIN" number="1" name="BASS" front="open" format="2" program="0" effect="1" triShape="triangle">
+        <KNOB id="VCO:RANGE" value="0.3333333333333333"/>
+        <KNOB id="VCO:FINE" value="0.5"/>
+        <KNOB id="VCO:PW" value="0.5"/>
+        <KNOB id="VCO:FM 1" value="0"/>
+        <KNOB id="VCO:FM 2" value="0"/>
+        <KNOB id="VCF:CUTOFF" value="0.3525"/>
+        <KNOB id="VCF:PEAK" value="0.4"/>
+        <KNOB id="VCF:MOD" value="0.5"/>
+        <KNOB id="VCA 1:INITIAL" value="0"/>
+        <KNOB id="VCA 1:MOD" value="0.85"/>
+        <KNOB id="VCA 1:LOW CUT" value="0"/>
+        <KNOB id="VCA 2:INITIAL" value="0"/>
+        <KNOB id="VCA 2:MOD" value="1"/>
+        <KNOB id="MG:RATE" value="0.5"/>
+        <KNOB id="MG:PW" value="0.5"/>
+        <KNOB id="EG 1:ATTACK" value="0"/>
+        <KNOB id="EG 1:DECAY" value="0.4554"/>
+        <KNOB id="EG 1:SUSTAIN" value="0.3"/>
+        <KNOB id="EG 1:RELEASE" value="0.3556"/>
+        <KNOB id="EG 2:HOLD" value="0.3"/>
+        <KNOB id="EG 2:DELAY" value="0"/>
+        <KNOB id="EG 2:ATTACK" value="0.2079"/>
+        <KNOB id="EG 2:RELEASE" value="0.39"/>
+        <KNOB id="S&amp;H:RATE" value="0.5"/>
+        <KNOB id="DIV:RATIO SWITCH" value="0"/>
+        <KNOB id="INT:TIME" value="0.5"/>
+        <KNOB id="MIX:LEVEL 1" value="0.8"/>
+        <KNOB id="MIX:LEVEL 2" value="0.6"/>
+        <KNOB id="MIX:LEVEL 3" value="0.8"/>
+        <KNOB id="EXT IN:THRESHOLD" value="0.3758"/>
+        <KNOB id="EXT IN:RELEASE" value="0.5316"/>
+        <KNOB id="OUTPUT:MIX" value="1"/>
+        <KNOB id="OUTPUT:LEVEL" value="0.6"/>
+      </DEVICE>
+      <DEVICE kind="RONIN" number="2" name="COUNTER" front="open" format="2" program="0" effect="1" triShape="triangle">
+        <KNOB id="VCO:RANGE" value="0"/>
+        <KNOB id="VCO:FINE" value="0.5"/>
+        <KNOB id="VCO:PW" value="0.5"/>
+        <KNOB id="VCO:FM 1" value="0"/>
+        <KNOB id="VCO:FM 2" value="0"/>
+        <KNOB id="VCF:CUTOFF" value="0.5596"/>
+        <KNOB id="VCF:PEAK" value="0.3"/>
+        <KNOB id="VCF:MOD" value="0.45"/>
+        <KNOB id="VCA 1:INITIAL" value="0"/>
+        <KNOB id="VCA 1:MOD" value="0.85"/>
+        <KNOB id="VCA 1:LOW CUT" value="0"/>
+        <KNOB id="VCA 2:INITIAL" value="0"/>
+        <KNOB id="VCA 2:MOD" value="1"/>
+        <KNOB id="MG:RATE" value="0.5"/>
+        <KNOB id="MG:PW" value="0.5"/>
+        <KNOB id="EG 1:ATTACK" value="0"/>
+        <KNOB id="EG 1:DECAY" value="0.4186"/>
+        <KNOB id="EG 1:SUSTAIN" value="0"/>
+        <KNOB id="EG 1:RELEASE" value="0.4186"/>
+        <KNOB id="EG 2:HOLD" value="0.3"/>
+        <KNOB id="EG 2:DELAY" value="0"/>
+        <KNOB id="EG 2:ATTACK" value="0.2079"/>
+        <KNOB id="EG 2:RELEASE" value="0.39"/>
+        <KNOB id="S&amp;H:RATE" value="0.5"/>
+        <KNOB id="DIV:RATIO SWITCH" value="0"/>
+        <KNOB id="INT:TIME" value="0.5"/>
+        <KNOB id="MIX:LEVEL 1" value="0.8"/>
+        <KNOB id="MIX:LEVEL 2" value="0.8"/>
+        <KNOB id="MIX:LEVEL 3" value="0.8"/>
+        <KNOB id="EXT IN:THRESHOLD" value="0.3758"/>
+        <KNOB id="EXT IN:RELEASE" value="0.5316"/>
+        <KNOB id="OUTPUT:MIX" value="1"/>
+        <KNOB id="OUTPUT:LEVEL" value="0.6"/>
+      </DEVICE>
+      <DEVICE kind="ORIGAMI" number="1" name="GLUE" front="open" format="1">
+        <ORIGAMI format="1" unit="ORIGAMI" program="24">
+          <PARAM id="gain" value="0"/>
+          <PARAM id="vca_depth" value="0"/>
+          <PARAM id="vca_source" value="0"/>
+          <PARAM id="wave" value="0.12"/>
+          <PARAM id="emph" value="0"/>
+          <PARAM id="sym" value="0.06"/>
+          <PARAM id="stage1" value="0"/>
+          <PARAM id="stage2" value="0"/>
+          <PARAM id="stage3" value="0"/>
+          <PARAM id="mix" value="1"/>
+          <PARAM id="level" value="0"/>
+          <PARAM id="level_comp" value="1"/>
+          <PARAM id="bypass" value="0"/>
+          <PARAM id="sym1" value="0"/>
+          <PARAM id="sym2" value="0"/>
+          <PARAM id="sym3" value="0"/>
+          <PARAM id="vc1_amt" value="0"/>
+          <PARAM id="vc2_amt" value="0"/>
+          <PARAM id="vc3_amt" value="0"/>
+          <PARAM id="vc1_sym" value="0"/>
+          <PARAM id="vc2_sym" value="0"/>
+          <PARAM id="vc3_sym" value="0"/>
+          <PARAM id="vc1_src" value="0"/>
+          <PARAM id="vc2_src" value="0"/>
+          <PARAM id="vc3_src" value="0"/>
+          <PARAM id="attack" value="1"/>
+          <PARAM id="release" value="80"/>
+          <PARAM id="cv_scale" value="1"/>
+          <PARAM id="vca_law" value="0"/>
+          <PARAM id="quality" value="0"/>
+        </ORIGAMI>
+      </DEVICE>
+      <CABLE a="RONIN#1/VCO:SAW" b="RONIN#1/VCF:IN" age="0"/>
+      <CABLE a="RONIN#1/VCF:OUT" b="RONIN#1/VCA 1:IN" age="1"/>
+      <CABLE a="RONIN#1/EG 1:OUT A" b="RONIN#1/VCA 1:ENV" age="2"/>
+      <CABLE a="RONIN#1/EG 1:OUT A" b="RONIN#1/VCF:CUTOFF" age="3"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:CV A" b="RONIN#1/VCO:V/OCT" age="4"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:GATE A" b="RONIN#1/EG 1:TRIG" age="5"/>
+      <CABLE a="RONIN#2/VCO:SAW" b="RONIN#2/VCF:IN" age="6"/>
+      <CABLE a="RONIN#2/VCF:OUT" b="RONIN#2/VCA 1:IN" age="7"/>
+      <CABLE a="RONIN#2/VCA 1:OUT" b="RONIN#2/OUTPUT:WET" age="8"/>
+      <CABLE a="RONIN#2/EG 1:OUT A" b="RONIN#2/VCA 1:ENV" age="9"/>
+      <CABLE a="RONIN#2/EG 1:OUT A" b="RONIN#2/VCF:CUTOFF" age="10"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:CV C" b="RONIN#2/VCO:V/OCT" age="11"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:GATE A" b="RONIN#2/EG 1:TRIG" age="12"/>
+      <CABLE a="RONIN#1/VCA 1:OUT" b="RONIN#1/MIX:IN 1" age="13"/>
+      <CABLE a="RONIN#2/HOST:OUT L" b="RONIN#1/MIX:IN 2" age="14"/>
+      <CABLE a="RONIN#1/MIX:OUT" b="RONIN#1/OUTPUT:WET" age="15"/>
+      <CABLE a="RONIN#1/HOST:OUT L" b="ORIGAMI#1/IN:IN L" age="16"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT L" b="RACK#1/MAIN:OUT L" age="17"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT R" b="RACK#1/MAIN:OUT R" age="18"/>
+    </JIDAIRACK>
+  </RACK>
+  <RACK name="Stepped Fold" category="EDM" about="BUSHIDO sequences the fold as well as the notes: row C (C MODE CV) drives ORIGAMI's VC 1, so every step has its own fold depth, and TRIG 5 kicks VC 3 once a loop. RONIN is a held saw drone gated by GATE A.">
+    <JIDAIRACK version="3" browser="1" view="back" cablesFront="HIDE PASS-THRU" cablesBack="ALL" scale="100">
+      <DEVICE kind="RACK I/O" number="1" front="open" format="1" level="1"/>
+      <DEVICE kind="BUSHIDO" number="1" name="FOLD SEQ" front="open" format="1" bypass="0" bank="-1" pattern="-1">
+        <PARAM id="A:1" value="0"/>
+        <PARAM id="A:2" value="0"/>
+        <PARAM id="A:3" value="0"/>
+        <PARAM id="A:4" value="0"/>
+        <PARAM id="A:5" value="0.416667"/>
+        <PARAM id="A:6" value="0.416667"/>
+        <PARAM id="A:7" value="0.25"/>
+        <PARAM id="A:8" value="0.25"/>
+        <PARAM id="A:9" value="0"/>
+        <PARAM id="A:10" value="0"/>
+        <PARAM id="A:11" value="0.583333"/>
+        <PARAM id="A:12" value="0.583333"/>
+        <PARAM id="B:1" value="0.5"/>
+        <PARAM id="B:2" value="0.5"/>
+        <PARAM id="B:3" value="0.5"/>
+        <PARAM id="B:4" value="0.5"/>
+        <PARAM id="B:5" value="0.5"/>
+        <PARAM id="B:6" value="0.5"/>
+        <PARAM id="B:7" value="0.5"/>
+        <PARAM id="B:8" value="0.5"/>
+        <PARAM id="B:9" value="0.5"/>
+        <PARAM id="B:10" value="0.5"/>
+        <PARAM id="B:11" value="0.5"/>
+        <PARAM id="B:12" value="0.5"/>
+        <PARAM id="C:1" value="0"/>
+        <PARAM id="C:2" value="0.3"/>
+        <PARAM id="C:3" value="0.6"/>
+        <PARAM id="C:4" value="1"/>
+        <PARAM id="C:5" value="0.2"/>
+        <PARAM id="C:6" value="0.5"/>
+        <PARAM id="C:7" value="0.8"/>
+        <PARAM id="C:8" value="0.4"/>
+        <PARAM id="C:9" value="0"/>
+        <PARAM id="C:10" value="0.7"/>
+        <PARAM id="C:11" value="1"/>
+        <PARAM id="C:12" value="0.5"/>
+        <PARAM id="CH:PORTA A" value="0.08"/>
+        <PARAM id="CH:PORTA B" value="0"/>
+        <PARAM id="CH:RANGE A" value="0"/>
+        <PARAM id="CH:RANGE B" value="1"/>
+        <PARAM id="CH:C MODE" value="0"/>
+        <PARAM id="CLOCK:TEMPO" value="0.5"/>
+        <PARAM id="CLOCK:SOURCE" value="1"/>
+        <PARAM id="MODE:MODE" value="0"/>
+        <PARAM id="MIXER:LEVEL 1" value="0.7"/>
+        <PARAM id="MIXER:LEVEL 2" value="0.7"/>
+        <PARAM id="CLOCK:DIV" value="0.5"/>
+        <PARAM id="CLOCK:EXT SOURCE" value="1"/>
+        <PARAM id="CLOCK:SETTLE" value="0"/>
+        <PARAM id="CLOCK:TRIG MODE" value="0"/>
+        <PARAM id="STEPS:LAW A" value="0"/>
+        <PARAM id="STEPS:LAW B" value="0"/>
+        <PARAM id="STEPS:QUANT A" value="1"/>
+        <PARAM id="STEPS:QUANT B" value="0"/>
+        <PARAM id="MIDI:CH A" value="0"/>
+        <PARAM id="MIDI:CH B" value="0.06666666666666667"/>
+        <PARAM id="MIDI:VEL A" value="0"/>
+        <PARAM id="MIDI:VEL B" value="0"/>
+      </DEVICE>
+      <DEVICE kind="RONIN" number="1" name="DRONE" front="open" format="2" program="0" effect="1" triShape="triangle">
+        <KNOB id="VCO:RANGE" value="0.3333333333333333"/>
+        <KNOB id="VCO:FINE" value="0.5"/>
+        <KNOB id="VCO:PW" value="0.5"/>
+        <KNOB id="VCO:FM 1" value="0"/>
+        <KNOB id="VCO:FM 2" value="0"/>
+        <KNOB id="VCF:CUTOFF" value="0.5227"/>
+        <KNOB id="VCF:PEAK" value="0.25"/>
+        <KNOB id="VCF:MOD" value="0.3"/>
+        <KNOB id="VCA 1:INITIAL" value="0"/>
+        <KNOB id="VCA 1:MOD" value="0.85"/>
+        <KNOB id="VCA 1:LOW CUT" value="0"/>
+        <KNOB id="VCA 2:INITIAL" value="0"/>
+        <KNOB id="VCA 2:MOD" value="1"/>
+        <KNOB id="MG:RATE" value="0.5"/>
+        <KNOB id="MG:PW" value="0.5"/>
+        <KNOB id="EG 1:ATTACK" value="0.0999"/>
+        <KNOB id="EG 1:DECAY" value="0.5184"/>
+        <KNOB id="EG 1:SUSTAIN" value="0.7"/>
+        <KNOB id="EG 1:RELEASE" value="0.3983"/>
+        <KNOB id="EG 2:HOLD" value="0.3"/>
+        <KNOB id="EG 2:DELAY" value="0"/>
+        <KNOB id="EG 2:ATTACK" value="0.2079"/>
+        <KNOB id="EG 2:RELEASE" value="0.39"/>
+        <KNOB id="S&amp;H:RATE" value="0.5"/>
+        <KNOB id="DIV:RATIO SWITCH" value="0"/>
+        <KNOB id="INT:TIME" value="0.5"/>
+        <KNOB id="MIX:LEVEL 1" value="0.8"/>
+        <KNOB id="MIX:LEVEL 2" value="0.8"/>
+        <KNOB id="MIX:LEVEL 3" value="0.8"/>
+        <KNOB id="EXT IN:THRESHOLD" value="0.3758"/>
+        <KNOB id="EXT IN:RELEASE" value="0.5316"/>
+        <KNOB id="OUTPUT:MIX" value="1"/>
+        <KNOB id="OUTPUT:LEVEL" value="0.55"/>
+      </DEVICE>
+      <DEVICE kind="ORIGAMI" number="1" name="STEP FOLD" front="open" format="1">
+        <ORIGAMI format="1" unit="ORIGAMI" program="17">
+          <PARAM id="gain" value="0"/>
+          <PARAM id="vca_depth" value="0"/>
+          <PARAM id="vca_source" value="0"/>
+          <PARAM id="wave" value="0.2"/>
+          <PARAM id="emph" value="0"/>
+          <PARAM id="sym" value="0"/>
+          <PARAM id="stage1" value="0"/>
+          <PARAM id="stage2" value="0"/>
+          <PARAM id="stage3" value="0"/>
+          <PARAM id="mix" value="1"/>
+          <PARAM id="level" value="0"/>
+          <PARAM id="level_comp" value="1"/>
+          <PARAM id="bypass" value="0"/>
+          <PARAM id="sym1" value="0"/>
+          <PARAM id="sym2" value="0"/>
+          <PARAM id="sym3" value="0"/>
+          <PARAM id="vc1_amt" value="0.5"/>
+          <PARAM id="vc2_amt" value="0.4"/>
+          <PARAM id="vc3_amt" value="0.3"/>
+          <PARAM id="vc1_sym" value="0"/>
+          <PARAM id="vc2_sym" value="0"/>
+          <PARAM id="vc3_sym" value="0"/>
+          <PARAM id="vc1_src" value="0"/>
+          <PARAM id="vc2_src" value="0"/>
+          <PARAM id="vc3_src" value="0"/>
+          <PARAM id="attack" value="1"/>
+          <PARAM id="release" value="80"/>
+          <PARAM id="cv_scale" value="1"/>
+          <PARAM id="vca_law" value="0"/>
+          <PARAM id="quality" value="0"/>
+        </ORIGAMI>
+      </DEVICE>
+      <CABLE a="RONIN#1/VCO:SAW" b="RONIN#1/VCF:IN" age="0"/>
+      <CABLE a="RONIN#1/VCF:OUT" b="RONIN#1/VCA 1:IN" age="1"/>
+      <CABLE a="RONIN#1/VCA 1:OUT" b="RONIN#1/OUTPUT:WET" age="2"/>
+      <CABLE a="RONIN#1/EG 1:OUT A" b="RONIN#1/VCA 1:ENV" age="3"/>
+      <CABLE a="RONIN#1/EG 1:OUT A" b="RONIN#1/VCF:CUTOFF" age="4"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:CV A" b="RONIN#1/VCO:V/OCT" age="5"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:GATE A" b="RONIN#1/EG 1:TRIG" age="6"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:CV C" b="ORIGAMI#1/VC:VC 1" age="7"/>
+      <CABLE a="BUSHIDO#1/5:TRIG" b="ORIGAMI#1/VC:VC 3" age="8"/>
+      <CABLE a="RONIN#1/HOST:OUT L" b="ORIGAMI#1/IN:IN L" age="9"/>
+      <CABLE a="RONIN#1/HOST:OUT R" b="ORIGAMI#1/IN:IN R" age="10"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT L" b="RACK#1/MAIN:OUT L" age="11"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT R" b="RACK#1/MAIN:OUT R" age="12"/>
+    </JIDAIRACK>
+  </RACK>
+  <RACK name="MIDI Fold Synth" category="EDM" about="Play RONIN from your DAW: RACK I/O's MIDI NOTE, GATE and VEL jacks drive RONIN's VCO, EG 1 and filter, and RONIN plays through ORIGAMI. Send MIDI to the JIDAI RACK track.">
+    <JIDAIRACK version="3" browser="1" view="back" cablesFront="HIDE PASS-THRU" cablesBack="ALL" scale="100">
+      <DEVICE kind="RACK I/O" number="1" front="open" format="1" level="1"/>
+      <DEVICE kind="RONIN" number="1" name="SYNTH" front="open" format="2" program="0" effect="1" triShape="triangle">
+        <KNOB id="VCO:RANGE" value="0.6666666666666666"/>
+        <KNOB id="VCO:FINE" value="0.5"/>
+        <KNOB id="VCO:PW" value="0.5"/>
+        <KNOB id="VCO:FM 1" value="0"/>
+        <KNOB id="VCO:FM 2" value="0"/>
+        <KNOB id="VCF:CUTOFF" value="0.4732"/>
+        <KNOB id="VCF:PEAK" value="0.4"/>
+        <KNOB id="VCF:MOD" value="0.5"/>
+        <KNOB id="VCA 1:INITIAL" value="0"/>
+        <KNOB id="VCA 1:MOD" value="0.85"/>
+        <KNOB id="VCA 1:LOW CUT" value="0"/>
+        <KNOB id="VCA 2:INITIAL" value="0"/>
+        <KNOB id="VCA 2:MOD" value="1"/>
+        <KNOB id="MG:RATE" value="0.5"/>
+        <KNOB id="MG:PW" value="0.5"/>
+        <KNOB id="EG 1:ATTACK" value="0.063"/>
+        <KNOB id="EG 1:DECAY" value="0.5446"/>
+        <KNOB id="EG 1:SUSTAIN" value="0.5"/>
+        <KNOB id="EG 1:RELEASE" value="0.5019"/>
+        <KNOB id="EG 2:HOLD" value="0.3"/>
+        <KNOB id="EG 2:DELAY" value="0"/>
+        <KNOB id="EG 2:ATTACK" value="0.2079"/>
+        <KNOB id="EG 2:RELEASE" value="0.39"/>
+        <KNOB id="S&amp;H:RATE" value="0.5"/>
+        <KNOB id="DIV:RATIO SWITCH" value="0"/>
+        <KNOB id="INT:TIME" value="0.5"/>
+        <KNOB id="MIX:LEVEL 1" value="0.8"/>
+        <KNOB id="MIX:LEVEL 2" value="0.4"/>
+        <KNOB id="MIX:LEVEL 3" value="0.8"/>
+        <KNOB id="EXT IN:THRESHOLD" value="0.3758"/>
+        <KNOB id="EXT IN:RELEASE" value="0.5316"/>
+        <KNOB id="OUTPUT:MIX" value="1"/>
+        <KNOB id="OUTPUT:LEVEL" value="0.6"/>
+      </DEVICE>
+      <DEVICE kind="ORIGAMI" number="1" name="BITE" front="open" format="1">
+        <ORIGAMI format="1" unit="ORIGAMI" program="5">
+          <PARAM id="gain" value="-3"/>
+          <PARAM id="vca_depth" value="0"/>
+          <PARAM id="vca_source" value="0"/>
+          <PARAM id="wave" value="0.5"/>
+          <PARAM id="emph" value="6"/>
+          <PARAM id="sym" value="0"/>
+          <PARAM id="stage1" value="0"/>
+          <PARAM id="stage2" value="0"/>
+          <PARAM id="stage3" value="0"/>
+          <PARAM id="mix" value="1"/>
+          <PARAM id="level" value="0"/>
+          <PARAM id="level_comp" value="1"/>
+          <PARAM id="bypass" value="0"/>
+          <PARAM id="sym1" value="0"/>
+          <PARAM id="sym2" value="0"/>
+          <PARAM id="sym3" value="0"/>
+          <PARAM id="vc1_amt" value="0"/>
+          <PARAM id="vc2_amt" value="0"/>
+          <PARAM id="vc3_amt" value="0"/>
+          <PARAM id="vc1_sym" value="0"/>
+          <PARAM id="vc2_sym" value="0"/>
+          <PARAM id="vc3_sym" value="0"/>
+          <PARAM id="vc1_src" value="0"/>
+          <PARAM id="vc2_src" value="0"/>
+          <PARAM id="vc3_src" value="0"/>
+          <PARAM id="attack" value="1"/>
+          <PARAM id="release" value="80"/>
+          <PARAM id="cv_scale" value="1"/>
+          <PARAM id="vca_law" value="0"/>
+          <PARAM id="quality" value="0"/>
+        </ORIGAMI>
+      </DEVICE>
+      <CABLE a="RONIN#1/VCO:SAW" b="RONIN#1/VCF:IN" age="0"/>
+      <CABLE a="RONIN#1/VCF:OUT" b="RONIN#1/VCA 1:IN" age="1"/>
+      <CABLE a="RONIN#1/VCA 1:OUT" b="RONIN#1/OUTPUT:WET" age="2"/>
+      <CABLE a="RONIN#1/EG 1:OUT A" b="RONIN#1/VCA 1:ENV" age="3"/>
+      <CABLE a="RACK#1/MIDI:NOTE" b="RONIN#1/VCO:V/OCT" age="4"/>
+      <CABLE a="RACK#1/MIDI:GATE" b="RONIN#1/EG 1:TRIG" age="5"/>
+      <CABLE a="RONIN#1/EG 1:OUT A" b="RONIN#1/MIX:IN 1" age="6"/>
+      <CABLE a="RACK#1/MIDI:VEL" b="RONIN#1/MIX:IN 2" age="7"/>
+      <CABLE a="RONIN#1/MIX:OUT" b="RONIN#1/VCF:CUTOFF" age="8"/>
+      <CABLE a="RONIN#1/HOST:OUT L" b="ORIGAMI#1/IN:IN L" age="9"/>
+      <CABLE a="RONIN#1/HOST:OUT R" b="ORIGAMI#1/IN:IN R" age="10"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT L" b="RACK#1/MAIN:OUT L" age="11"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT R" b="RACK#1/MAIN:OUT R" age="12"/>
+    </JIDAIRACK>
+  </RACK>
+  <RACK name="Acid Drum Jam" category="EDM" about="Every unit: SHOGUN plays a four-on-the-floor kit clocked from RACK I/O (CLK 1/16 -&gt; CLK IN, RESET -&gt; RST IN). BUSHIDO plays a 12-step acid line into RONIN's ACID DRIVE voice (INT slides, row C accents), ORIGAMI folds it. Drums and bass meet at MAIN OUT, where the rack lines them up to the sample.">
+    <JIDAIRACK version="3" browser="1" view="back" cablesFront="HIDE PASS-THRU" cablesBack="ALL" scale="100">
+      <DEVICE kind="RACK I/O" number="1" front="open" format="1" level="1"/>
+      <DEVICE kind="SHOGUN" number="1" name="KIT" front="open" format="2">
+        <SHOGUN version="2" running="1">{"format":"shogun-patch","version":2,"name":"ACID JAM","params":{"CLOCK:SOURCE":0.833333,"CLOCK:CLK IN":0.083333,"MASTER:GLUE":0.3,"CH:LEVEL":0.42,"OH:LEVEL":0.38},"mod":[],"cables":[],"cvAmt":{},"inLaw":{},"seq":{"pattern":"ACID JAM","seed":1513406686,"tracks":[{"id":"BD1","len":16,"steps":[{"i":0,"on":true,"acc":3,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":4,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":8,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":12,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}}]},{"id":"CP","len":16,"steps":[{"i":4,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":12,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}}]},{"id":"CH","len":16,"steps":[{"i":0,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":2,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":4,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":6,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":8,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":10,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":12,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":14,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":15,"on":true,"acc":3,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}}]},{"id":"OH","len":16,"steps":[{"i":2,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":6,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":10,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":14,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}}]}]}}</SHOGUN>
+      </DEVICE>
+      <DEVICE kind="BUSHIDO" number="1" name="ACID SEQ" front="open" format="1" bypass="0" bank="-1" pattern="-1">
+        <PARAM id="A:1" value="0"/>
+        <PARAM id="A:2" value="0"/>
+        <PARAM id="A:3" value="1"/>
+        <PARAM id="A:4" value="0"/>
+        <PARAM id="A:5" value="0.25"/>
+        <PARAM id="A:6" value="0"/>
+        <PARAM id="A:7" value="0.583333"/>
+        <PARAM id="A:8" value="0.833333"/>
+        <PARAM id="A:9" value="0"/>
+        <PARAM id="A:10" value="1"/>
+        <PARAM id="A:11" value="0.416667"/>
+        <PARAM id="A:12" value="0.25"/>
+        <PARAM id="B:1" value="0.5"/>
+        <PARAM id="B:2" value="0.5"/>
+        <PARAM id="B:3" value="0.5"/>
+        <PARAM id="B:4" value="0.5"/>
+        <PARAM id="B:5" value="0.5"/>
+        <PARAM id="B:6" value="0.5"/>
+        <PARAM id="B:7" value="0.5"/>
+        <PARAM id="B:8" value="0.5"/>
+        <PARAM id="B:9" value="0.5"/>
+        <PARAM id="B:10" value="0.5"/>
+        <PARAM id="B:11" value="0.5"/>
+        <PARAM id="B:12" value="0.5"/>
+        <PARAM id="C:1" value="0.5"/>
+        <PARAM id="C:2" value="0"/>
+        <PARAM id="C:3" value="0"/>
+        <PARAM id="C:4" value="0.4"/>
+        <PARAM id="C:5" value="0"/>
+        <PARAM id="C:6" value="0"/>
+        <PARAM id="C:7" value="0.5"/>
+        <PARAM id="C:8" value="0"/>
+        <PARAM id="C:9" value="0"/>
+        <PARAM id="C:10" value="0.3"/>
+        <PARAM id="C:11" value="0"/>
+        <PARAM id="C:12" value="0.45"/>
+        <PARAM id="CH:PORTA A" value="0"/>
+        <PARAM id="CH:PORTA B" value="0"/>
+        <PARAM id="CH:RANGE A" value="0"/>
+        <PARAM id="CH:RANGE B" value="1"/>
+        <PARAM id="CH:C MODE" value="0"/>
+        <PARAM id="CLOCK:TEMPO" value="0.5"/>
+        <PARAM id="CLOCK:SOURCE" value="1"/>
+        <PARAM id="MODE:MODE" value="0"/>
+        <PARAM id="MIXER:LEVEL 1" value="0.7"/>
+        <PARAM id="MIXER:LEVEL 2" value="0.7"/>
+        <PARAM id="CLOCK:DIV" value="0.5"/>
+        <PARAM id="CLOCK:EXT SOURCE" value="1"/>
+        <PARAM id="CLOCK:SETTLE" value="0"/>
+        <PARAM id="CLOCK:TRIG MODE" value="0"/>
+        <PARAM id="STEPS:LAW A" value="0"/>
+        <PARAM id="STEPS:LAW B" value="0"/>
+        <PARAM id="STEPS:QUANT A" value="1"/>
+        <PARAM id="STEPS:QUANT B" value="0"/>
+        <PARAM id="MIDI:CH A" value="0"/>
+        <PARAM id="MIDI:CH B" value="0.06666666666666667"/>
+        <PARAM id="MIDI:VEL A" value="0"/>
+        <PARAM id="MIDI:VEL B" value="0"/>
+      </DEVICE>
+      <DEVICE kind="RONIN" number="1" name="ACID BASS" front="open" format="2" program="0" effect="1" triShape="triangle">
+        <KNOB id="VCO:RANGE" value="0.3333"/>
+        <KNOB id="VCO:FINE" value="0.5"/>
+        <KNOB id="VCO:PW" value="0.35"/>
+        <KNOB id="VCO:FM 1" value="0"/>
+        <KNOB id="VCO:FM 2" value="0"/>
+        <KNOB id="VCF:CUTOFF" value="0.4"/>
+        <KNOB id="VCF:PEAK" value="0.92"/>
+        <KNOB id="VCF:MOD" value="0.75"/>
+        <KNOB id="VCA 1:INITIAL" value="0"/>
+        <KNOB id="VCA 1:MOD" value="0.6"/>
+        <KNOB id="VCA 1:LOW CUT" value="0"/>
+        <KNOB id="VCA 2:INITIAL" value="0"/>
+        <KNOB id="VCA 2:MOD" value="1"/>
+        <KNOB id="MG:RATE" value="0.5"/>
+        <KNOB id="MG:PW" value="0.5"/>
+        <KNOB id="EG 1:ATTACK" value="0.063"/>
+        <KNOB id="EG 1:DECAY" value="0.5184"/>
+        <KNOB id="EG 1:SUSTAIN" value="0.8"/>
+        <KNOB id="EG 1:RELEASE" value="0.2723"/>
+        <KNOB id="EG 2:HOLD" value="0"/>
+        <KNOB id="EG 2:DELAY" value="0"/>
+        <KNOB id="EG 2:ATTACK" value="0.063"/>
+        <KNOB id="EG 2:RELEASE" value="0.4351"/>
+        <KNOB id="S&amp;H:RATE" value="0.5"/>
+        <KNOB id="DIV:RATIO SWITCH" value="0"/>
+        <KNOB id="INT:TIME" value="0.3029"/>
+        <KNOB id="MIX:LEVEL 1" value="0.8"/>
+        <KNOB id="MIX:LEVEL 2" value="0.8"/>
+        <KNOB id="MIX:LEVEL 3" value="0.8"/>
+        <KNOB id="EXT IN:THRESHOLD" value="0.3758"/>
+        <KNOB id="EXT IN:RELEASE" value="0.5316"/>
+        <KNOB id="OUTPUT:MIX" value="1"/>
+        <KNOB id="OUTPUT:LEVEL" value="0.55"/>
+      </DEVICE>
+      <DEVICE kind="ORIGAMI" number="1" name="GRIT" front="open" format="1">
+        <ORIGAMI format="1" unit="ORIGAMI" program="1">
+          <PARAM id="gain" value="-3"/>
+          <PARAM id="vca_depth" value="0"/>
+          <PARAM id="vca_source" value="0"/>
+          <PARAM id="wave" value="0.45"/>
+          <PARAM id="emph" value="6"/>
+          <PARAM id="sym" value="0.15"/>
+          <PARAM id="stage1" value="0"/>
+          <PARAM id="stage2" value="0"/>
+          <PARAM id="stage3" value="0"/>
+          <PARAM id="mix" value="1"/>
+          <PARAM id="level" value="0"/>
+          <PARAM id="level_comp" value="1"/>
+          <PARAM id="bypass" value="0"/>
+          <PARAM id="sym1" value="0"/>
+          <PARAM id="sym2" value="0"/>
+          <PARAM id="sym3" value="0"/>
+          <PARAM id="vc1_amt" value="0"/>
+          <PARAM id="vc2_amt" value="0"/>
+          <PARAM id="vc3_amt" value="0"/>
+          <PARAM id="vc1_sym" value="0"/>
+          <PARAM id="vc2_sym" value="0"/>
+          <PARAM id="vc3_sym" value="0"/>
+          <PARAM id="vc1_src" value="0"/>
+          <PARAM id="vc2_src" value="0"/>
+          <PARAM id="vc3_src" value="0"/>
+          <PARAM id="attack" value="1"/>
+          <PARAM id="release" value="80"/>
+          <PARAM id="cv_scale" value="1"/>
+          <PARAM id="vca_law" value="0"/>
+          <PARAM id="quality" value="1"/>
+        </ORIGAMI>
+      </DEVICE>
+      <CABLE a="RONIN#1/VCO:SAW" b="RONIN#1/VCF:IN" age="0"/>
+      <CABLE a="RONIN#1/VCO:PULSE" b="RONIN#1/VCF:IN" age="1"/>
+      <CABLE a="RONIN#1/VCF:OUT" b="RONIN#1/VCA 1:IN" age="2"/>
+      <CABLE a="RONIN#1/VCA 1:OUT" b="RONIN#1/OUTPUT:WET" age="3"/>
+      <CABLE a="RONIN#1/EG 1:OUT A" b="RONIN#1/VCA 1:ENV" age="4"/>
+      <CABLE a="RONIN#1/EG 2:OUT +" b="RONIN#1/VCF:CUTOFF" age="5"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:CV A" b="RONIN#1/INT:IN" age="6"/>
+      <CABLE a="RONIN#1/INT:OUT" b="RONIN#1/VCO:V/OCT" age="7"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:GATE A" b="RONIN#1/EG 1:TRIG" age="8"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:GATE A" b="RONIN#1/EG 2:TRIG" age="9"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:CV C" b="RONIN#1/VCF:CUTOFF" age="10"/>
+      <CABLE a="RACK#1/TRANSPORT:CLK 1/16" b="SHOGUN#1/CLOCK:CLK IN" age="11"/>
+      <CABLE a="RACK#1/TRANSPORT:RESET" b="SHOGUN#1/CLOCK:RST IN" age="12"/>
+      <CABLE a="RONIN#1/HOST:OUT L" b="ORIGAMI#1/IN:IN L" age="13"/>
+      <CABLE a="SHOGUN#1/MIX:L" b="RACK#1/MAIN:OUT L" age="14"/>
+      <CABLE a="SHOGUN#1/MIX:R" b="RACK#1/MAIN:OUT R" age="15"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT L" b="RACK#1/MAIN:OUT L" age="16"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT R" b="RACK#1/MAIN:OUT R" age="17"/>
+    </JIDAIRACK>
+  </RACK>
+  <RACK name="Full EDM Jam" category="EDM" about="Every unit, host-clocked: SHOGUN plays kick, clap, hats, open hat and a tom fill plus a lead riff on its own LEAD synth. BUSHIDO's 8-step bass (TRIG 9 -&gt; RESET) plays RONIN. SHOGUN's whole mix runs through ORIGAMI as a glue fold on the bus; the bass joins at MAIN OUT, where the rack lines it up with the drums.">
+    <JIDAIRACK version="3" browser="1" view="back" cablesFront="HIDE PASS-THRU" cablesBack="ALL" scale="100">
+      <DEVICE kind="RACK I/O" number="1" front="open" format="1" level="1"/>
+      <DEVICE kind="SHOGUN" number="1" name="KIT" front="open" format="2">
+        <SHOGUN version="2" running="0">{"format":"shogun-patch","version":2,"name":"FULL JAM","params":{"CLOCK:SOURCE":0.166667,"MASTER:GLUE":0.35,"MASTER:DRIVE":0.1,"CH:LEVEL":0.4,"OH:LEVEL":0.36,"LTC:LEVEL":0.45,"LEAD:CUTOFF":0.62,"LEAD:RESO":0.35,"LEAD:DECAY":0.35,"LEAD:LEVEL":0.36,"LEAD:PAN":0.6,"CH:PAN":0.42},"mod":[],"cables":[],"cvAmt":{},"inLaw":{},"seq":{"pattern":"FULL JAM","seed":1513406686,"tracks":[{"id":"BD1","len":16,"steps":[{"i":0,"on":true,"acc":3,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":4,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":8,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":12,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}}]},{"id":"CP","len":16,"steps":[{"i":4,"on":true,"acc":3,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":12,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}}]},{"id":"CH","len":16,"steps":[{"i":0,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":2,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":4,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":6,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":8,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":10,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":12,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":14,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}}]},{"id":"OH","len":16,"steps":[{"i":2,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":6,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":10,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}},{"i":14,"on":true,"acc":3,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}}]},{"id":"LTC","len":32,"steps":[{"i":30,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"locks":{}}]},{"id":"LEAD","len":16,"steps":[{"i":0,"on":true,"acc":3,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"note":72,"tie":false,"locks":{}},{"i":3,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"note":75,"tie":false,"locks":{}},{"i":6,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"note":79,"tie":false,"locks":{}},{"i":8,"on":true,"acc":3,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"note":77,"tie":false,"locks":{}},{"i":11,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"note":75,"tie":false,"locks":{}},{"i":14,"on":true,"acc":2,"prob":1.0,"micro":0.0,"flam":0,"ratchet":1,"note":70,"tie":false,"locks":{}}]}]}}</SHOGUN>
+      </DEVICE>
+      <DEVICE kind="BUSHIDO" number="1" name="BASS SEQ" front="open" format="1" bypass="0" bank="-1" pattern="-1">
+        <PARAM id="A:1" value="0"/>
+        <PARAM id="A:2" value="0"/>
+        <PARAM id="A:3" value="1"/>
+        <PARAM id="A:4" value="0"/>
+        <PARAM id="A:5" value="0"/>
+        <PARAM id="A:6" value="1"/>
+        <PARAM id="A:7" value="0"/>
+        <PARAM id="A:8" value="0.833333"/>
+        <PARAM id="A:9" value="0"/>
+        <PARAM id="A:10" value="0"/>
+        <PARAM id="A:11" value="0"/>
+        <PARAM id="A:12" value="0"/>
+        <PARAM id="B:1" value="0.5"/>
+        <PARAM id="B:2" value="0.5"/>
+        <PARAM id="B:3" value="0.5"/>
+        <PARAM id="B:4" value="0.5"/>
+        <PARAM id="B:5" value="0.5"/>
+        <PARAM id="B:6" value="0.5"/>
+        <PARAM id="B:7" value="0.5"/>
+        <PARAM id="B:8" value="0.5"/>
+        <PARAM id="B:9" value="0.5"/>
+        <PARAM id="B:10" value="0.5"/>
+        <PARAM id="B:11" value="0.5"/>
+        <PARAM id="B:12" value="0.5"/>
+        <PARAM id="C:1" value="0.5"/>
+        <PARAM id="C:2" value="0.5"/>
+        <PARAM id="C:3" value="0.5"/>
+        <PARAM id="C:4" value="0.5"/>
+        <PARAM id="C:5" value="0.5"/>
+        <PARAM id="C:6" value="0.5"/>
+        <PARAM id="C:7" value="0.5"/>
+        <PARAM id="C:8" value="0.5"/>
+        <PARAM id="C:9" value="0.5"/>
+        <PARAM id="C:10" value="0.5"/>
+        <PARAM id="C:11" value="0.5"/>
+        <PARAM id="C:12" value="0.5"/>
+        <PARAM id="CH:PORTA A" value="0"/>
+        <PARAM id="CH:PORTA B" value="0"/>
+        <PARAM id="CH:RANGE A" value="0"/>
+        <PARAM id="CH:RANGE B" value="1"/>
+        <PARAM id="CH:C MODE" value="0"/>
+        <PARAM id="CLOCK:TEMPO" value="0.5"/>
+        <PARAM id="CLOCK:SOURCE" value="1"/>
+        <PARAM id="MODE:MODE" value="0"/>
+        <PARAM id="MIXER:LEVEL 1" value="0.7"/>
+        <PARAM id="MIXER:LEVEL 2" value="0.7"/>
+        <PARAM id="CLOCK:DIV" value="0.5"/>
+        <PARAM id="CLOCK:EXT SOURCE" value="1"/>
+        <PARAM id="CLOCK:SETTLE" value="0"/>
+        <PARAM id="CLOCK:TRIG MODE" value="0"/>
+        <PARAM id="STEPS:LAW A" value="0"/>
+        <PARAM id="STEPS:LAW B" value="0"/>
+        <PARAM id="STEPS:QUANT A" value="1"/>
+        <PARAM id="STEPS:QUANT B" value="0"/>
+        <PARAM id="MIDI:CH A" value="0"/>
+        <PARAM id="MIDI:CH B" value="0.06666666666666667"/>
+        <PARAM id="MIDI:VEL A" value="0"/>
+        <PARAM id="MIDI:VEL B" value="0"/>
+      </DEVICE>
+      <DEVICE kind="RONIN" number="1" name="BASS" front="open" format="2" program="0" effect="1" triShape="triangle">
+        <KNOB id="VCO:RANGE" value="0.3333333333333333"/>
+        <KNOB id="VCO:FINE" value="0.5"/>
+        <KNOB id="VCO:PW" value="0.5"/>
+        <KNOB id="VCO:FM 1" value="0"/>
+        <KNOB id="VCO:FM 2" value="0"/>
+        <KNOB id="VCF:CUTOFF" value="0.3771"/>
+        <KNOB id="VCF:PEAK" value="0.35"/>
+        <KNOB id="VCF:MOD" value="0.5"/>
+        <KNOB id="VCA 1:INITIAL" value="0"/>
+        <KNOB id="VCA 1:MOD" value="0.85"/>
+        <KNOB id="VCA 1:LOW CUT" value="0"/>
+        <KNOB id="VCA 2:INITIAL" value="0"/>
+        <KNOB id="VCA 2:MOD" value="1"/>
+        <KNOB id="MG:RATE" value="0.5"/>
+        <KNOB id="MG:PW" value="0.5"/>
+        <KNOB id="EG 1:ATTACK" value="0"/>
+        <KNOB id="EG 1:DECAY" value="0.4351"/>
+        <KNOB id="EG 1:SUSTAIN" value="0.25"/>
+        <KNOB id="EG 1:RELEASE" value="0.3091"/>
+        <KNOB id="EG 2:HOLD" value="0.3"/>
+        <KNOB id="EG 2:DELAY" value="0"/>
+        <KNOB id="EG 2:ATTACK" value="0.2079"/>
+        <KNOB id="EG 2:RELEASE" value="0.39"/>
+        <KNOB id="S&amp;H:RATE" value="0.5"/>
+        <KNOB id="DIV:RATIO SWITCH" value="0"/>
+        <KNOB id="INT:TIME" value="0.5"/>
+        <KNOB id="MIX:LEVEL 1" value="0.8"/>
+        <KNOB id="MIX:LEVEL 2" value="0.8"/>
+        <KNOB id="MIX:LEVEL 3" value="0.8"/>
+        <KNOB id="EXT IN:THRESHOLD" value="0.3758"/>
+        <KNOB id="EXT IN:RELEASE" value="0.5316"/>
+        <KNOB id="OUTPUT:MIX" value="1"/>
+        <KNOB id="OUTPUT:LEVEL" value="0.5"/>
+      </DEVICE>
+      <DEVICE kind="ORIGAMI" number="1" name="BUS GLUE" front="open" format="1">
+        <ORIGAMI format="1" unit="ORIGAMI" program="12">
+          <PARAM id="gain" value="0"/>
+          <PARAM id="vca_depth" value="0"/>
+          <PARAM id="vca_source" value="0"/>
+          <PARAM id="wave" value="0.15"/>
+          <PARAM id="emph" value="0"/>
+          <PARAM id="sym" value="0.05"/>
+          <PARAM id="stage1" value="0"/>
+          <PARAM id="stage2" value="0"/>
+          <PARAM id="stage3" value="0"/>
+          <PARAM id="mix" value="0.8"/>
+          <PARAM id="level" value="-0.5"/>
+          <PARAM id="level_comp" value="1"/>
+          <PARAM id="bypass" value="0"/>
+          <PARAM id="sym1" value="0"/>
+          <PARAM id="sym2" value="0"/>
+          <PARAM id="sym3" value="0"/>
+          <PARAM id="vc1_amt" value="0"/>
+          <PARAM id="vc2_amt" value="0"/>
+          <PARAM id="vc3_amt" value="0"/>
+          <PARAM id="vc1_sym" value="0"/>
+          <PARAM id="vc2_sym" value="0"/>
+          <PARAM id="vc3_sym" value="0"/>
+          <PARAM id="vc1_src" value="0"/>
+          <PARAM id="vc2_src" value="0"/>
+          <PARAM id="vc3_src" value="0"/>
+          <PARAM id="attack" value="1"/>
+          <PARAM id="release" value="80"/>
+          <PARAM id="cv_scale" value="1"/>
+          <PARAM id="vca_law" value="0"/>
+          <PARAM id="quality" value="0"/>
+        </ORIGAMI>
+      </DEVICE>
+      <CABLE a="RONIN#1/VCO:SAW" b="RONIN#1/VCF:IN" age="0"/>
+      <CABLE a="RONIN#1/VCF:OUT" b="RONIN#1/VCA 1:IN" age="1"/>
+      <CABLE a="RONIN#1/VCA 1:OUT" b="RONIN#1/OUTPUT:WET" age="2"/>
+      <CABLE a="RONIN#1/EG 1:OUT A" b="RONIN#1/VCA 1:ENV" age="3"/>
+      <CABLE a="RONIN#1/EG 1:OUT A" b="RONIN#1/VCF:CUTOFF" age="4"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:CV A" b="RONIN#1/VCO:V/OCT" age="5"/>
+      <CABLE a="BUSHIDO#1/OUTPUTS:GATE A" b="RONIN#1/EG 1:TRIG" age="6"/>
+      <CABLE a="BUSHIDO#1/9:TRIG" b="BUSHIDO#1/INPUTS:RESET" age="7"/>
+      <CABLE a="SHOGUN#1/MIX:L" b="ORIGAMI#1/IN:IN L" age="8"/>
+      <CABLE a="SHOGUN#1/MIX:R" b="ORIGAMI#1/IN:IN R" age="9"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT L" b="RACK#1/MAIN:OUT L" age="10"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT R" b="RACK#1/MAIN:OUT R" age="11"/>
+      <CABLE a="RONIN#1/HOST:OUT L" b="RACK#1/MAIN:OUT L" age="12"/>
+      <CABLE a="RONIN#1/HOST:OUT R" b="RACK#1/MAIN:OUT R" age="13"/>
+    </JIDAIRACK>
+  </RACK>
+  <RACK name="Filter Fold FX" category="FX" about="An insert effect for your track: host audio from RACK I/O goes through RONIN's resonant filter, swept by the MG, then through ORIGAMI, and back to the host.">
+    <JIDAIRACK version="3" browser="1" view="back" cablesFront="HIDE PASS-THRU" cablesBack="ALL" scale="100">
+      <DEVICE kind="RACK I/O" number="1" front="open" format="1" level="1"/>
+      <DEVICE kind="RONIN" number="1" name="FILTER" front="open" format="2" program="0" effect="1" triShape="triangle">
+        <KNOB id="VCO:RANGE" value="0.5"/>
+        <KNOB id="VCO:FINE" value="0.5"/>
+        <KNOB id="VCO:PW" value="0.5"/>
+        <KNOB id="VCO:FM 1" value="0"/>
+        <KNOB id="VCO:FM 2" value="0"/>
+        <KNOB id="VCF:CUTOFF" value="0.5596"/>
+        <KNOB id="VCF:PEAK" value="0.55"/>
+        <KNOB id="VCF:MOD" value="0.45"/>
+        <KNOB id="VCA 1:INITIAL" value="1"/>
+        <KNOB id="VCA 1:MOD" value="0.85"/>
+        <KNOB id="VCA 1:LOW CUT" value="0"/>
+        <KNOB id="VCA 2:INITIAL" value="0"/>
+        <KNOB id="VCA 2:MOD" value="1"/>
+        <KNOB id="MG:RATE" value="0.3"/>
+        <KNOB id="MG:PW" value="0.5"/>
+        <KNOB id="EG 1:ATTACK" value="0.2079"/>
+        <KNOB id="EG 1:DECAY" value="0.39"/>
+        <KNOB id="EG 1:SUSTAIN" value="0.6"/>
+        <KNOB id="EG 1:RELEASE" value="0.39"/>
+        <KNOB id="EG 2:HOLD" value="0.3"/>
+        <KNOB id="EG 2:DELAY" value="0"/>
+        <KNOB id="EG 2:ATTACK" value="0.2079"/>
+        <KNOB id="EG 2:RELEASE" value="0.39"/>
+        <KNOB id="S&amp;H:RATE" value="0.5"/>
+        <KNOB id="DIV:RATIO SWITCH" value="0"/>
+        <KNOB id="INT:TIME" value="0.5"/>
+        <KNOB id="MIX:LEVEL 1" value="0.8"/>
+        <KNOB id="MIX:LEVEL 2" value="0.8"/>
+        <KNOB id="MIX:LEVEL 3" value="0.8"/>
+        <KNOB id="EXT IN:THRESHOLD" value="0.3758"/>
+        <KNOB id="EXT IN:RELEASE" value="0.5316"/>
+        <KNOB id="OUTPUT:MIX" value="1"/>
+        <KNOB id="OUTPUT:LEVEL" value="0.7"/>
+      </DEVICE>
+      <DEVICE kind="ORIGAMI" number="1" name="GLUE" front="open" format="1">
+        <ORIGAMI format="1" unit="ORIGAMI" program="24">
+          <PARAM id="gain" value="0"/>
+          <PARAM id="vca_depth" value="0"/>
+          <PARAM id="vca_source" value="0"/>
+          <PARAM id="wave" value="0.12"/>
+          <PARAM id="emph" value="0"/>
+          <PARAM id="sym" value="0.06"/>
+          <PARAM id="stage1" value="0"/>
+          <PARAM id="stage2" value="0"/>
+          <PARAM id="stage3" value="0"/>
+          <PARAM id="mix" value="1"/>
+          <PARAM id="level" value="0"/>
+          <PARAM id="level_comp" value="1"/>
+          <PARAM id="bypass" value="0"/>
+          <PARAM id="sym1" value="0"/>
+          <PARAM id="sym2" value="0"/>
+          <PARAM id="sym3" value="0"/>
+          <PARAM id="vc1_amt" value="0"/>
+          <PARAM id="vc2_amt" value="0"/>
+          <PARAM id="vc3_amt" value="0"/>
+          <PARAM id="vc1_sym" value="0"/>
+          <PARAM id="vc2_sym" value="0"/>
+          <PARAM id="vc3_sym" value="0"/>
+          <PARAM id="vc1_src" value="0"/>
+          <PARAM id="vc2_src" value="0"/>
+          <PARAM id="vc3_src" value="0"/>
+          <PARAM id="attack" value="1"/>
+          <PARAM id="release" value="80"/>
+          <PARAM id="cv_scale" value="1"/>
+          <PARAM id="vca_law" value="0"/>
+          <PARAM id="quality" value="0"/>
+        </ORIGAMI>
+      </DEVICE>
+      <CABLE a="RACK#1/HOST:IN L" b="RONIN#1/HOST:IN L" age="0"/>
+      <CABLE a="RACK#1/HOST:IN R" b="RONIN#1/HOST:IN R" age="1"/>
+      <CABLE a="RONIN#1/EXT IN:MONO" b="RONIN#1/VCF:IN" age="2"/>
+      <CABLE a="RONIN#1/VCF:OUT" b="RONIN#1/VCA 1:IN" age="3"/>
+      <CABLE a="RONIN#1/VCA 1:OUT" b="RONIN#1/OUTPUT:WET" age="4"/>
+      <CABLE a="RONIN#1/MG:TRI" b="RONIN#1/VCF:CUTOFF" age="5"/>
+      <CABLE a="RONIN#1/HOST:OUT L" b="ORIGAMI#1/IN:IN L" age="6"/>
+      <CABLE a="RONIN#1/HOST:OUT R" b="ORIGAMI#1/IN:IN R" age="7"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT L" b="RACK#1/MAIN:OUT L" age="8"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT R" b="RACK#1/MAIN:OUT R" age="9"/>
+    </JIDAIRACK>
+  </RACK>
+  <RACK name="Tempo Gate FX" category="FX" about="A tempo-synced gate for your track: RACK I/O's TRANSPORT CLK 1/16 fires RONIN's EG 1 on every 16th, which opens VCA 1 on the host audio; ORIGAMI folds the chopped signal. Runs while the DAW plays.">
+    <JIDAIRACK version="3" browser="1" view="back" cablesFront="HIDE PASS-THRU" cablesBack="ALL" scale="100">
+      <DEVICE kind="RACK I/O" number="1" front="open" format="1" level="1"/>
+      <DEVICE kind="RONIN" number="1" name="GATE" front="open" format="2" program="0" effect="1" triShape="triangle">
+        <KNOB id="VCO:RANGE" value="0.5"/>
+        <KNOB id="VCO:FINE" value="0.5"/>
+        <KNOB id="VCO:PW" value="0.5"/>
+        <KNOB id="VCO:FM 1" value="0"/>
+        <KNOB id="VCO:FM 2" value="0"/>
+        <KNOB id="VCF:CUTOFF" value="1"/>
+        <KNOB id="VCF:PEAK" value="0"/>
+        <KNOB id="VCF:MOD" value="0"/>
+        <KNOB id="VCA 1:INITIAL" value="0"/>
+        <KNOB id="VCA 1:MOD" value="1"/>
+        <KNOB id="VCA 1:LOW CUT" value="0"/>
+        <KNOB id="VCA 2:INITIAL" value="0"/>
+        <KNOB id="VCA 2:MOD" value="1"/>
+        <KNOB id="MG:RATE" value="0.5"/>
+        <KNOB id="MG:PW" value="0.5"/>
+        <KNOB id="EG 1:ATTACK" value="0"/>
+        <KNOB id="EG 1:DECAY" value="0.409"/>
+        <KNOB id="EG 1:SUSTAIN" value="0"/>
+        <KNOB id="EG 1:RELEASE" value="0.3721"/>
+        <KNOB id="EG 2:HOLD" value="0.3"/>
+        <KNOB id="EG 2:DELAY" value="0"/>
+        <KNOB id="EG 2:ATTACK" value="0.2079"/>
+        <KNOB id="EG 2:RELEASE" value="0.39"/>
+        <KNOB id="S&amp;H:RATE" value="0.5"/>
+        <KNOB id="DIV:RATIO SWITCH" value="0"/>
+        <KNOB id="INT:TIME" value="0.5"/>
+        <KNOB id="MIX:LEVEL 1" value="0.8"/>
+        <KNOB id="MIX:LEVEL 2" value="0.8"/>
+        <KNOB id="MIX:LEVEL 3" value="0.8"/>
+        <KNOB id="EXT IN:THRESHOLD" value="0.3758"/>
+        <KNOB id="EXT IN:RELEASE" value="0.5316"/>
+        <KNOB id="OUTPUT:MIX" value="1"/>
+        <KNOB id="OUTPUT:LEVEL" value="0.7"/>
+      </DEVICE>
+      <DEVICE kind="ORIGAMI" number="1" name="EDGE" front="open" format="1">
+        <ORIGAMI format="1" unit="ORIGAMI" program="25">
+          <PARAM id="gain" value="0"/>
+          <PARAM id="vca_depth" value="0"/>
+          <PARAM id="vca_source" value="0"/>
+          <PARAM id="wave" value="0.22"/>
+          <PARAM id="emph" value="3"/>
+          <PARAM id="sym" value="0.1"/>
+          <PARAM id="stage1" value="0"/>
+          <PARAM id="stage2" value="0"/>
+          <PARAM id="stage3" value="0"/>
+          <PARAM id="mix" value="0.6"/>
+          <PARAM id="level" value="0"/>
+          <PARAM id="level_comp" value="1"/>
+          <PARAM id="bypass" value="0"/>
+          <PARAM id="sym1" value="0"/>
+          <PARAM id="sym2" value="0"/>
+          <PARAM id="sym3" value="0"/>
+          <PARAM id="vc1_amt" value="0"/>
+          <PARAM id="vc2_amt" value="0"/>
+          <PARAM id="vc3_amt" value="0"/>
+          <PARAM id="vc1_sym" value="0"/>
+          <PARAM id="vc2_sym" value="0"/>
+          <PARAM id="vc3_sym" value="0"/>
+          <PARAM id="vc1_src" value="0"/>
+          <PARAM id="vc2_src" value="0"/>
+          <PARAM id="vc3_src" value="0"/>
+          <PARAM id="attack" value="1"/>
+          <PARAM id="release" value="80"/>
+          <PARAM id="cv_scale" value="1"/>
+          <PARAM id="vca_law" value="0"/>
+          <PARAM id="quality" value="0"/>
+        </ORIGAMI>
+      </DEVICE>
+      <CABLE a="RACK#1/HOST:IN L" b="RONIN#1/HOST:IN L" age="0"/>
+      <CABLE a="RACK#1/HOST:IN R" b="RONIN#1/HOST:IN R" age="1"/>
+      <CABLE a="RONIN#1/EXT IN:MONO" b="RONIN#1/VCF:IN" age="2"/>
+      <CABLE a="RONIN#1/VCF:OUT" b="RONIN#1/VCA 1:IN" age="3"/>
+      <CABLE a="RONIN#1/VCA 1:OUT" b="RONIN#1/OUTPUT:WET" age="4"/>
+      <CABLE a="RONIN#1/EG 1:OUT A" b="RONIN#1/VCA 1:ENV" age="5"/>
+      <CABLE a="RACK#1/TRANSPORT:CLK 1/16" b="RONIN#1/EG 1:TRIG" age="6"/>
+      <CABLE a="RONIN#1/HOST:OUT L" b="ORIGAMI#1/IN:IN L" age="7"/>
+      <CABLE a="RONIN#1/HOST:OUT R" b="ORIGAMI#1/IN:IN R" age="8"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT L" b="RACK#1/MAIN:OUT L" age="9"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT R" b="RACK#1/MAIN:OUT R" age="10"/>
+    </JIDAIRACK>
+  </RACK>
+</JIDAI_STARTER_RACKS>

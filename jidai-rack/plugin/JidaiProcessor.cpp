@@ -3,8 +3,13 @@
 #include "JidaiProcessor.h"
 #include "JidaiEditor.h"
 #include "BinaryData.h"
+#include "StarterRacks.h"
 
 #include "UI/PatchBayLogic.h"
+#include "engine/BushidoState.h"
+#include "origami/plugin/OrigamiState.h"
+#include "origami/plugin/OrigamiPresets.h"
+#include "ShogunState.h"
 
 #include <algorithm>
 #include <utility>
@@ -13,6 +18,8 @@ using namespace jidai;
 
 namespace {
 
+// v2 cable colour names (pattern and preset files, shared with the BUSHIDO and RONIN plugins). The rack draws role
+// colours (JCS R14); these names are only written so those plugins keep a sensible colour.
 const char* kColourNames[] = { "red", "white", "yellow", "green" };
 
 // Tests may swap in their own rack patch list. An empty string is the compiled rack_patches.json.
@@ -66,7 +73,7 @@ juce::var patternToVar (const JidaiProcessor::Pattern& pat)
     o->setProperty ("name", pat.name);
     auto* params = new juce::DynamicObject();
     for (auto& [id, v] : pat.params)
-        params->setProperty (id, v);
+        params->setProperty (id, (double) v);
     o->setProperty ("params", juce::var (params));
     juce::Array<juce::var> cl;
     for (size_t i = 0; i < pat.cables.size(); ++i)
@@ -132,6 +139,24 @@ int cableColor (const JackDesc& a, const JackDesc& b)
     return 1;
 }
 
+// The v2 automatic colour of a cable (cableColor), for the shared pattern/preset files.
+int v2Colour (const Rack& rack, const jidai::CableSpec& c)
+{
+    Device* da = nullptr;
+    Device* db = nullptr;
+    int ja = -1, jb = -1;
+    if (! rack.resolve (c.a, da, ja) || ! rack.resolve (c.b, db, jb))
+        return 0;
+    return cableColor (da->jacks()[(size_t) ja], db->jacks()[(size_t) jb]);
+}
+
+// v2 colour index (red, white, yellow, green) -> v3 swatch (red, yellow, green, blue, white, orange).
+int v3Swatch (int v2)
+{
+    static const int map[4] = { 0, 4, 1, 2 };
+    return map[juce::jlimit (0, 3, v2)];
+}
+
 }
 
 JidaiProcessor::RoninStored JidaiProcessor::roninFromVar (const juce::var& pv)
@@ -141,6 +166,8 @@ JidaiProcessor::RoninStored JidaiProcessor::roninFromVar (const juce::var& pv)
     u.base = (int) pv["base"];
     u.power = pv.hasProperty ("power") ? (bool) pv["power"] : true;
     readPairs (pv["knobs"], u.knobs);
+    u.format = pv.hasProperty ("format") ? (int) pv["format"] : 1;
+    u.triShape = pv["triShape"].toString() == "parabola" ? 1 : 0;
     if (auto* cl = pv["cables"].getArray())
         for (auto& c : *cl)
         {
@@ -156,9 +183,12 @@ juce::var JidaiProcessor::roninToVar (const RoninStored& u)
     o->setProperty ("name", u.name);
     o->setProperty ("base", u.base);
     o->setProperty ("power", u.power);
+    o->setProperty ("format", u.format);
+    if (u.format >= 2)
+        o->setProperty ("triShape", u.triShape == 1 ? "parabola" : "triangle");
     auto* knobs = new juce::DynamicObject();
     for (auto& [id, v] : u.knobs)
-        knobs->setProperty (id, v);
+        knobs->setProperty (id, (double) v);
     o->setProperty ("knobs", juce::var (knobs));
     juce::Array<juce::var> cl;
     for (size_t i = 0; i < u.cables.size(); ++i)
@@ -238,49 +268,210 @@ JidaiProcessor::JidaiProcessor()
     }
 
     resetToDefaultRack();
+    midiScratch_.resize (1024);
+    latencyTimer_.startTimerHz (10);
 }
 
-JidaiProcessor::~JidaiProcessor() = default;
+
+JidaiProcessor::~JidaiProcessor()
+{
+    cancelPendingUpdate();
+    latencyTimer_.stopTimer();
+}
+
+int JidaiProcessor::getNumPrograms()
+{
+    return (int) starterRacks().size();
+}
+
+const juce::String JidaiProcessor::getProgramName (int index)
+{
+    const auto& racks = starterRacks();
+    return index >= 0 && index < (int) racks.size() ? racks[(size_t) index].displayName() : juce::String();
+}
+
+void JidaiProcessor::setCurrentProgram (int index)
+{
+    if (index < 0 || index >= (int) starterRacks().size())
+        return;
+    if (onMessageThread())
+    {
+        discardPendingState();      // this request is newer than anything staged
+        currentProgram_.store (index);
+        restoreProgram (index);
+        rackReplaced();
+        updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withProgramChanged (true));
+        return;
+    }
+    // Any other thread (the VST3 program parameter can arrive on the audio thread): stage it, lock-free.
+    const std::uint32_t seq = ++requestSeq_;
+    pendingProgram_.store (((std::uint64_t) seq << 32) | (std::uint64_t) (index + 1));
+    currentProgram_.store (index);
+    triggerAsyncUpdate();
+}
+
+void JidaiProcessor::restoreProgram (int index)
+{
+    const juce::ScopedLock sl (stateLock_);
+    const int scale = scalePercent;          // the window size is the user's, not the rack's
+    restoreFromXml (*starterRacks()[(size_t) index].state);
+    scalePercent = scale;
+}
+
+bool JidaiProcessor::onMessageThread()
+{
+    // No message manager (command-line tests): the caller's thread is the only one.
+    auto* mm = juce::MessageManager::getInstanceWithoutCreating();
+    return mm == nullptr || mm->isThisTheMessageThread();
+}
+
+void JidaiProcessor::discardPendingState()
+{
+    pendingProgram_.store (0);
+    std::unique_ptr<juce::XmlElement> dropped;
+    {
+        const std::lock_guard<std::mutex> g (pendingLock_);
+        dropped = std::move (pendingXml_);
+        pendingXmlSeq_ = 0;
+    }
+}
+
+bool JidaiProcessor::hasPendingState() const
+{
+    if (pendingProgram_.load() != 0)
+        return true;
+    const std::lock_guard<std::mutex> g (pendingLock_);
+    return pendingXml_ != nullptr;
+}
+
+bool JidaiProcessor::applyPendingState()
+{
+    jassert (onMessageThread());
+    bool programChanged = false;
+    {
+        // Taking the request and restoring it is one step for getStateInformation on another thread: it sees either
+        // the request still staged or the rack it made, never the old rack in between.
+        const juce::ScopedLock sl (stateLock_);
+        const std::uint64_t program = pendingProgram_.exchange (0);
+        std::unique_ptr<juce::XmlElement> xml;
+        std::uint32_t xmlSeq = 0;
+        {
+            const std::lock_guard<std::mutex> g (pendingLock_);
+            xml = std::move (pendingXml_);
+            xmlSeq = pendingXmlSeq_;
+            pendingXmlSeq_ = 0;
+        }
+        // Both replace the whole rack: only the newer one is applied. getCurrentProgram already reports it.
+        if (program != 0 && (xml == nullptr || (std::uint32_t) (program >> 32) > xmlSeq))
+        {
+            restoreProgram ((int) (program & 0xffffffffu) - 1);
+            programChanged = true;
+        }
+        else if (xml != nullptr)
+            restoreFromXml (*xml);
+        else
+            return false;
+    }
+    rackReplaced();
+    if (programChanged)
+        updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withProgramChanged (true));
+    return true;
+}
+
+std::unique_ptr<juce::XmlElement> JidaiProcessor::pendingStateXml() const
+{
+    const std::uint64_t program = pendingProgram_.load();
+    const std::lock_guard<std::mutex> g (pendingLock_);
+    if (program != 0 && (pendingXml_ == nullptr || (std::uint32_t) (program >> 32) > pendingXmlSeq_))
+    {
+        auto xml = std::make_unique<juce::XmlElement> (*starterRacks()[(size_t) (program & 0xffffffffu) - 1].state);
+        xml->setAttribute ("scale", scalePercent);       // as restoreProgram keeps the window size
+        return xml;
+    }
+    return pendingXml_ != nullptr ? std::make_unique<juce::XmlElement> (*pendingXml_) : nullptr;
+}
+
+void JidaiProcessor::rackReplaced()
+{
+    jassert (onMessageThread());
+    if (juce::MessageManager::getInstanceWithoutCreating() != nullptr)
+        sendSynchronousChangeMessage(); // the editor rebuilds its device views now, before anything repaints
+    rack_.releaseRetired();             // nothing references the dropped devices any more
+}
 
 void JidaiProcessor::resetToDefaultRack()
 {
-    rack_.clear();
-    loaded_.clear();
-    addDevice (DeviceKind::Bushido);
-    addDevice (DeviceKind::Ronin);
-    sendChangeMessage();
+    {
+        const juce::ScopedLock sl (stateLock_);
+        rack_.clear();
+        loaded_.clear();
+        rack_.addDevice (DeviceKind::RackIO);
+        refreshLatency();
+    }
+    rackReplaced();
+}
+
+void JidaiProcessor::refreshLatency()
+{
+    const juce::ScopedLock sl (stateLock_);
+    rack_.updateLatency();
+    if (rack_.latency() != getLatencySamples())
+        setLatencySamples (rack_.latency());
 }
 
 // ---------------- devices ----------------
 
-Device* JidaiProcessor::addDevice (DeviceKind kind, int position)
+Device* JidaiProcessor::addDevice (DeviceKind kind, int position, bool route, bool asEffect)
 {
+    const juce::ScopedLock sl (stateLock_);
     Device* d = rack_.addDevice (kind, position);
+    if (d == nullptr)
+        return nullptr;
     if (auto* b = dynamic_cast<BushidoDevice*> (d))
+    {
         loadPattern (b, 0, 0);
+        b->engine().applyNewInstanceDefaults (true, rack_.hostPlaying());
+    }
     if (auto* r = dynamic_cast<RoninDevice*> (d))
         loaded_[r] = { 0, r->program() };
+    if (auto* sg = dynamic_cast<ShogunDevice*> (d))
+        sg->setParam (shogun::P_CLOCK_SOURCE, shogun::stepU (0, 3));     // a new SHOGUN follows the host transport
+    if (route)
+        rack_.autoRoute (d, asEffect);
+    refreshLatency();
     return d;
 }
 
 void JidaiProcessor::removeDevice (Device* device)
 {
+    const juce::ScopedLock sl (stateLock_);
     loaded_.erase (device);
     rack_.removeDevice (device);
+    refreshLatency();
 }
 
 void JidaiProcessor::moveDevice (Device* device, int position)
 {
+    const juce::ScopedLock sl (stateLock_);
     rack_.moveDevice (device, position);
+}
+
+bool JidaiProcessor::setCableColor (int index, int color)
+{
+    const juce::ScopedLock sl (stateLock_);
+    return rack_.setCableColor (index, color);
 }
 
 void JidaiProcessor::setCables (const std::vector<jidai::CableSpec>& cables)
 {
+    const juce::ScopedLock sl (stateLock_);
     rack_.setCables (cables);
+    refreshLatency();
 }
 
 void JidaiProcessor::loadRoninProgram (RoninDevice* ronin, int index)
 {
+    const juce::ScopedLock sl (stateLock_);
     if (rack_.loadRoninProgram (ronin, index))
         loaded_[ronin] = { 0, index };
 }
@@ -306,6 +497,7 @@ BushidoDevice* JidaiProcessor::firstBushido() const
 // Cables on other devices stay. The file lists cables oldest first, and that order is the age order.
 void JidaiProcessor::loadRackPatch (BushidoDevice* bushido, RoninDevice* ronin, int index)
 {
+    const juce::ScopedLock sl (stateLock_);
     if (! juce::isPositiveAndBelow (index, (int) rackPatches_.size()))
         return;
     if (bushido != nullptr && rack_.indexOf (bushido) < 0)
@@ -353,7 +545,7 @@ void JidaiProcessor::loadRackPatch (BushidoDevice* bushido, RoninDevice* ronin, 
         int ja = -1, jb = -1;
         if (! rack_.resolve (a, da, ja) || ! rack_.resolve (b, db, jb))
             continue;
-        next.push_back ({ a, b, cableColor (da->jacks()[(size_t) ja], db->jacks()[(size_t) jb]), age++ });
+        next.push_back ({ a, b, -1, age++ });      // role colour
     }
     rack_.setCables (next);
 }
@@ -382,6 +574,7 @@ std::pair<int, int> JidaiProcessor::loadedPattern (const Device* device) const
 // and cables to other devices stay. A bank B index below the rack patches loads that rack patch instead.
 void JidaiProcessor::loadPattern (BushidoDevice* bushido, int bank, int index)
 {
+    const juce::ScopedLock sl (stateLock_);
     if (bushido == nullptr || (bank != 0 && bank != 1))
         return;
     if (bank == 1 && index < (int) rackPatches_.size())
@@ -398,7 +591,7 @@ void JidaiProcessor::loadPattern (BushidoDevice* bushido, int bank, int index)
     std::vector<jidai::CableSpec> own;
     const std::string prefix = bushido->rackId() + "/";
     for (size_t i = 0; i < pat.cables.size(); ++i)
-        own.push_back ({ prefix + pat.cables[i][0].toStdString(), prefix + pat.cables[i][1].toStdString(), pat.colors[i], 0 });
+        own.push_back ({ prefix + pat.cables[i][0].toStdString(), prefix + pat.cables[i][1].toStdString() });   // role colour
     rack_.replaceInternalCables (bushido, own);
     loaded_[bushido] = { bank, index };
 }
@@ -418,7 +611,7 @@ int JidaiProcessor::savePattern (BushidoDevice* bushido, int bank, const juce::S
         if (c.a.rfind (prefix, 0) != 0 || c.b.rfind (prefix, 0) != 0)
             continue;
         pat.cables.push_back ({ juce::String (c.a.substr (prefix.size())), juce::String (c.b.substr (prefix.size())) });
-        pat.colors.push_back (c.color);
+        pat.colors.push_back (v2Colour (rack_, c));
     }
     banks_[bank].push_back (std::move (pat));
     writeUserPatterns();
@@ -462,6 +655,7 @@ juce::StringArray JidaiProcessor::roninPresetNames (int bank) const
 
 void JidaiProcessor::loadRoninPreset (RoninDevice* ronin, int bank, int index)
 {
+    const juce::ScopedLock sl (stateLock_);
     if (ronin == nullptr || rack_.indexOf (ronin) < 0 || (bank != 0 && bank != 1))
         return;
     const int front = bank == 0 ? kFactoryPresetCount : (int) rackPatches_.size();
@@ -487,9 +681,13 @@ void JidaiProcessor::loadRoninPreset (RoninDevice* ronin, int bank, int index)
         const auto a = mapEndpoint (u.cables[i][0], ronin, nullptr);
         const auto b = mapEndpoint (u.cables[i][1], ronin, nullptr);
         if (! a.empty() && ! b.empty())
-            own.push_back ({ a, b, u.colors[i], 0 });
+            own.push_back ({ a, b });      // role colour
     }
     rack_.replaceInternalCables (ronin, own);
+    if (u.format >= 2)
+        ronin->setTriShape (u.triShape);
+    else
+        migrateRoninFormat1 (ronin);     // a preset saved before RONIN's redesign: same sound under the new laws
     loaded_[ronin] = { bank, index };
 }
 
@@ -501,6 +699,8 @@ int JidaiProcessor::saveRoninPreset (RoninDevice* ronin, int bank, const juce::S
     u.name = name.trim().isEmpty() ? juce::String ("PRESET") : name.trim();
     u.base = ronin->program();
     u.power = ronin->effectOn();
+    u.format = RoninDevice::kStateFormat;
+    u.triShape = ronin->triShape();
     for (int i = 0; i < kPanelKnobCount; ++i)
         u.knobs.push_back ({ juce::String::fromUTF8 (kPanelKnobs[i].section) + ":" + juce::String::fromUTF8 (kPanelKnobs[i].label), ronin->knob (i) });
     const std::string prefix = ronin->rackId() + "/";
@@ -509,7 +709,7 @@ int JidaiProcessor::saveRoninPreset (RoninDevice* ronin, int bank, const juce::S
         if (c.a.rfind (prefix, 0) != 0 || c.b.rfind (prefix, 0) != 0)
             continue;
         u.cables.push_back ({ juce::String (c.a.substr (prefix.size())), juce::String (c.b.substr (prefix.size())) });
-        u.colors.push_back (c.color);
+        u.colors.push_back (v2Colour (rack_, c));
     }
     roninUser_[bank].push_back (std::move (u));
     writeUserRonin();
@@ -546,16 +746,41 @@ bool JidaiProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 void JidaiProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     rack_.prepare (sampleRate, samplesPerBlock);
-    setLatencySamples (0);
+    preparedBlock_.store (juce::jmax (1, samplesPerBlock));
+    refreshLatency();
 }
 
 void JidaiProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
-    midi.clear();    // Effect: no plugin MIDI port. The rack does not read this buffer.
     const int n = buffer.getNumSamples();
     const int ins = getTotalNumInputChannels();
     const int outs = buffer.getNumChannels();
+
+    // Host transport (JCS R5.7) and MIDI for RACK I/O. MIDI never goes back out (no MIDI out port).
+    jidai::Transport t;
+    if (auto* head = getPlayHead())
+        if (auto pos = head->getPosition())
+        {
+            t.valid = true;
+            t.playing = pos->getIsPlaying();
+            if (auto bpm = pos->getBpm()) t.bpm = *bpm;
+            if (auto ppq = pos->getPpqPosition()) t.ppq = *ppq;
+            if (auto smp = pos->getTimeInSamples()) t.samplePosition = *smp;
+        }
+    int events = 0;
+    for (const auto meta : midi)
+    {
+        if (events >= (int) midiScratch_.size())
+            break;
+        const auto m = meta.getMessage();
+        if (m.isNoteOn())
+            midiScratch_[(size_t) events++] = { meta.samplePosition, m.getNoteNumber(), m.getVelocity(), true };
+        else if (m.isNoteOff())
+            midiScratch_[(size_t) events++] = { meta.samplePosition, m.getNoteNumber(), 0, false };
+    }
+    midi.clear();
+
     if (n == 0 || outs < 2)
     {
         buffer.clear();
@@ -564,43 +789,118 @@ void JidaiProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     // Host audio, if any, is read sample by sample before that sample of output is written, so in place is fine.
     const float* inL = ins > 0 ? buffer.getReadPointer (0) : nullptr;
     const float* inR = ins > 1 ? buffer.getReadPointer (1) : inL;
-    rack_.process (inL, inR, buffer.getWritePointer (0), buffer.getWritePointer (1), n);
+    float* outL = buffer.getWritePointer (0);
+    float* outR = buffer.getWritePointer (1);
+    // Hosts may send any block size, larger than prepareToPlay's too: the rack sees blocks of at most that size, each
+    // with its own MIDI (offsets from the chunk) and transport (moved on by the samples before it while playing).
+    const int chunkMax = preparedBlock_.load();
+    const double rate = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
+    int firstEvent = 0;
+    for (int start = 0; start < n;)
+    {
+        const int len = juce::jmin (chunkMax, n - start);
+        int count = 0;
+        const bool last = start + len >= n;     // the last chunk also takes any event the host placed past the block
+        while (firstEvent + count < events && (last || midiScratch_[(size_t) (firstEvent + count)].sample < start + len))
+        {
+            midiScratch_[(size_t) (firstEvent + count)].sample = juce::jmax (0, midiScratch_[(size_t) (firstEvent + count)].sample - start);
+            ++count;
+        }
+        jidai::Transport tc = t;
+        if (t.valid && t.playing && start > 0)
+        {
+            tc.ppq += t.bpm / 60.0 * (double) start / rate;
+            tc.samplePosition += start;
+        }
+        rack_.setTransport (tc);
+        rack_.process (inL != nullptr ? inL + start : nullptr, inR != nullptr ? inR + start : nullptr,
+                       outL + start, outR + start, len, midiScratch_.data() + firstEvent, count);
+        firstEvent += count;
+        start += len;
+    }
     for (int ch = 2; ch < outs; ++ch)
         buffer.clear (ch, 0, n);
 }
 
 // ---------------- state ----------------
+//
+// v3 (JIDAI_RACK_Redesign 4, JCS R6/R7):
+//   <JIDAIRACK version="3" browser view="front|back" cablesFront cablesBack scale>
+//     <DEVICE kind number name folded front="open|closed" format ...device state.../>
+//     <CABLE a b colour age auto legacyInvert/>
+// Older versions migrate (M5): RACK I/O plus cables that reproduce the v2 host routing, BUSHIDO format 0 -> 1,
+// RONIN knob CSV -> knob ids, legacyInvert where the v2 gate law differs (M3), v2 default colours -> role colours.
+
+namespace {
+const char* kModeNames[] = { "all", "hidePass", "selected", "hide" };
+int modeFromName (const juce::String& s, int fallback)
+{
+    for (int i = 0; i < 4; ++i)
+        if (s == kModeNames[i])
+            return i;
+    return fallback;
+}
+juce::String knobId (int k)
+{
+    return juce::String::fromUTF8 (kPanelKnobs[k].section) + ":" + juce::String::fromUTF8 (kPanelKnobs[k].label);
+}
+}
 
 void JidaiProcessor::getStateInformation (juce::MemoryBlock& dest)
 {
+    if (onMessageThread())
+        applyPendingState();        // a staged program or state is the current one: apply it, then save the rack
+    const juce::ScopedLock sl (stateLock_);
+    if (auto pending = pendingStateXml())
+    {
+        copyXmlToBinary (*pending, dest);      // staged but not applied yet: that is the plugin's state
+        return;
+    }
     juce::XmlElement xml ("JIDAIRACK");
-    xml.setAttribute ("version", 2);
+    xml.setAttribute ("version", kStateVersion);
     xml.setAttribute ("browser", browserOpen ? 1 : 0);
+    xml.setAttribute ("view", showBack ? "back" : "front");
+    xml.setAttribute ("cablesFront", kModeNames[juce::jlimit (0, 3, cableModeFront)]);
+    xml.setAttribute ("cablesBack", kModeNames[juce::jlimit (0, 3, cableModeBack)]);
+    xml.setAttribute ("scale", scalePercent);
     for (int i = 0; i < rack_.deviceCount(); ++i)
     {
         Device* d = rack_.device (i);
         auto* e = xml.createNewChildElement ("DEVICE");
         e->setAttribute ("kind", deviceKindName (d->kind()));
         e->setAttribute ("number", d->number);
+        if (! d->name.empty())
+            e->setAttribute ("name", juce::String::fromUTF8 (d->name.c_str()));
         if (d->folded)
             e->setAttribute ("folded", 1);
+        e->setAttribute ("front", d->closed ? "closed" : "open");
+        if (auto* io = dynamic_cast<RackIODevice*> (d))
+        {
+            e->setAttribute ("format", 1);
+            e->setAttribute ("level", (double) io->mainLevel());
+        }
         if (auto* r = dynamic_cast<RoninDevice*> (d))
         {
+            e->setAttribute ("format", RoninDevice::kStateFormat);     // 2: EG real-time law, TRI SHAPE stored
             e->setAttribute ("program", r->program());
             e->setAttribute ("effect", r->effectOn() ? 1 : 0);
+            e->setAttribute ("triShape", r->triShape() == 1 ? "parabola" : "triangle");
             const auto screen = loadedPattern (r);
             if (screen.first >= 0)
             {
                 e->setAttribute ("screenBank", screen.first);
                 e->setAttribute ("screenIndex", screen.second);
             }
-            juce::StringArray knobs;
             for (int k = 0; k < kPanelKnobCount; ++k)
-                knobs.add (juce::String (r->knob (k), 6));
-            e->setAttribute ("knobs", knobs.joinIntoString (","));
+            {
+                auto* ke = e->createNewChildElement ("KNOB");
+                ke->setAttribute ("id", knobId (k));
+                ke->setAttribute ("value", (double) r->knob (k));
+            }
         }
         if (auto* b = dynamic_cast<BushidoDevice*> (d))
         {
+            e->setAttribute ("format", bushido::kFormat);
             e->setAttribute ("bypass", b->bypassed() ? 1 : 0);
             const auto p = loadedPattern (b);
             e->setAttribute ("bank", p.first);
@@ -614,16 +914,56 @@ void JidaiProcessor::getStateInformation (juce::MemoryBlock& dest)
                 pe->setAttribute ("value", (double) b->param (param.id));
             }
         }
+        if (auto* o = dynamic_cast<OrigamiDevice*> (d))
+        {
+            double values[origami::kParamCount];
+            for (int p = 0; p < origami::kParamCount; ++p)
+                values[p] = o->param (p);
+            e->setAttribute ("format", origami::kStateFormat);
+            auto oe = origami::stateToXml (values);
+            if (o->program() >= 0)
+                oe->setAttribute ("program", o->program());      // as the ORIGAMI plugin saves its program
+            e->addChildElement (oe.release());
+        }
+        if (auto* sg = dynamic_cast<ShogunDevice*> (d))
+        {
+            e->setAttribute ("format", jidai::shogunstate::kVersion);     // the SHOGUN plugin's state, unchanged inside
+            e->addChildElement (jidai::shogunstate::toXml (*sg).release());
+        }
     }
     for (auto& c : rack_.cables())
     {
         auto* e = xml.createNewChildElement ("CABLE");
         e->setAttribute ("a", juce::String (c.a));
         e->setAttribute ("b", juce::String (c.b));
-        e->setAttribute ("color", c.color);
+        if (c.color >= 0)
+            e->setAttribute ("colour", c.color);
         e->setAttribute ("age", c.age);
+        if (c.autoRouted)
+            e->setAttribute ("auto", 1);
+        if (c.legacyInvert)
+            e->setAttribute ("legacyInvert", 1);
     }
     copyXmlToBinary (xml, dest);
+}
+
+juce::String JidaiProcessor::migrateRoninFormat1 (RoninDevice* r)
+{
+    const std::string me = r->rackId() + "/";
+    std::vector<std::pair<std::string, std::string>> vcfIn;
+    for (auto& c : rack_.cables())
+        for (const auto& [from, to] : { std::pair (c.a, c.b), std::pair (c.b, c.a) })
+            if (to == me + "VCF:IN")
+                vcfIn.push_back ({ from.rfind (me, 0) == 0 ? from.substr (me.size()) : from, "VCF:IN" });
+    const auto rep = r->migrateFormat1 (vcfIn);
+    juce::String note = juce::String::fromUTF8 (r->displayName().c_str()) + ": EG knobs on the real-time law, VCO TRI SHAPE PARABOLA";
+    if (rep.cutoffCompensated)
+        note << ", VCF CUTOFF " << juce::String (rep.cutoffBefore, 3) << " -> " << juce::String (rep.cutoffAfter, 3);
+    else if (rep.cutoffUnknown)
+        note << ", VCF CUTOFF left as saved (input level unknown)";
+    if (rep.attackWasStalled)
+        note << ", a stalled EG attack now completes";
+    return note + ".";
 }
 
 void JidaiProcessor::setStateInformation (const void* data, int size)
@@ -631,31 +971,83 @@ void JidaiProcessor::setStateInformation (const void* data, int size)
     auto xml = getXmlFromBinary (data, size);
     if (xml == nullptr || ! xml->hasTagName ("JIDAIRACK"))
         return;
-    restoreFromXml (*xml);
-    sendChangeMessage();
+    if (onMessageThread())
+    {
+        discardPendingState();      // this state is newer than anything staged
+        restoreFromXml (*xml);
+        rackReplaced();
+        return;
+    }
+    // Another thread: stage it; the message thread applies it (AsyncUpdater), newest request wins.
+    {
+        const std::lock_guard<std::mutex> g (pendingLock_);
+        pendingXml_ = std::move (xml);
+        pendingXmlSeq_ = ++requestSeq_;
+    }
+    triggerAsyncUpdate();
 }
 
 void JidaiProcessor::restoreFromXml (const juce::XmlElement& xml)
 {
+    const juce::ScopedLock sl (stateLock_);
+    const int version = xml.getIntAttribute ("version", 1);
+    if (version > kStateVersion)
+    {
+        // JCS R7: a newer rack is never half-loaded. The current rack stays.
+        migrationNotice = "This rack was saved by a newer JIDAI RACK (version " + juce::String (version) + ") and was not loaded.";
+        return;
+    }
     rack_.clear();
     loaded_.clear();
+    migrationNotice.clear();
     browserOpen = xml.getIntAttribute ("browser", 1) != 0;
-    const int version = xml.getIntAttribute ("version", 1);
+    showBack = xml.getStringAttribute ("view", "front") == "back";
+    cableModeFront = modeFromName (xml.getStringAttribute ("cablesFront"), CablesHidePassThru);
+    cableModeBack = modeFromName (xml.getStringAttribute ("cablesBack"), CablesAll);
+    scalePercent = juce::jlimit (50, 200, xml.getIntAttribute ("scale", 100));
+
+    // Cables first (raw): BUSHIDO's format migration reads them.
+    std::vector<std::pair<std::string, std::string>> rawCables;
+    for (auto* e : xml.getChildWithTagNameIterator ("CABLE"))
+        rawCables.push_back ({ e->getStringAttribute ("a").toStdString(), e->getStringAttribute ("b").toStdString() });
+
+    if (version >= 3 && xml.getChildByName ("DEVICE") == nullptr)
+        rack_.addDevice (DeviceKind::RackIO);
+    std::vector<RoninDevice*> roninFormat1;     // RONINs saved before RONIN's redesign: migrated once cables are set
+    std::vector<std::pair<ShogunDevice*, std::vector<std::pair<std::string, std::string>>>> shogunBay;   // in device order
+    jidai::shogunstate::Dropped shogunDropped;     // saved cables on jacks SHOGUN no longer has (or unknown ids)
     for (auto* e : xml.getChildWithTagNameIterator ("DEVICE"))
     {
-        const auto kind = e->getStringAttribute ("kind") == "RONIN" ? DeviceKind::Ronin : DeviceKind::Bushido;
+        DeviceKind kind = DeviceKind::Bushido;
+        if (deviceKindFromName (e->getStringAttribute ("kind").toStdString(), kind) == nullptr)
+            continue;
         Device* d = rack_.addDevice (kind, -1, e->getIntAttribute ("number", 0));
         if (d == nullptr)
             continue;
         d->folded = e->getIntAttribute ("folded") != 0;
+        d->closed = e->getStringAttribute ("front", "open") == "closed";
+        d->name = e->getStringAttribute ("name").toStdString();
+        if (auto* io = dynamic_cast<RackIODevice*> (d))
+            io->setMainLevel ((float) e->getDoubleAttribute ("level", 1.0));
         if (auto* r = dynamic_cast<RoninDevice*> (d))
         {
             rack_.loadRoninProgram (r, e->getIntAttribute ("program", kDefaultFactoryPreset));
             r->setEffectOn (e->getIntAttribute ("effect", 1) != 0);
-            juce::StringArray knobs;
-            knobs.addTokens (e->getStringAttribute ("knobs"), ",", "");
-            for (int k = 0; k < knobs.size() && k < kPanelKnobCount; ++k)
-                r->setKnob (k, knobs[k].getFloatValue());
+            if (e->hasAttribute ("knobs"))
+            {
+                // v1/v2: a CSV in kPanelKnobs order (M5: knob CSV -> knob ids on the next save).
+                juce::StringArray knobs;
+                knobs.addTokens (e->getStringAttribute ("knobs"), ",", "");
+                for (int k = 0; k < knobs.size() && k < kPanelKnobCount; ++k)
+                    r->setKnob (k, knobs[k].getFloatValue());
+            }
+            for (auto* ke : e->getChildWithTagNameIterator ("KNOB"))
+                setRoninKnob (r, ke->getStringAttribute ("id"), (float) ke->getDoubleAttribute ("value"));
+            const int format = version >= 3 ? e->getIntAttribute ("format", 1) : 1;
+            if (format >= 2)
+                r->setTriShape (e->getStringAttribute ("triShape", "triangle") == "parabola" ? 1 : 0);
+            else
+                roninFormat1.push_back (r);
             if (e->hasAttribute ("screenBank"))
                 loaded_[r] = { e->getIntAttribute ("screenBank"), e->getIntAttribute ("screenIndex") };
             else
@@ -664,8 +1056,14 @@ void JidaiProcessor::restoreFromXml (const juce::XmlElement& xml)
         if (auto* b = dynamic_cast<BushidoDevice*> (d))
         {
             b->setBypassed (e->getIntAttribute ("bypass") != 0);
+            std::map<std::string, float> params;
             for (auto* pe : e->getChildWithTagNameIterator ("PARAM"))
-                b->setParam (pe->getStringAttribute ("id").toStdString(), (float) pe->getDoubleAttribute ("value"));
+                params[pe->getStringAttribute ("id").toStdString()] = (float) pe->getDoubleAttribute ("value");
+            const int format = version >= 3 ? e->getIntAttribute ("format", bushido::kFormat) : 0;
+            const auto report = bushido::migrate (format, params, rawCables, b->rackId());
+            if (! report.readOnly)
+                for (auto& [id, v] : params)
+                    b->setParam (id, v);
             int bank = e->getIntAttribute ("bank", -1), pattern = e->getIntAttribute ("pattern", -1);
             // Version 1 stored bank B as user entries only. The rack patches now sit in front of them.
             if (version < 2 && bank == 1 && pattern >= 0)
@@ -673,12 +1071,110 @@ void JidaiProcessor::restoreFromXml (const juce::XmlElement& xml)
             if (bank >= 0)
                 loaded_[b] = { bank, pattern };
         }
+        if (auto* o = dynamic_cast<OrigamiDevice*> (d))
+            if (auto* oe = e->getChildByName (origami::kStateUnit))
+            {
+                double values[origami::kParamCount];
+                if (origami::stateFromXml (*oe, values).ok)
+                {
+                    for (int p = 0; p < origami::kParamCount; ++p)
+                        o->setParam (p, values[p]);
+                    // The factory preset shown on the face: the saved choice, or else the preset these values are.
+                    const auto& bank = origami::factoryPresets();
+                    int program = oe->getIntAttribute ("program", -1);
+                    if (program < 0 || program >= (int) bank.size())
+                    {
+                        program = -1;
+                        for (size_t i = 0; i < bank.size() && program < 0; ++i)
+                        {
+                            bool same = true;
+                            for (int p = 0; p < origami::kParamCount && same; ++p)
+                                same = p == origami::kBypass || std::abs (bank[i].values[p] - values[p]) < 1e-9;
+                            program = same ? (int) i : -1;
+                        }
+                    }
+                    o->setProgram (program);
+                }
+            }
+        if (auto* sg = dynamic_cast<ShogunDevice*> (d))
+            if (auto* se = e->getChildByName (jidai::shogunstate::kTag))
+            {
+                // A SHOGUN plugin patch may carry cables of SHOGUN's own bay: they become rack cables on this device.
+                std::vector<std::pair<std::string, std::string>> bay;
+                if (jidai::shogunstate::fromXml (*sg, *se, &bay, &shogunDropped) && ! bay.empty())
+                    shogunBay.push_back ({ sg, std::move (bay) });
+            }
     }
+
     std::vector<jidai::CableSpec> cables;
+    int kept = 0;
     for (auto* e : xml.getChildWithTagNameIterator ("CABLE"))
-        cables.push_back ({ e->getStringAttribute ("a").toStdString(), e->getStringAttribute ("b").toStdString(),
-                            e->getIntAttribute ("color"), e->getIntAttribute ("age", (int) cables.size()) });
+    {
+        jidai::CableSpec c { e->getStringAttribute ("a").toStdString(), e->getStringAttribute ("b").toStdString() };
+        if (jidai::shogunstate::isRemovedJack (c.a) || jidai::shogunstate::isRemovedJack (c.b))
+        {
+            // SHOGUN's CLOCK:FILL IN and MOD:LANE A are gone (never read / always 0 V): the cable is dropped and reported.
+            ++shogunDropped.cables;
+            ++shogunDropped.removedJacks;
+            continue;
+        }
+        c.age = e->getIntAttribute ("age", (int) cables.size());
+        if (version >= 3)
+        {
+            c.color = e->getIntAttribute ("colour", -1);
+            c.autoRouted = e->getIntAttribute ("auto") != 0;
+            c.legacyInvert = e->getIntAttribute ("legacyInvert") != 0;
+        }
+        else
+        {
+            // JCS M4c: a v2 colour that was the automatic one loads as the role colour; a changed one as an override.
+            // RONIN-internal cables took their colour from the program order, never from the user: role colour.
+            const int stored = e->getIntAttribute ("color");
+            const auto pa = c.a.substr (0, c.a.find ('/')), pb = c.b.substr (0, c.b.find ('/'));
+            const bool internalRonin = pa == pb && pa.rfind ("RONIN#", 0) == 0;
+            c.color = internalRonin || stored == v2Colour (rack_, c) ? -1 : v3Swatch (stored);
+            c.legacyInvert = rack_.legacyInversionDiffers (c.a, c.b);     // M3
+            kept += c.legacyInvert ? 1 : 0;
+        }
+        cables.push_back (c);
+    }
+    for (const auto& [sg, bay] : shogunBay)
+        for (const auto& [a, b] : bay)
+        {
+            jidai::CableSpec c { sg->rackId() + "/" + a, sg->rackId() + "/" + b };
+            c.age = (int) cables.size();
+            cables.push_back (c);
+        }
     rack_.setCables (cables);
+
+    // RONIN format 1 -> 2 (RONIN_Redesign 6): M-R1 EG knobs, M-R2 PARABOLA, M-R5 VCF CUTOFF; M-R3 is M3 above.
+    juce::String roninNotes;
+    for (auto* r : roninFormat1)
+        roninNotes << " " << migrateRoninFormat1 (r);
+    if (version < 3)
+    {
+        rack_.applyLegacyHostRouting();     // M5: RACK I/O, HOST IN -> first RONIN, every RONIN -> MAIN OUT
+        migrationNotice = "Rack from version " + juce::String (version) + " updated to the current cable levels.";
+        if (kept > 0)
+            migrationNotice << " " << kept << (kept == 1 ? " cable kept its" : " cables kept their") << " old S-trig inversion.";
+    }
+    else if (rack_.rackIO() == nullptr)
+        rack_.addDevice (DeviceKind::RackIO);
+    if (roninNotes.isNotEmpty())
+        migrationNotice = (migrationNotice.isEmpty() ? juce::String ("RONIN updated:") : migrationNotice + " RONIN:") + roninNotes;
+    if (shogunDropped.cables > 0)
+    {
+        juce::String note;
+        const int removed = shogunDropped.removedJacks, other = shogunDropped.cables - shogunDropped.removedJacks;
+        if (removed > 0)
+            note << "SHOGUN no longer has the FILL IN and LANE A jacks: " << removed << (removed == 1 ? " cable on them was" : " cables on them were")
+                 << " removed.";
+        if (other > 0)
+            note << (note.isEmpty() ? "SHOGUN: " : " ") << other << (other == 1 ? " saved cable" : " saved cables")
+                 << " to an unknown jack " << (other == 1 ? "was" : "were") << " removed.";
+        migrationNotice = migrationNotice.isEmpty() ? note : migrationNotice + " " + note;
+    }
+    refreshLatency();
 }
 
 juce::AudioProcessorEditor* JidaiProcessor::createEditor()

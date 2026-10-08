@@ -2,12 +2,74 @@
 
 #include "Rack.h"
 
+#include "jidai/jcs/Graph.h"
+
 #include <algorithm>
+#include <cmath>
 
 namespace jidai {
 
-const char* deviceKindName (DeviceKind kind) { return kind == DeviceKind::Bushido ? "BUSHIDO" : "RONIN"; }
-const char* deviceKindPrefix (DeviceKind kind) { return kind == DeviceKind::Bushido ? "BUSHIDO" : "RONIN"; }
+const char* deviceKindName (DeviceKind kind)
+{
+    switch (kind)
+    {
+        case DeviceKind::Bushido: return "BUSHIDO";
+        case DeviceKind::Ronin: return "RONIN";
+        case DeviceKind::Origami: return "ORIGAMI";
+        case DeviceKind::RackIO: return "RACK I/O";
+        case DeviceKind::Shogun: return "SHOGUN";
+    }
+    return "";
+}
+const char* deviceKindPrefix (DeviceKind kind) { return kind == DeviceKind::RackIO ? "RACK" : deviceKindName (kind); }
+
+const char* deviceKindFromName (const std::string& n, DeviceKind& kind)
+{
+    for (DeviceKind k : { DeviceKind::Bushido, DeviceKind::Ronin, DeviceKind::Origami, DeviceKind::RackIO, DeviceKind::Shogun })
+        if (n == deviceKindName (k) || n == deviceKindPrefix (k))
+        {
+            kind = k;
+            return deviceKindName (k);
+        }
+    return nullptr;
+}
+
+std::vector<JackGroup> Device::jackGroups() const
+{
+    std::vector<JackGroup> groups;
+    for (int i = 0; i < (int) jacks_.size(); ++i)
+    {
+        if (jacks_[(size_t) i].unit == nullptr)
+            continue;
+        const std::string section = jacks_[(size_t) i].id.substr (0, jacks_[(size_t) i].id.find (':'));
+        auto it = std::find_if (groups.begin(), groups.end(), [&] (const JackGroup& g) { return g.title == section; });
+        if (it == groups.end())
+            groups.push_back ({ section, { i } });
+        else
+            it->jacks.push_back (i);
+    }
+    return groups;
+}
+
+jidai::jcs::Role Device::jackRole (int jack) const
+{
+    using jidai::jcs::Role;
+    if (jack < 0 || jack >= (int) jacks_.size() || jacks_[(size_t) jack].unit == nullptr)
+        return Role::CV;
+    const JackDesc& j = jacks_[(size_t) jack];
+    const std::string label = j.id.substr (j.id.find (':') + 1);
+    if (j.desc.type == PortType::Audio)
+        return Role::Audio;
+    if (j.desc.type == PortType::Gate)
+        return j.desc.strigVolts ? Role::STrig : Role::GateClk;
+    if (j.desc.dir == PortDir::In && j.unit->strigInput (j.port))
+        return Role::STrig;
+    if (label.find ("HZ/V") != std::string::npos)
+        return Role::HzvLin;
+    if (label.find ("V/OCT") != std::string::npos)
+        return Role::VOct;
+    return Role::CV;
+}
 
 int Device::findJack (const std::string& id) const
 {
@@ -117,6 +179,8 @@ int Rack::nextNumber (DeviceKind kind) const
 
 Device* Rack::addDevice (DeviceKind kind, int position, int number)
 {
+    if (kind == DeviceKind::RackIO && rackIO_ != nullptr)
+        return nullptr;
     if (number > 0)
         for (auto& d : devices_)
             if (d->kind() == kind && d->number == number)
@@ -124,64 +188,197 @@ Device* Rack::addDevice (DeviceKind kind, int position, int number)
     std::unique_ptr<Device> made;
     if (kind == DeviceKind::Ronin)
         made = std::make_unique<RoninDevice>();
+    else if (kind == DeviceKind::Origami)
+        made = std::make_unique<OrigamiDevice>();
+    else if (kind == DeviceKind::RackIO)
+        made = std::make_unique<RackIODevice>();
+    else if (kind == DeviceKind::Shogun)
+        made = std::make_unique<ShogunDevice>();
     else
         made = std::make_unique<BushidoDevice>();
     made->number = number > 0 ? number : nextNumber (kind);
-    made->prepare (sampleRate_);
-    Device* d = made.get();
 
     std::vector<CableSpec> internal;
-    if (auto* ronin = dynamic_cast<RoninDevice*> (d))
+    if (auto* ronin = dynamic_cast<RoninDevice*> (made.get()))
     {
         std::vector<std::pair<int, int>> pairs;
         ronin->loadProgram (ronin->program(), pairs);
-        for (size_t i = 0; i < pairs.size(); ++i)
-            internal.push_back ({ jackId (*d, pairs[i].first), jackId (*d, pairs[i].second), (int) (i % 4), 0 });
+        for (const auto& pr : pairs)
+            internal.push_back ({ jackId (*ronin, pr.first), jackId (*ronin, pr.second) });
     }
+    return place (std::move (made), position, std::move (internal));
+}
 
+Device* Rack::adoptDevice (std::unique_ptr<Device> device, int position)
+{
+    if (device == nullptr || (device->kind() == DeviceKind::RackIO && rackIO_ != nullptr))
+        return nullptr;
+    for (auto& d : devices_)
+        if (d->kind() == device->kind() && d->number == device->number)
+            device->number = nextNumber (device->kind());
+    return place (std::move (device), position, {});
+}
+
+Device* Rack::place (std::unique_ptr<Device> made, int position, std::vector<CableSpec> internal)
+{
+    made->prepare (sampleRate_);
+    Device* d = made.get();
+    std::lock_guard<std::mutex> g (lock_);
+    if (d->kind() == DeviceKind::RackIO)
     {
-        std::lock_guard<std::mutex> g (lock_);
-        if (position < 0 || position > (int) devices_.size())
-            position = (int) devices_.size();
-        devices_.insert (devices_.begin() + position, std::move (made));
-        for (auto& c : internal)
-        {
-            c.age = nextAge_++;
-            cables_.push_back (c);
-        }
-        rebuild();
+        position = 0;
+        rackIO_ = static_cast<RackIODevice*> (d);
     }
+    else if (position < 0 || position > (int) devices_.size())
+        position = (int) devices_.size();
+    else
+        position = std::max (position, firstPosition());
+    devices_.insert (devices_.begin() + position, std::move (made));
+    for (auto& c : internal)
+    {
+        c.age = nextAge_++;
+        cables_.push_back (c);
+    }
+    rebuild();
     return d;
+}
+
+Device* Rack::insertNew (DeviceKind kind, int position, bool route)
+{
+    Device* d = addDevice (kind, position);
+    if (d == nullptr)
+        return nullptr;
+    if (auto* b = dynamic_cast<BushidoDevice*> (d))
+        b->engine().applyNewInstanceDefaults (true, hostPlaying());
+    if (route)
+        autoRoute (d);
+    return d;
+}
+
+bool Rack::hasCable (const std::string& a, const std::string& b) const
+{
+    for (const auto& c : cables_)
+        if ((c.a == a && c.b == b) || (c.a == b && c.b == a))
+            return true;
+    return false;
+}
+
+void Rack::addCableLocked (const std::string& a, const std::string& b, bool autoRouted)
+{
+    CableSpec c { a, b };
+    c.age = nextAge_++;
+    c.autoRouted = autoRouted;
+    cables_.push_back (c);
+}
+
+int Rack::autoRoute (Device* device, bool asEffect)
+{
+    const int index = indexOf (device);
+    if (index < 0 || rackIO_ == nullptr || device == rackIO_)
+        return 0;
+    const std::string io = rackIO_->rackId() + "/";
+    const std::string me = device->rackId() + "/";
+    std::vector<std::pair<std::string, std::string>> want;
+    auto add = [&] (const std::string& from, const std::string& to)
+    {
+        if (check (from, to) == Check::Ok && ! hasCable (from, to))
+            want.push_back ({ from, to });
+    };
+    switch (device->kind())
+    {
+        case DeviceKind::Ronin:
+            add (me + RoninDevice::kHostOutL, io + "MAIN:OUT L");
+            add (me + RoninDevice::kHostOutR, io + "MAIN:OUT R");
+            if (asEffect)
+            {
+                add (io + "HOST:IN L", me + RoninDevice::kHostInL);
+                add (io + "HOST:IN R", me + RoninDevice::kHostInR);
+            }
+            if (index > 0)
+                if (auto* above = dynamic_cast<BushidoDevice*> (devices_[(size_t) index - 1].get()))
+                {
+                    const std::string seq = above->rackId() + "/";
+                    const bool lin = above->engine().law (0) == rack::pitch::Law::HzvLin;
+                    add (seq + "OUTPUTS:CV A", me + (lin ? "VCO:HZ/V" : "VCO:V/OCT"));
+                    add (seq + "OUTPUTS:GATE A", me + "EG 1:TRIG");
+                }
+            break;
+        case DeviceKind::Origami:
+            add (io + "HOST:IN L", me + "HOST:IN L");
+            add (io + "HOST:IN R", me + "HOST:IN R");
+            add (me + "HOST:OUT L", io + "MAIN:OUT L");
+            add (me + "HOST:OUT R", io + "MAIN:OUT R");
+            break;
+        case DeviceKind::Shogun:       // the stereo mix to the host; its clock follows the host (CLOCK:SOURCE HOST)
+            add (me + "MIX:L", io + "MAIN:OUT L");
+            add (me + "MIX:R", io + "MAIN:OUT R");
+            break;
+        case DeviceKind::Bushido:      // no audio out to the host by default (MIXER:OUT is a mixer for patching)
+        case DeviceKind::RackIO:
+            break;
+    }
+    if (want.empty())
+        return 0;
+    std::lock_guard<std::mutex> g (lock_);
+    for (const auto& [a, b] : want)
+        addCableLocked (a, b, true);
+    rebuild();
+    return (int) want.size();
+}
+
+void Rack::applyLegacyHostRouting()
+{
+    if (rackIO_ == nullptr)
+        addDevice (DeviceKind::RackIO);
+    const std::string io = rackIO_->rackId() + "/";
+    std::lock_guard<std::mutex> g (lock_);
+    bool first = true;
+    for (auto& d : devices_)
+    {
+        if (d->kind() != DeviceKind::Ronin)
+            continue;
+        const std::string me = d->rackId() + "/";
+        if (first)
+        {
+            if (! hasCable (io + "HOST:IN L", me + RoninDevice::kHostInL)) addCableLocked (io + "HOST:IN L", me + RoninDevice::kHostInL, false);
+            if (! hasCable (io + "HOST:IN R", me + RoninDevice::kHostInR)) addCableLocked (io + "HOST:IN R", me + RoninDevice::kHostInR, false);
+            first = false;
+        }
+        if (! hasCable (me + RoninDevice::kHostOutL, io + "MAIN:OUT L")) addCableLocked (me + RoninDevice::kHostOutL, io + "MAIN:OUT L", false);
+        if (! hasCable (me + RoninDevice::kHostOutR, io + "MAIN:OUT R")) addCableLocked (me + RoninDevice::kHostOutR, io + "MAIN:OUT R", false);
+    }
+    rebuild();
 }
 
 bool Rack::removeDevice (Device* device)
 {
-    std::unique_ptr<Device> removed;
-    {
-        std::lock_guard<std::mutex> g (lock_);
-        const int index = indexOf (device);
-        if (index < 0)
-            return false;
-        const std::string prefix = device->rackId() + "/";
-        cables_.erase (std::remove_if (cables_.begin(), cables_.end(), [&prefix] (const CableSpec& c)
-                                       { return c.a.rfind (prefix, 0) == 0 || c.b.rfind (prefix, 0) == 0; }),
-                       cables_.end());
-        removed = std::move (devices_[(size_t) index]);
-        devices_.erase (devices_.begin() + index);
-        rebuild();
-    }
-    return true;    // `removed` is freed here, after the audio thread has the routing without it
+    if (device != nullptr && device == rackIO_)
+        return false;
+    std::lock_guard<std::mutex> g (lock_);
+    const int index = indexOf (device);
+    if (index < 0)
+        return false;
+    const std::string prefix = device->rackId() + "/";
+    cables_.erase (std::remove_if (cables_.begin(), cables_.end(), [&prefix] (const CableSpec& c)
+                                   { return c.a.rfind (prefix, 0) == 0 || c.b.rfind (prefix, 0) == 0; }),
+                   cables_.end());
+    retired_.push_back (std::move (devices_[(size_t) index]));
+    devices_.erase (devices_.begin() + index);
+    rebuild();      // the audio thread gets the routing without it; the device itself waits in retired_
+    return true;
 }
 
 bool Rack::moveDevice (Device* device, int position)
 {
+    if (device != nullptr && device == rackIO_)
+        return false;
     std::lock_guard<std::mutex> g (lock_);
     const int index = indexOf (device);
     if (index < 0)
         return false;
     auto keep = std::move (devices_[(size_t) index]);
     devices_.erase (devices_.begin() + index);
-    position = std::clamp (position, 0, (int) devices_.size());
+    position = std::clamp (position, firstPosition(), (int) devices_.size());
     devices_.insert (devices_.begin() + position, std::move (keep));
     rebuild();
     return true;
@@ -189,12 +386,22 @@ bool Rack::moveDevice (Device* device, int position)
 
 void Rack::clear()
 {
-    std::vector<std::unique_ptr<Device>> removed;
+    std::lock_guard<std::mutex> g (lock_);
+    for (auto& d : devices_)
+        retired_.push_back (std::move (d));
+    devices_.clear();
+    rackIO_ = nullptr;
+    cables_.clear();
+    rebuild();      // the devices wait in retired_ until releaseRetired()
+}
+
+void Rack::releaseRetired()
+{
+    // Retired devices are in neither devices_ nor the audio graph (rebuild() swapped them out): freed outside the lock.
+    std::vector<std::unique_ptr<Device>> gone;
     {
         std::lock_guard<std::mutex> g (lock_);
-        removed.swap (devices_);
-        cables_.clear();
-        rebuild();
+        gone.swap (retired_);
     }
 }
 
@@ -233,9 +440,50 @@ Rack::Check Rack::connect (const std::string& a, const std::string& b, int color
     if (c != Check::Ok)
         return c;
     std::lock_guard<std::mutex> g (lock_);
-    cables_.push_back ({ a, b, color, nextAge_++ });
+    CableSpec spec { a, b, color, nextAge_++ };
+    cables_.push_back (spec);
     rebuild();
     return Check::Ok;
+}
+
+bool Rack::setCableColor (int index, int color)
+{
+    std::lock_guard<std::mutex> g (lock_);
+    if (index < 0 || index >= (int) cables_.size())
+        return false;
+    cables_[(size_t) index].color = color;      // colour never changes sound: no rebuild
+    return true;
+}
+
+bool Rack::legacyInversionDiffers (const std::string& a, const std::string& b) const
+{
+    Device* da = nullptr;
+    Device* db = nullptr;
+    int ja = -1, jb = -1;
+    if (! resolve (a, da, ja) || ! resolve (b, db, jb))
+        return false;
+    const JackDesc& A = da->jacks()[(size_t) ja];
+    const JackDesc& B = db->jacks()[(size_t) jb];
+    if (A.unit == nullptr || B.unit == nullptr || A.desc.dir == B.desc.dir)
+        return false;
+    const JackDesc& out = A.desc.dir == PortDir::Out ? A : B;
+    const JackDesc& in = A.desc.dir == PortDir::Out ? B : A;
+    if (out.desc.type != PortType::Gate)
+        return false;
+    const bool destPlain = in.unit->plainVoltGates();
+    const bool destStrig = in.unit->strigInput (in.port);
+    if (! destPlain)
+        // v2 inverted a non-S-trig gate into any non-Gate RONIN input; JCS inverts only into S-trig inputs.
+        return ! out.desc.strigVolts && in.desc.type != PortType::Gate && ! destStrig;
+    // v2 turned an S-trig source into a plain input positive (held = 5 V); JCS passes it raw (held = 0 V).
+    return out.desc.strigVolts && ! out.unit->plainVoltGates();
+}
+
+jidai::jcs::Role Rack::jackRole (const std::string& id) const
+{
+    Device* d = nullptr;
+    int j = -1;
+    return resolve (id, d, j) ? d->jackRole (j) : jidai::jcs::Role::CV;
 }
 
 bool Rack::disconnect (const std::string& a, const std::string& b)
@@ -279,33 +527,75 @@ bool Rack::loadRoninProgram (RoninDevice* ronin, int index)
         if (! ronin->loadProgram (index, pairs))
             return false;
         for (size_t i = 0; i < pairs.size(); ++i)
-            internal.push_back ({ jackId (*ronin, pairs[i].first), jackId (*ronin, pairs[i].second), (int) (i % 4), 0 });
+            internal.push_back ({ jackId (*ronin, pairs[i].first), jackId (*ronin, pairs[i].second) });
     }
     replaceInternalCables (ronin, internal);
     return true;
+}
+
+int Rack::pathLatency (const Device* device) const
+{
+    const int i = indexOf (device);
+    return i >= 0 && i < (int) devicePath_.size() ? devicePath_[(size_t) i] : 0;
+}
+
+bool Rack::updateLatency()
+{
+    std::lock_guard<std::mutex> g (lock_);
+    bool changed = deviceLatency_.size() != devices_.size();
+    for (auto& d : devices_)
+        if (d->needsPrepare())
+        {
+            d->prepare (sampleRate_);     // audio is held off by lock_ (process() try-locks and outputs silence)
+            changed = true;
+        }
+    for (size_t i = 0; ! changed && i < devices_.size(); ++i)
+        changed = deviceLatency_[i] != devices_[i]->latencySamples();
+    if (changed)
+        rebuild();
+    return changed;
 }
 
 // Caller holds lock_. Allocates (message thread), then swaps the routing in; the old one is freed here too.
 void Rack::rebuild()
 {
     std::vector<Unit*> units;
-    ronins_.clear();
+    std::vector<int> unitDevice;
+    std::vector<OrderEdge> order;
     bushidos_.clear();
-    for (auto& d : devices_)
+    deviceLatency_.assign (devices_.size(), 0);
+    for (size_t di = 0; di < devices_.size(); ++di)
     {
+        auto& d = devices_[di];
+        deviceLatency_[di] = std::max (0, d->latencySamples());
         for (Unit* u : d->units())
+        {
             units.push_back (u);
-        if (auto* r = dynamic_cast<RoninDevice*> (d.get()))
-            ronins_.push_back (r);
+            unitDevice.push_back ((int) di);
+        }
+        for (const auto& o : d->orderEdges())
+            order.push_back (o);
         if (auto* b = dynamic_cast<BushidoDevice*> (d.get()))
             bushidos_.push_back (b);
     }
-
-    auto byAge = cables_;
-    std::stable_sort (byAge.begin(), byAge.end(), [] (const CableSpec& x, const CableSpec& y) { return x.age < y.age; });
-    std::vector<GraphCable> graphCables;
-    for (const auto& c : byAge)
+    auto unitIndex = [&units] (const Unit* u)
     {
+        const auto it = std::find (units.begin(), units.end(), u);
+        return it == units.end() ? -1 : (int) (it - units.begin());
+    };
+
+    // Oldest first; graphCables[k] came from cables_[from[k]].
+    std::vector<size_t> byAge (cables_.size());
+    for (size_t i = 0; i < byAge.size(); ++i)
+        byAge[i] = i;
+    std::stable_sort (byAge.begin(), byAge.end(), [this] (size_t x, size_t y) { return cables_[x].age < cables_[y].age; });
+    std::vector<GraphCable> graphCables;
+    std::vector<size_t> from;
+    std::vector<char> sourceAudio, intoMain;
+    info_.assign (cables_.size(), CableInfo {});
+    for (size_t idx : byAge)
+    {
+        const auto& c = cables_[idx];
         Device* da = nullptr;
         Device* db = nullptr;
         int ja = -1, jb = -1;
@@ -315,14 +605,119 @@ void Rack::rebuild()
         const JackDesc& B = db->jacks()[(size_t) jb];
         if (A.unit == nullptr || B.unit == nullptr || A.desc.dir == B.desc.dir)
             continue;    // output to output or input to input carries nothing
-        const JackDesc& out = A.desc.dir == PortDir::Out ? A : B;
-        const JackDesc& in = A.desc.dir == PortDir::Out ? B : A;
-        graphCables.push_back ({ out.unit, out.port, in.unit, in.port });
+        const bool aOut = A.desc.dir == PortDir::Out;
+        const JackDesc& out = aOut ? A : B;
+        const JackDesc& in = aOut ? B : A;
+        const Device* outDev = aOut ? da : db;
+        const Device* inDev = aOut ? db : da;
+        const int outJack = aOut ? ja : jb, inJack = aOut ? jb : ja;
+        info_[idx].role = outDev->jackRole (outJack);
+        info_[idx].badge = jidai::jcs::cableBadge (info_[idx].role, inDev->jackRole (inJack));
+        // "gate converted to S-trig" only where the graph converts: a Gate-type output that is not already S-trig.
+        // A GATE/CLK-role jack of CV type (RONIN DIV, S&H CLOCK) passes its volts as written.
+        if (info_[idx].badge == jidai::jcs::Badge::GateToStrig && (out.desc.type != PortType::Gate || out.desc.strigVolts))
+            info_[idx].badge = jidai::jcs::Badge::None;
+        GraphCable gc { out.unit, out.port, in.unit, in.port };
+        gc.legacyInvert = c.legacyInvert;
+        graphCables.push_back (gc);
+        from.push_back (idx);
+        sourceAudio.push_back (out.desc.type == PortType::Audio ? 1 : 0);
+        intoMain.push_back (inDev == rackIO_ ? 1 : 0);
     }
-    graph_.install (RackGraph::build (units, graphCables));
+
+    // First pass: R9 classification. Then R11 path latency over the zero-delay audio cables and the device-internal
+    // order edges (signal paths inside a device), with L on the units that have audio outputs.
+    std::vector<signed char> status;
+    (void) RackGraph::build (units, graphCables, order, &status);
+    const int n = (int) units.size();
+    std::vector<int> L ((size_t) n, 0);
+    for (int u = 0; u < n; ++u)
+    {
+        const int lat = deviceLatency_[(size_t) unitDevice[(size_t) u]];
+        if (lat <= 0)
+            continue;
+        const auto named = devices_[(size_t) unitDevice[(size_t) u]]->latencyUnits();
+        if (! named.empty())
+        {
+            if (std::find (named.begin(), named.end(), units[(size_t) u]) != named.end())
+                L[(size_t) u] = lat;
+            // A named unit with no audio outputs is an input stage (SHOGUN's RET): its latency is on the signal that
+            // passes through it, so it counts only while an audio cable feeds it.
+            bool audioOut = false;
+            for (int p = 0; p < units[(size_t) u]->numPorts() && ! audioOut; ++p)
+            {
+                const PortDesc pd = units[(size_t) u]->port (p);
+                audioOut = pd.dir == PortDir::Out && pd.type == PortType::Audio;
+            }
+            if (! audioOut)
+            {
+                bool fed = false;
+                for (size_t k = 0; k < graphCables.size() && ! fed; ++k)
+                    fed = status[k] == 0 && sourceAudio[k] && graphCables[k].dest == units[(size_t) u];
+                if (! fed)
+                    L[(size_t) u] = 0;
+            }
+            continue;
+        }
+        for (int p = 0; p < units[(size_t) u]->numPorts(); ++p)
+        {
+            const PortDesc pd = units[(size_t) u]->port (p);
+            if (pd.dir == PortDir::Out && pd.type == PortType::Audio)
+            {
+                L[(size_t) u] = lat;
+                break;
+            }
+        }
+    }
+    std::vector<jidai::jcs::GraphEdge> audioEdges;
+    std::vector<int> audioEdgeCable;      // index into graphCables, -1 for order edges
+    for (const auto& o : order)
+    {
+        const int x = unitIndex (o.before), y = unitIndex (o.after);
+        if (x >= 0 && y >= 0)
+        {
+            audioEdges.push_back ({ x, y });
+            audioEdgeCable.push_back (-1);
+        }
+    }
+    for (size_t k = 0; k < graphCables.size(); ++k)
+        if (status[k] == 0 && sourceAudio[k])
+        {
+            audioEdges.push_back ({ unitIndex (graphCables[k].source), unitIndex (graphCables[k].dest) });
+            audioEdgeCable.push_back ((int) k);
+        }
+    const auto P = jidai::jcs::pathLatency (L, audioEdges);
+    const auto skew = jidai::jcs::arrivalSkew (P, audioEdges);
+
+    int maxP = 0;
+    for (size_t k = 0; k < graphCables.size(); ++k)
+        if (status[k] >= 0 && intoMain[k] && sourceAudio[k])
+            maxP = std::max (maxP, P[(size_t) unitIndex (graphCables[k].source)]);
+    for (size_t k = 0; k < graphCables.size(); ++k)
+    {
+        CableInfo& ci = info_[from[k]];
+        ci.live = status[k] >= 0;
+        ci.feedback = status[k] == 1;
+        if (ci.live && intoMain[k])
+        {
+            const int p = sourceAudio[k] ? P[(size_t) unitIndex (graphCables[k].source)] : 0;
+            ci.comp = maxP - p;
+            graphCables[k].delay = ci.comp;
+        }
+    }
+    for (size_t e = 0; e < audioEdges.size(); ++e)
+        if (audioEdgeCable[e] >= 0)
+            info_[from[(size_t) audioEdgeCable[e]]].skew = skew[e];
+
+    devicePath_.assign (devices_.size(), 0);
+    for (int u = 0; u < n; ++u)
+        devicePath_[(size_t) unitDevice[(size_t) u]] = std::max (devicePath_[(size_t) unitDevice[(size_t) u]], P[(size_t) u]);
+    latency_.store (maxP);
+
+    graph_.install (RackGraph::build (units, graphCables, order));
 }
 
-bool Rack::process (const float* inL, const float* inR, float* outL, float* outR, int n)
+bool Rack::process (const float* inL, const float* inR, float* outL, float* outR, int n, const MidiNote* midi, int numMidi)
 {
     std::unique_lock<std::mutex> g (lock_, std::try_to_lock);
     if (! g.owns_lock())
@@ -336,33 +731,42 @@ bool Rack::process (const float* inL, const float* inR, float* outL, float* outR
     }
 
     for (auto& d : devices_)
+    {
+        d->setTransport (transport_);
         d->beginBlock();
+    }
+    if (rackIO_ != nullptr)
+        rackIO_->setBlockMidi (midi, numMidi);
 
+    float pk[4] {};
     for (int i = 0; i < n; ++i)
     {
         const float l = inL != nullptr ? inL[i] : 0.0f;
         const float r = inR != nullptr ? inR[i] : l;
-        for (size_t k = 0; k < ronins_.size(); ++k)
-        {
-            if (k == 0)
-                ronins_[k]->setHostSample (l, r);
-            else
-                ronins_[k]->setHostSample (0.0f, 0.0f);
-        }
+        if (rackIO_ != nullptr)
+            rackIO_->setHostSample (i, l * 5.0f, r * 5.0f);
 
         graph_.process();
 
         for (auto* b : bushidos_)
             b->collectMidi (i);
-        float sumL = 0.0f, sumR = 0.0f;
-        for (auto* ronin : ronins_)
+        float ol = 0.0f, orr = 0.0f;
+        if (rackIO_ != nullptr)
         {
-            sumL += ronin->hostLeft();
-            sumR += ronin->hostRight();
+            ol = rackIO_->mainLeftVolts() * 0.2f;
+            orr = rackIO_->mainRightVolts() * 0.2f;
         }
-        if (outL != nullptr) outL[i] = sumL;
-        if (outR != nullptr) outR[i] = sumR;
+        if (outL != nullptr) outL[i] = ol;
+        if (outR != nullptr) outR[i] = orr;
+        pk[0] = std::max (pk[0], std::fabs (l));
+        pk[1] = std::max (pk[1], std::fabs (r));
+        pk[2] = std::max (pk[2], std::fabs (ol));
+        pk[3] = std::max (pk[3], std::fabs (orr));
     }
+    if (rackIO_ != nullptr)
+        rackIO_->updateMeters (pk[0], pk[1], pk[2], pk[3], n);
+    if (transport_.valid && transport_.playing)
+        transport_.ppq += transport_.bpm / 60.0 * (double) n / sampleRate_;   // in case the host does not update it
     return true;
 }
 
