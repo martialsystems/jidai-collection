@@ -5,7 +5,8 @@
 // cable it names, its state round-trips byte for byte and parameter for parameter, every cable is valid under the
 // Jidai Cable Standard (R6 ids, Out -> In, one cable per input, allowed types, no pitch-law mismatch, feedback only
 // where a rack patches a loop on purpose), and played on the host transport (128 BPM) with a test signal at
-// HOST IN and a few MIDI notes, its output is finite, audible and peaks below 0 dBFS.
+// HOST IN and a few MIDI notes, its output is finite, audible and peaks below 0 dBFS. The EDM Starter (the first JIDAI
+// Patch Cookbook recipe) is also rendered on its own: level, stems, kick ducking and sequencer lock (testEdmStarter).
 
 #include "plugin/JidaiProcessor.h"
 #include "plugin/StarterRacks.h"
@@ -18,6 +19,7 @@
 #include <cmath>
 #include <cstdio>
 #include <map>
+#include <vector>
 #include <set>
 #include <string>
 
@@ -373,6 +375,273 @@ void testStarterRacks()
     }
 }
 
+
+// EDM Starter (the first JIDAI Patch Cookbook recipe), rendered 8 bars at 125 BPM on the host transport. The mix is
+// finite and peaks between -6.5 and -2.5 dBFS; drums alone and bass alone are both audible (the kick in the low band);
+// the kick ducks the bass (the bass with and without the BD1 ENV -> MIX IN 1 cable, 0-60 ms after each kick, and
+// open again before the next one); and BUSHIDO's step stays locked to SHOGUN's bar (step = bar position mod 12)
+// before and after transport jumps: a jump to a bar line locks at once, a jump into the middle of a bar locks again
+// at the next downbeat (SHOGUN's RST OUT restarts BUSHIDO there).
+struct SongHead : juce::AudioPlayHead
+{
+    double bpm = 125.0, sampleRate = 48000.0;
+    long long song = 0;          // song position in samples (jumps move it)
+    juce::Optional<PositionInfo> getPosition() const override
+    {
+        PositionInfo info;
+        info.setIsPlaying (true);
+        info.setBpm (bpm);
+        info.setTimeInSamples (song);
+        info.setPpqPosition ((double) song / sampleRate * bpm / 60.0);
+        return info;
+    }
+};
+
+struct EdmRender
+{
+    std::vector<float> l, r;
+    int latency = 0;
+    int lockChecks = 0, lockMisses = 0, relockSteps = -1;
+    double peak = 0.0;
+    bool finite = true;
+};
+
+int edmStarterProgram()
+{
+    const auto& racks = starterRacks();
+    for (int i = 0; i < (int) racks.size(); ++i)
+        if (racks[(size_t) i].name == "EDM Starter")
+            return i;
+    return -1;
+}
+
+// Renders the EDM Starter with some cables removed. jumps: { block, new song position in samples }.
+EdmRender renderEdmStarter (const std::vector<std::pair<std::string, std::string>>& remove, int bars,
+                            const std::vector<std::pair<int, long long>>& jumps = {})
+{
+    EdmRender out;
+    JidaiProcessor p;
+    p.setCurrentProgram (edmStarterProgram());
+    for (auto& [a, b] : remove)
+        check (p.rack().disconnect (a, b), "EDM Starter: remove " + juce::String (a) + " -> " + juce::String (b));
+    SongHead head;
+    p.setPlayHead (&head);
+    const int block = 512;
+    p.prepareToPlay (head.sampleRate, block);
+    out.latency = p.getLatencySamples();
+    const long long total = (long long) std::llround (bars * 4 * 60.0 / head.bpm * head.sampleRate);
+    const int blocks = (int) ((total + block - 1) / block);
+    auto* bushido = dynamic_cast<BushidoDevice*> (p.rack().findDevice ("BUSHIDO#1"));
+    auto* shogun = dynamic_cast<ShogunDevice*> (p.rack().findDevice ("SHOGUN#1"));
+    juce::AudioBuffer<float> buffer (2, block);
+    bool locked = true;          // false from a jump into the middle of a bar until BUSHIDO matches again
+    long long unlockedAt = -1;
+    int litPrev = -1;
+    for (int blk = 0; blk < blocks; ++blk)
+    {
+        for (auto& [at, to] : jumps)
+            if (at == blk)
+            {
+                const long long stepLen = (long long) std::llround (60.0 / head.bpm / 4.0 * head.sampleRate);
+                head.song = to;
+                if ((to / stepLen) % 16 != 0)
+                {
+                    locked = false;
+                    unlockedAt = to / stepLen;
+                }
+            }
+        buffer.clear();
+        juce::MidiBuffer midi;
+        p.processBlock (buffer, midi);
+        head.song += block;
+        for (int s = 0; s < block; ++s)
+        {
+            const float a = buffer.getSample (0, s), b = buffer.getSample (1, s);
+            out.finite = out.finite && std::isfinite (a) && std::isfinite (b);
+            out.peak = std::max (out.peak, (double) std::max (std::abs (a), std::abs (b)));
+            out.l.push_back (a);
+            out.r.push_back (b);
+        }
+        // Lock: BUSHIDO's lit step against SHOGUN's bar position at the same moment. SHOGUN publishes its step at the
+        // start of each block (the end of the one before), so its value now is compared with BUSHIDO's lamp read
+        // after the previous block.
+        if (bushido != nullptr && shogun != nullptr)
+        {
+            const long g = shogun->globalStep();
+            if (blk > 1 && litPrev >= 0)
+            {
+                const int want = (int) (((g % 16) + 16) % 16) % 12;
+                if (! locked && litPrev == want && (g % 16) == 0)
+                {
+                    locked = true;
+                    out.relockSteps = (int) (g - unlockedAt);
+                }
+                if (locked)
+                {
+                    ++out.lockChecks;
+                    out.lockMisses += litPrev == want ? 0 : 1;
+                }
+            }
+            litPrev = -1;
+            for (int k = 1; k <= 12; ++k)
+                if (bushido->indicator ("STEP:" + std::to_string (k)) > 0.5f)
+                    litPrev = k - 1;
+        }
+    }
+    p.setPlayHead (nullptr);
+    return out;
+}
+
+double rmsDb (const std::vector<float>& x, size_t from, size_t to)
+{
+    double s = 0.0;
+    to = std::min (to, x.size());
+    for (size_t i = from; i < to; ++i)
+        s += (double) x[i] * (double) x[i];
+    return 10.0 * std::log10 (std::max (s / (double) std::max<size_t> (1, to - from), 1e-24));
+}
+
+// The cookbook recipe (docs/cookbook/JIDAI_Patch_Cookbook.md, "EDM Starter") patched by hand: from INIT, add SHOGUN,
+// BUSHIDO, RONIN and ORIGAMI with no automatic cables (Shift), remove RONIN's INIT cables except the two the recipe
+// keeps, then make the recipe's cables in its order. Every cable must be accepted, and the result must be exactly the
+// EDM Starter preset's cables.
+const std::vector<std::pair<std::string, std::string>> kEdmRecipeKeep {
+    { "RONIN#1/EG 1:OUT A", "RONIN#1/VCA 1:ENV" },
+    { "RONIN#1/VCA 1:OUT", "RONIN#1/OUTPUT:WET" },
+};
+const std::vector<std::pair<std::string, std::string>> kEdmRecipeRemove {     // the cookbook's "unplug these six"
+    { "RONIN#1/EXT IN:MONO", "RONIN#1/VCF:IN" },
+    { "RONIN#1/VCF:OUT", "RONIN#1/VCA 1:IN" },
+    { "RONIN#1/EXT IN:L", "RONIN#1/OUTPUT:L" },
+    { "RONIN#1/EXT IN:R", "RONIN#1/OUTPUT:R" },
+    { "RONIN#1/EXT IN:GATE", "RONIN#1/EG 1:TRIG" },
+    { "RONIN#1/EG 1:OUT A", "RONIN#1/VCF:CUTOFF" },
+};
+const std::vector<std::pair<std::string, std::string>> kEdmRecipe {
+    { "SHOGUN#1/CLOCK:RST OUT", "BUSHIDO#1/INPUTS:RESET" },     //  1 lock
+    { "BUSHIDO#1/OUTPUTS:CV A", "RONIN#1/INT:IN" },             //  2 notes
+    { "RONIN#1/INT:OUT", "RONIN#1/VCO:V/OCT" },                 //  3 slide
+    { "RONIN#1/VCO:SAW", "RONIN#1/VCF:IN" },                    //  4
+    { "BUSHIDO#1/OUTPUTS:GATE A", "RONIN#1/EG 1:TRIG" },        //  5
+    { "BUSHIDO#1/OUTPUTS:GATE A", "RONIN#1/EG 2:TRIG" },        //  6
+    { "RONIN#1/EG 2:OUT +", "RONIN#1/VCF:CUTOFF" },             //  7
+    { "BUSHIDO#1/OUTPUTS:CV C", "RONIN#1/VCF:CUTOFF" },         //  8 accent
+    { "RONIN#1/VCF:OUT", "ORIGAMI#1/IN:IN L" },                 //  9 fold
+    { "ORIGAMI#1/OUT:OUT L", "RONIN#1/VCA 1:IN" },              // 10
+    { "SHOGUN#1/BD1:ENV", "RONIN#1/MIX:IN 1" },                 // 11 duck
+    { "RONIN#1/MIX:OUT", "RONIN#1/VCA 1:ENV" },                 // 12
+    { "RONIN#1/HOST:OUT L", "RACK#1/MAIN:OUT L" },              // 13 out
+    { "RONIN#1/HOST:OUT R", "RACK#1/MAIN:OUT R" },              // 14
+    { "SHOGUN#1/MIX:L", "RACK#1/MAIN:OUT L" },                  // 15
+    { "SHOGUN#1/MIX:R", "RACK#1/MAIN:OUT R" },                  // 16
+};
+
+void testEdmRecipeByHand()
+{
+    JidaiProcessor preset;
+    preset.setCurrentProgram (edmStarterProgram());
+    std::set<std::string> want;
+    for (auto& c : preset.rack().cables())
+        want.insert (c.a + " > " + c.b);
+
+    JidaiProcessor p;          // INIT
+    auto& rack = p.rack();
+    const DeviceKind order[] { DeviceKind::Shogun, DeviceKind::Bushido, DeviceKind::Ronin, DeviceKind::Origami };
+    for (auto k : order)
+        check (rack.insertNew (k, -1, false) != nullptr, "recipe: add a device with Shift (no automatic cables)");
+    bool sameOrder = rack.deviceCount() == preset.rack().deviceCount();
+    for (int i = 0; sameOrder && i < rack.deviceCount(); ++i)
+        sameOrder = rack.device (i)->rackId() == preset.rack().device (i)->rackId();
+    check (sameOrder, "recipe: the devices sit in the preset's order (RACK I/O, SHOGUN, BUSHIDO, RONIN, ORIGAMI)");
+    int removed = 0;
+    std::set<std::string> unplugged, listed;
+    const auto initial = rack.cables();
+    for (auto& c : initial)
+    {
+        bool keep = false;
+        for (auto& k : kEdmRecipeKeep)
+            keep = keep || (c.a == k.first && c.b == k.second);
+        if (! keep && rack.disconnect (c.a, c.b))
+        {
+            ++removed;
+            unplugged.insert (c.a + " > " + c.b);
+        }
+    }
+    for (auto& [a, b] : kEdmRecipeRemove)
+        listed.insert (a + " > " + b);
+    check (removed == 6 && rack.cables().size() == kEdmRecipeKeep.size(),
+           "recipe: RONIN arrives with its 8 INIT cables; removing 6 leaves the 2 the recipe keeps (removed " + juce::String (removed) + ")");
+    check (unplugged == listed, "recipe: the six cables the cookbook says to unplug are exactly RONIN's other INIT cables");
+    for (auto& [a, b] : kEdmRecipe)
+        check (rack.connect (a, b) == Rack::Check::Ok, "recipe: cable " + juce::String (a) + " -> " + juce::String (b) + " is accepted");
+    std::set<std::string> got;
+    for (auto& c : rack.cables())
+        got.insert (c.a + " > " + c.b);
+    check (got == want && got.size() == kEdmRecipe.size() + kEdmRecipeKeep.size(),
+           "recipe: the hand-patched rack has exactly the EDM Starter preset's " + juce::String ((int) want.size()) + " cables");
+    for (auto& c : rack.cables())
+        check (c.color == -1 && ! c.autoRouted, "recipe: " + juce::String (c.a) + " -> " + juce::String (c.b) + " takes its role colour");
+}
+
+void testEdmStarter()
+{
+    const int program = edmStarterProgram();
+    check (program > 0 && starterRacks()[(size_t) program].category == "EDM", "EDM Starter is a starter rack in EDM");
+    if (program <= 0)
+        return;
+    const double fs = 48000.0, bpm = 125.0;
+    const int beat = (int) std::llround (60.0 / bpm * fs);              // 23040 samples
+    const std::pair<std::string, std::string> drumsL { "SHOGUN#1/MIX:L", "RACK#1/MAIN:OUT L" }, drumsR { "SHOGUN#1/MIX:R", "RACK#1/MAIN:OUT R" };
+    const std::pair<std::string, std::string> bassL { "RONIN#1/HOST:OUT L", "RACK#1/MAIN:OUT L" }, bassR { "RONIN#1/HOST:OUT R", "RACK#1/MAIN:OUT R" };
+    const std::pair<std::string, std::string> duck { "SHOGUN#1/BD1:ENV", "RONIN#1/MIX:IN 1" };
+
+    // Full mix, 8 bars, with two transport jumps: at bar 5 (mid-bar) back to bar 2's downbeat, and at bar 7 into
+    // the middle of bar 3 (step 6). Lock is checked on every block.
+    const long long bar = 4LL * beat, step = beat / 4;
+    const auto mix = renderEdmStarter ({}, 8, { { (int) (4 * bar + 6 * step) / 512, 1 * bar }, { (int) (6 * bar) / 512, 2 * bar + 5 * step } });
+    const double peakDb = 20.0 * std::log10 (std::max (mix.peak, 1e-12));
+    check (mix.finite && peakDb > -6.5 && peakDb < -2.5, "EDM Starter: 8 bars finite, peak " + juce::String (peakDb, 2) + " dBFS (want -6.5..-2.5)");
+    check (mix.lockChecks > 1000 && mix.lockMisses == 0, "EDM Starter: BUSHIDO's step = SHOGUN's bar position mod 12 on every block while locked ("
+           + juce::String (mix.lockChecks) + " blocks, " + juce::String (mix.lockMisses) + " off)");
+    check (mix.relockSteps > 0 && mix.relockSteps <= 16, "EDM Starter: a jump into the middle of a bar locks again at the next downbeat (after "
+           + juce::String (mix.relockSteps) + " steps)");
+
+    // Plain 8 bars (no jumps) for the stems.
+    const auto drums = renderEdmStarter ({ bassL, bassR }, 8);
+    const auto bass = renderEdmStarter ({ drumsL, drumsR }, 8);
+    const auto bassOpen = renderEdmStarter ({ drumsL, drumsR, duck }, 8);
+    // Kick in the low band (two one-pole low-passes at 120 Hz) in the 80 ms after each beat.
+    std::vector<float> low (drums.l.size());
+    {
+        const double a = 1.0 - std::exp (-2.0 * juce::MathConstants<double>::pi * 120.0 / fs);
+        double y1 = 0.0, y2 = 0.0;
+        for (size_t i = 0; i < drums.l.size(); ++i) { y1 += a * (drums.l[i] - y1); y2 += a * (y1 - y2); low[i] = (float) y2; }
+    }
+    double kick = 0.0, duckDb = 0.0, openDb = 0.0;
+    int kicks = 0;
+    for (long long b = 1; (b + 1) * beat < (long long) bass.l.size(); ++b)
+    {
+        const size_t kat = (size_t) (b * beat + drums.latency), at = (size_t) (b * beat + bass.latency);
+        kick += std::pow (10.0, rmsDb (low, kat, kat + (size_t) (0.08 * fs)) / 10.0);
+        duckDb += rmsDb (bassOpen.l, at, at + (size_t) (0.06 * fs)) - rmsDb (bass.l, at, at + (size_t) (0.06 * fs));
+        const size_t late = at + (size_t) (0.36 * fs);
+        openDb += rmsDb (bassOpen.l, late, late + (size_t) (0.06 * fs)) - rmsDb (bass.l, late, late + (size_t) (0.06 * fs));
+        ++kicks;
+    }
+    const double kickDb = 10.0 * std::log10 (std::max (kick / std::max (1, kicks), 1e-24));
+    duckDb /= std::max (1, kicks);
+    openDb /= std::max (1, kicks);
+    const double drumsDb = rmsDb (drums.l, 0, drums.l.size()), bassDb = rmsDb (bass.l, 0, bass.l.size());
+    std::printf ("  EDM Starter: peak %.2f dBFS, drums rms %.2f dBFS (kick low band %.2f dBFS), bass rms %.2f dBFS, duck %.2f dB (0-60 ms),"
+                 " %.2f dB at 360-420 ms, lock %d blocks / %d off, relock after %d steps, latency %d\n",
+                 peakDb, drumsDb, kickDb, bassDb, duckDb, openDb, mix.lockChecks, mix.lockMisses, mix.relockSteps, mix.latency);
+    check (drums.finite && drumsDb > -30.0 && kickDb > -30.0, "EDM Starter: drums audible (rms " + juce::String (drumsDb, 1) + " dBFS, kick low band "
+           + juce::String (kickDb, 1) + " dBFS)");
+    check (bass.finite && bassDb > -30.0, "EDM Starter: bass audible (rms " + juce::String (bassDb, 1) + " dBFS)");
+    check (kicks >= 28 && duckDb > 6.0, "EDM Starter: the kick ducks the bass by " + juce::String (duckDb, 1) + " dB in the 60 ms after each kick (want > 6)");
+    check (std::abs (openDb) < 2.0, "EDM Starter: the bass is open again before the next kick (" + juce::String (openDb, 2) + " dB at 360-420 ms)");
+}
+
 }
 
 void runStarterRackTests (int& checks, int& failures)
@@ -380,4 +649,6 @@ void runStarterRackTests (int& checks, int& failures)
     gChecks = &checks;
     gFailures = &failures;
     testStarterRacks();
+    testEdmStarter();
+    testEdmRecipeByHand();
 }

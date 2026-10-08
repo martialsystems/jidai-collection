@@ -517,6 +517,15 @@ int main (int argc, char** argv)
                     "starter rack " + racks[(size_t) i].name + ": back view draws all " + juce::String (n) + " cables as ropes between rear jacks (ropes "
                     + juce::String (ropes) + ", both ends on the back " + juce::String (onRear) + ")");
             snapshot (rack, out.getChildFile (stem + "_back.png"));
+            {
+                // Where each cable's jacks sit in that PNG (rack pixels), for the cookbook's numbered diagrams.
+                juce::DynamicObject::Ptr jacks = new juce::DynamicObject();
+                for (auto& c : proc.rack().cables())
+                    for (const auto& id : { c.a, c.b })
+                        if (const auto* s = rack.spotFor (id))
+                            jacks->setProperty (juce::Identifier (juce::String (id)), juce::Array<juce::var> { s->p.x, s->p.y, s->r });
+                out.getChildFile (stem + "_back_jacks.json").replaceWithText (juce::JSON::toString (juce::var (jacks.get())));
+            }
             rack.setShowBack (false);
             rack.setCableMode (JidaiProcessor::CablesHidePassThru);
             pump (60);
