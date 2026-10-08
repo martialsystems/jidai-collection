@@ -63,8 +63,9 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../jidai-common ${CMAKE_CURRENT_BIN
 FetchContent_Declare(origami
   GIT_REPOSITORY https://github.com/martialsystems/origami.git
   # origami main 943bba3: factory presets in banks (INIT, RONIN, SHOGUN, BUSHIDO, GENERIC), FMA-safe bit-exact INIT
-  # (-ffp-contract=off on ORIGAMI's targets), LEVEL COMP reference fix. If it lands elsewhere by squash or rebase, re-pin.
-  GIT_TAG 943bba31fe4e16106101132f5cc9794a5220427b)
+  # (-ffp-contract=off on ORIGAMI's targets), LEVEL COMP reference fix; f41c9c4 user manual; 16d3029 isnan in clampParam
+  # (clean under the rack's gcc -Wfloat-equal). If it lands elsewhere by squash or rebase, re-pin.
+  GIT_TAG 16d30296790c1d26b9eada50e780cccf79ed14cb)
 FetchContent_MakeAvailable(origami)
 if(NOT TARGET origami::dsp OR NOT ORIGAMI_UI_SOURCES)
   message(FATAL_ERROR "ORIGAMI did not provide origami::dsp and ORIGAMI_UI_SOURCES")
