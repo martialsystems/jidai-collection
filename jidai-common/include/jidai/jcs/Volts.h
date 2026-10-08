@@ -27,7 +27,7 @@ inline float clampRail (float v, bool& over) noexcept
 {
     if (v > kRail) { over = true; return kRail; }
     if (v < -kRail) { over = true; return -kRail; }
-    if (v != v) { over = true; return 0.0f; }   // NaN never reaches a cable
+    if (std::isnan (v)) { over = true; return 0.0f; }   // NaN never reaches a cable
     return v;
 }
 

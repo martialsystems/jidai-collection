@@ -101,8 +101,65 @@ void testAdaa()
     (void) ref;
     check (worst < 1e-12, "ADAA uses sample-n parameters for both terms (cache is exact), worst " + std::to_string (worst));
     AdaaStage w;
+    w.wire = true;                  // planned as a wire for this block
     w.process (0.5, 0.0, 0.0, 4.0);
-    check (w.process (0.25, 0.0, 0.0, 4.0) == 0.25, "a skipped stage has no ADAA delay");
+    check (w.process (0.25, 0.0, 0.0, 4.0) == 0.25, "a stage planned as a wire has no ADAA delay");
+    AdaaStage u;                    // not planned: a = b = 0 on a sample keeps the ADAA (half-sample average)
+    u.process (0.5, 0.0, 0.0, 4.0);
+    check (std::fabs (u.process (0.25, 0.0, 0.0, 4.0) - 0.375) < 1e-15, "an unplanned stage at a = b = 0 stays ADAA: (x[n] + x[n-1]) / 2");
+}
+
+// Upstream fix (SHOGUN report 1): the skip is decided per block, never per sample. A stage modulated through 0
+// (a = 0, b = 0 on single samples) must not toggle the ADAA half-sample delay: the output stays continuous.
+void testSkipPerBlock()
+{
+    // Stage 1 amount swept by a slow triangle that touches exactly 0 every period; x is a 50 Hz sine.
+    const int N = 4800;
+    auto run = [&] (bool perSampleSkip, double& worstJump)
+    {
+        AdaaStage s;
+        double prev = 0.0;
+        worstJump = 0.0;
+        for (int n = 0; n < N; ++n)
+        {
+            const double x = 0.6 * std::sin (2.0 * kPi * 50.0 * n / 48000.0);
+            const int t = n % 200;
+            const double a = t < 100 ? (100 - t) / 100.0 * 0.02 : (t - 100) / 100.0 * 0.02;   // 0 exactly at t = 100
+            s.wire = perSampleSkip && a == 0.0;              // the old behaviour: skip on any sample with a = b = 0
+            const double y = s.process (x, a, 0.0, 4.0);
+            if (n > 0)
+                worstJump = std::fmax (worstJump, std::fabs (y - prev));
+            prev = y;
+        }
+    };
+    double oldJump = 0.0, newJump = 0.0;
+    run (true, oldJump);
+    run (false, newJump);
+    const double sineStep = 0.6 * 2.0 * kPi * 50.0 / 48000.0;
+    std::printf ("  skip per block: worst sample-to-sample step %.3g (per-sample skip %.3g, sine slope %.3g)\n", newJump, oldJump, sineStep);
+    check (newJump < 1.2 * sineStep, "modulated through 0: no discontinuity (step stays at the signal slope)");
+    check (oldJump > newJump, "the old per-sample skip shows a larger step (the toggled half-sample delay)");
+
+    // planBlock: steady, a = b = 0 and no VC depth -> wire; a live VC with depth, or a ramp -> ADAA.
+    TripleShaper ts;
+    ShaperControls c;                                         // WAVE 0, all trims 0
+    ts.planBlock (c, true, false);
+    check (ts.stageIsWire (0) && ts.stageIsWire (1) && ts.stageIsWire (2), "steady zero controls: every stage is a wire");
+    c.vcToAmt[1] = 0.5;
+    ts.planBlock (c, true, true);
+    check (ts.stageIsWire (0) && ! ts.stageIsWire (1) && ts.stageIsWire (2), "a live VC with depth on stage 2 keeps its ADAA");
+    ts.planBlock (c, false, false);
+    check (! ts.stageIsWire (0) && ! ts.stageIsWire (2), "a moving control (not steady) plans no wire");
+    c = ShaperControls();
+    c.macro = 0.3;                                            // c1 = 0.6, c2 = 0.1, c3 = 0
+    ts.planBlock (c, true, false);
+    check (! ts.stageIsWire (0) && ! ts.stageIsWire (1) && ts.stageIsWire (2), "WAVE 0.3: stage 3 (amount 0) is the only wire");
+    // A wrong plan (a control left 0 mid-block) falls back to ADAA instead of ignoring the control.
+    AdaaStage w;
+    w.wire = true;
+    w.process (0.1, 0.0, 0.0, 4.0);
+    const double y = w.process (0.2, 0.5, 0.0, 4.0);
+    check (! w.wire && std::fabs (y - 0.2) > 1e-6, "a nonzero amount on a planned wire is shaped, and the plan is dropped");
 }
 
 void testMacro()
@@ -154,6 +211,7 @@ void testLevelComp()
         const double amps[] = { 1.0, 0.6, 0.3 };
         const double amp = amps[t % 3], f = 60.0 + 340.0 * r.uni();
         TripleShaper ts; DcBlocker dc; LevelComp lc;
+        ts.planBlock (c, true, false);                        // steady controls: zero-amount stages are wires
         dc.prepare (fs); lc.prepare (fs);
         double sx = 0.0, sy = 0.0;
         for (int i = 0; i < n; ++i)
@@ -215,6 +273,7 @@ void testAliasing()
     auto run = [&] (int M, bool adaa) {
         TripleShaper ts; ts.setAdaa (adaa);
         ShaperControls c; c.macro = 0.5;
+        ts.planBlock (c, true, false);                        // stage 3 (amount 0 at WAVE 0.5) is a wire
         std::vector<double> y ((size_t) N);
         Upsampler2x up; Downsampler2x dn;
         for (int n = 0; n < 2 * N; ++n)
@@ -244,6 +303,7 @@ int main()
     testLevelComp();
     testHalfband();
     testAliasing();
+    testSkipPerBlock();
     std::printf ("%d checks, %d failed\n%s\n", checks, failures, failures == 0 ? "JIDAI DSP TESTS PASS" : "JIDAI DSP TESTS FAIL");
     return failures == 0 ? 0 : 1;
 }

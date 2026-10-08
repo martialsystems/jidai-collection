@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(JidaiCommon VERSION 1.1.0 LANGUAGES CXX)
+project(JidaiCommon VERSION 1.1.1 LANGUAGES CXX)
 
 # Header-only C++17: the Jidai Cable Standard v1.1 helpers and the shared DSP blocks.
 # Other repos vendor include/jidai (copy, subtree or FetchContent) and add include/ to their include path,
@@ -30,4 +30,15 @@ if(JIDAI_COMMON_TESTS)
     target_compile_options(JidaiDspTests PRIVATE -O2 -Wall -Wextra -Wpedantic -Wshadow -Werror)
   endif()
   add_test(NAME dsp COMMAND JidaiDspTests)
+endif()
+
+if(JIDAI_COMMON_TESTS)
+  # Header hygiene: every header with -Wfloat-equal and -Wconversion (the strictest set a vendoring unit uses).
+  add_executable(JidaiHeaderHygiene tests/HeaderHygiene.cpp)
+  target_link_libraries(JidaiHeaderHygiene PRIVATE jidai_common)
+  set_target_properties(JidaiHeaderHygiene PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    target_compile_options(JidaiHeaderHygiene PRIVATE -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wno-sign-conversion -Wfloat-equal -Wdouble-promotion -Werror)
+  endif()
+  add_test(NAME headers COMMAND JidaiHeaderHygiene)
 endif()

@@ -158,10 +158,11 @@ void testPitch()
 {
     group = "pitch R4";
     using namespace pitch;
-    check (near (kC3Hz, 440.0 * std::exp2 (-21.0 / 12.0), 1e-4), "C3 = 130.8128 Hz is A440 minus 21 semitones");
-    check (near (hz (Law::VOct, 0.0), 130.8128, 1e-12), "0 V = 130.8128 Hz (C3)");
-    check (near (hz (Law::VOct, 1.0), 261.6256, 1e-9), "+1 V = one octave up");
-    check (near (hz (Law::VOct, -1.0), 65.4064, 1e-9), "-1 V = one octave down");
+    check (near (kC3Hz, 440.0 * std::exp2 (-21.0 / 12.0), 1e-12) && near (kC3Hz, 55.0 * std::exp2 (15.0 / 12.0), 1e-12), "C3 is exactly A440 minus 21 semitones (130.8127826502993 Hz)");
+    check (near (kC3Hz, 130.8127826502993, 0.0), "C3 constant is the exact double, not the rounded 130.8128");
+    check (near (hz (Law::VOct, 0.0), kC3Hz, 0.0), "0 V = C3");
+    check (near (hz (Law::VOct, 1.0), 2.0 * kC3Hz, 1e-12), "+1 V = one octave up");
+    check (near (hz (Law::VOct, -1.0), 0.5 * kC3Hz, 1e-12), "-1 V = one octave down");
     check (near (hz (Law::VOct, 1.0 / 12.0) / hz (Law::VOct, 0.0), std::exp2 (1.0 / 12.0), 1e-12), "1/12 V = one semitone");
     const int notes[] = { 24, 36, 48, 60, 72, 84, 108 };
     const double volts[] = { -2, -1, 0, 1, 2, 3, 5 };
@@ -171,14 +172,14 @@ void testPitch()
         check (midiNote (Law::VOct, volts[i]) == notes[i], "V/OCT volts -> note " + std::to_string (notes[i]));
     }
     check (near (note (Law::VOct, 0.25), 51.0, 1e-12), "fractional note");
-    check (near (hzToVolts (Law::VOct, 523.2512), 2.0, 1e-9), "C5 = +2 V");
+    check (near (hzToVolts (Law::VOct, 4.0 * kC3Hz), 2.0, 1e-12), "C5 = +2 V");
     // HZ/V LIN: a different role, 1 V = C3.
-    check (near (hz (Law::HzvLin, 1.0), 130.8128, 1e-12) && near (hz (Law::HzvLin, 2.0), 261.6256, 1e-9), "HZ/V LIN: 1 V = C3, 2 V = C4");
+    check (near (hz (Law::HzvLin, 1.0), kC3Hz, 0.0) && near (hz (Law::HzvLin, 2.0), 2.0 * kC3Hz, 1e-12), "HZ/V LIN: 1 V = C3, 2 V = C4");
     check (hz (Law::HzvLin, 0.0) == 0.0 && midiNote (Law::HzvLin, 0.0) == -1 && std::isnan (note (Law::HzvLin, -1.0)), "HZ/V LIN has no note at or below 0 V");
     check (midiNote (Law::HzvLin, 1.0) == 48 && midiNote (Law::HzvLin, 4.0) == 72, "HZ/V LIN MIDI: 1 V -> 48, 4 V -> 72");
     check (near (voltsForNote (Law::HzvLin, 60), 2.0, 1e-12), "HZ/V LIN note 60 = 2 V");
-    check (near (hz (Law::HzvLin, 5.0), 654.064, 1e-9), "HZ/V LIN +5 V = 654.06 Hz");
-    check (near (roninHzvLinHz (0.01), 130.8128 * 0.05, 1e-12), "RONIN's linear input floors at 0.05 V");
+    check (near (hz (Law::HzvLin, 5.0), 5.0 * kC3Hz, 1e-12), "HZ/V LIN +5 V = 654.06 Hz");
+    check (near (roninHzvLinHz (0.01), kC3Hz * 0.05, 1e-12), "RONIN's linear input floors at 0.05 V");
     check (midiNote (Law::VOct, 9.0) == 127 && midiNote (Law::VOct, -9.0) == 0, "MIDI clamps to 0..127");
     // quantize, the BUSHIDO QUANT SEMI rule
     check (near (quantize (Law::VOct, 0.04), 0.0, 1e-12) && near (quantize (Law::VOct, 0.05), 1.0 / 12.0, 1e-12), "V/OCT quantize to semitones");
@@ -186,11 +187,11 @@ void testPitch()
     check (near (quantize (Law::HzvLin, 5.0), std::exp2 (27.0 / 12.0), 1e-12), "HZ/V LIN 5 V quantizes to note 75 (4.757 V)");
     check (quantize (Law::HzvLin, 0.02) == 0.0, "HZ/V LIN below 2^-5 V is silent");
     // Tuning is not the volt law (R4.6).
-    check (near (voiceHz (0.0), 130.8128, 1e-12), "voice at home tuning plays the law");
-    check (near (voiceHz (0.0, 0.0, 442.0), 130.8128 * 442.0 / 440.0, 1e-9), "A4 442 moves the voice");
-    check (near (voiceHz (1.0, 100.0), 261.6256 * std::exp2 (1.0 / 12.0), 1e-9), "+100 cents fine moves the voice a semitone");
+    check (near (voiceHz (0.0), kC3Hz, 1e-12), "voice at home tuning plays the law");
+    check (near (voiceHz (0.0, 0.0, 442.0), kC3Hz * 442.0 / 440.0, 1e-12), "A4 442 moves the voice");
+    check (near (voiceHz (1.0, 100.0), 2.0 * kC3Hz * std::exp2 (1.0 / 12.0), 1e-12), "+100 cents fine moves the voice a semitone");
     check (near (voltsForNote (Law::VOct, 60), 1.0, 0.0), "...while the volts for note 60 stay 1 V");
-    check (near (voiceHz (0.0, 0.0, 440.0, -1), 65.4064, 1e-9), "an OCT switch moves the voice, not the law");
+    check (near (voiceHz (0.0, 0.0, 440.0, -1), 0.5 * kC3Hz, 1e-12), "an OCT switch moves the voice, not the law");
     // lin55 migration converter (SHOGUN v2 HZ/V, old BUSHIDO MIDI): exact.
     double worst = 0.0;
     for (int n = 24; n <= 96; ++n)
@@ -199,8 +200,9 @@ void testPitch()
         const double oldV = f / 55.0;
         worst = std::fmax (worst, std::fabs (lin55ToVoct (oldV) - (n - 48) / 12.0));
     }
-    check (worst < 2e-6, "lin55 -> V/OCT matches (note-48)/12 for notes 24..96 (C3 const 130.8128), worst " + std::to_string (worst));
-    check (near (std::log2 (130.8128 / 55.0), 1.25, 2e-6), "log2(130.8128/55) = 1.25");
+    check (worst < 1e-12, "lin55 -> V/OCT matches (note-48)/12 for notes 24..96 exactly, worst " + std::to_string (worst));
+    check (near (lin55ToVoct (1.0), -1.25, 0.0) && near (lin55ToVoct (4.0), 0.75, 0.0), "lin55: V' = log2 V - 1.25 exactly (1 V -> -1.25 V)");
+    check (near (std::log2 (kC3Hz / 55.0), kLin55Octaves, 1e-14), "log2(C3/55) = 1.25 with the exact C3");
     bool over = false;
     check (clampPitch (5.2, over) == 5.0 && over, "pitch rail +5 V");
     char buf[8];
@@ -272,7 +274,7 @@ void testJackIds()
     check (! parseJackId ("RONIN#1/VCO:SAW#2"), "'#' in a label rejected");
     check (! parseJackId ("RONIN#1/VCO:A:B"), "second ':' rejected");
     check (! parseJackId ("RONIN#1/ VCO:SAW"), "leading space rejected");
-    check (isKnownPrefix ("ORIGAMI") && isKnownPrefix ("RACK") && ! isKnownPrefix ("OTHERDEV"), "known neutral prefixes");
+    check (isKnownPrefix ("ORIGAMI") && isKnownPrefix ("RACK") && ! isKnownPrefix ("ACME"), "known neutral prefixes");
     check (formatJackId ("ORIGAMI", 1, "HOST", "IN L") == "ORIGAMI#1/HOST:IN L", "formatJackId");
     check (isValidLocalId ("INPUTS:START/STOP") && ! isValidLocalId ("IN/PUTS:START"), "slash allowed in label, not in section");
 
@@ -288,6 +290,27 @@ void testJackIds()
     chain.add ("A:TWO X", "A:THREE");
     check (chain.apply ("A:ONE") == "A:TWO", "apply does not invent chains");
     check (chain.size() == 2, "alias count");
+    check (! chain.add ("A:TWO", "A:FOUR") && ! chain.add ("A:ZERO", "A:ONE"), "aliases never chain (one hop)");
+
+    // Input laws: a unit declares a rename and its conversion together (SHOGUN LEAD:HZ/V -> LEAD:NOTE, lin55).
+    AliasTable laws;
+    check (laws.add ("LEAD:HZ/V", "LEAD:NOTE", AliasLaw::Lin55ToVoct) && laws.add ("BASS:HZ/V", "BASS:NOTE", AliasLaw::Lin55ToVoct), "aliases with an input law");
+    check (! laws.add ("LEAD:HZ/V", "LEAD:NOTE"), "the same alias with a different law is refused");
+    check (laws.add ("LEAD:HZ/V", "LEAD:NOTE", AliasLaw::Lin55ToVoct), "the same alias with the same law is fine");
+    const auto r = laws.resolve ("LEAD:HZ/V");
+    check (r.aliased && r.id == "LEAD:NOTE" && r.conversion.law == AliasLaw::Lin55ToVoct, "resolve gives the canonical id and its law");
+    check (near (r.conversion.convert (2.0), std::log2 (2.0) - 1.25, 0.0) && near (r.conversion.convert (2.0), pitch::lin55ToVoct (2.0), 0.0),
+           "Lin55ToVoct: V' = log2 V - 1.25");
+    check (near (r.conversion.convert (0.0), -5.0, 0.0), "Lin55ToVoct: 0 V and below go to the -5 V rail");
+    const auto pass = laws.resolve ("LEAD:GATE");
+    check (! pass.aliased && pass.id == "LEAD:GATE" && pass.conversion.identity() && near (pass.conversion.convert (3.3), 3.3, 0.0), "unknown ids pass through with the identity law");
+    AliasTable more;
+    more.add ("VCO:LIN", "VCO:VOCT", AliasLaw::HzvLinToVoct);
+    more.add ("VCO:OLD VOCT", "VCO:HZV", AliasLaw::VoctToHzvLin);
+    more.add ("MIX:IN OLD", "MIX:IN", AliasConversion::linear (2.0, -1.0));
+    check (near (more.resolve ("VCO:LIN").conversion.convert (4.0), 2.0, 0.0), "HzvLinToVoct: 4 V (C5) -> +2 V");
+    check (near (more.resolve ("VCO:OLD VOCT").conversion.convert (2.0), 4.0, 0.0), "VoctToHzvLin: +2 V -> 4 V");
+    check (near (more.resolve ("MIX:IN OLD").conversion.convert (1.5), 2.0, 0.0), "Scale: 2 V - 1");
 }
 
 // ---------------------------------------------------------------- State.h
