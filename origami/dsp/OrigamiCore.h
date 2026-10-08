@@ -119,6 +119,33 @@ public:
     int latencySamples() const noexcept { return quality_ ? kLatency2x : 0; }
     bool oversampled() const noexcept { return quality_ != 0; }
 
+    // Once per block, before its first process() call (jidai-common 1.1.1: the shaper skips a stage only for a whole
+    // block). A stage is a true wire for the block when every control is settled (no smoothing ramp), its amount and
+    // symmetry are exactly 0 and no live VC source has depth on it. vcPatched / sidechainLive: as process() will see
+    // them for this block. Without a call no stage is skipped (correct, just a little more CPU).
+    void planBlock (const bool vcPatched[3], bool sidechainLive) noexcept
+    {
+        syncSmoothers (false);
+        bool steady = true;
+        for (const auto* s : { &wave_, &symG_, &trim_[0], &trim_[1], &trim_[2], &sym_[0], &sym_[1], &sym_[2] })
+            steady = steady && jidai::dsp::same (s->value, s->target);
+        jidai::dsp::ShaperControls ctl;
+        ctl.macro = wave_.value;
+        bool live[3];
+        for (int i = 0; i < 3; ++i)
+        {
+            ctl.trim[i] = trim_[i].value;
+            ctl.sym[i] = sym_[i].value + symG_.value;
+            ctl.vcToAmt[i] = params_[kVc1Amt + i];
+            ctl.vcToSym[i] = params_[kVc1Sym + i];
+            const int src = (int) params_[kVc1Src + i];
+            live[i] = vcPatched[i] || src == 1 || src == 2 || (src == 3 && sidechainLive);
+        }
+        for (auto& sh : shaper_)
+            sh.planBlock (ctl, steady, live);
+    }
+    bool stageIsWire (int stage) const noexcept { return shaper_[0].stageIsWire (stage); }
+
     void process (const Inputs& in, double& outL, double& outR) noexcept
     {
         syncSmoothers (false);

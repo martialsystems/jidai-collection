@@ -48,6 +48,8 @@ std::vector<double> run (OrigamiCore& c, int n, const std::function<void (int, O
     {
         OrigamiCore::Inputs in;
         gen (i, in);
+        if (i % 64 == 0)
+            c.planBlock (in.vcPatched, in.sidechainLive);     // as the plugin and the rack do, once per 64-sample block
         double a, b;
         c.process (in, a, b);
         l[(size_t) i] = a;
@@ -320,6 +322,42 @@ void testParams()
 
 }
 
+// jidai-common 1.1.1: a stage is a wire only for a whole block, decided by planBlock.
+void testPlanBlock()
+{
+    auto c = make();
+    c->setParam (kWave, 0.5);                              // stage 3 amount 2m - 1 = 0, SYM 0
+    const bool none[3] { false, false, false };
+    c->planBlock (none, false);
+    check (! c->stageIsWire (2), "a WAVE change still ramping (smoothing) plans no wire");
+    run (*c, 48000, [] (int, OrigamiCore::Inputs&) {});     // let the 5 ms smoothers settle (exact snap)
+    c->planBlock (none, false);
+    check (c->stageIsWire (2) && ! c->stageIsWire (0) && ! c->stageIsWire (1), "settled WAVE 0.5: stage 3 is a wire, stages 1-2 are not");
+    c->setParam (kVc3Amt, 0.5);
+    const bool vc3[3] { false, false, true };
+    c->planBlock (vc3, false);
+    check (! c->stageIsWire (2), "a patched VC 3 with depth keeps stage 3's ADAA for the block");
+    c->planBlock (none, false);
+    check (c->stageIsWire (2), "VC 3 depth without a live source: stage 3 is a wire again");
+    // Under VC modulation that crosses 0, stage 3 keeps its ADAA all the way: planned output = never-skipping output.
+    auto planned = make(), unplanned = make();
+    for (auto* m : { planned.get(), unplanned.get() }) { m->setParam (kWave, 0.5); m->setParam (kVc3Amt, 0.5); }
+    double worst = 0.0;
+    for (int i = 0; i < 9600; ++i)
+    {
+        OrigamiCore::Inputs in;
+        in.inL = in.inR = 2.0 * std::sin (2.0 * kPi * 110.0 * i / 48000.0);
+        in.vc[2] = 5.0 * std::sin (2.0 * kPi * 3.0 * i / 48000.0);
+        in.vcPatched[2] = true;
+        if (i % 64 == 0) planned->planBlock (in.vcPatched, false);
+        double a, b, a2, b2;
+        planned->process (in, a, b);
+        unplanned->process (in, a2, b2);
+        worst = std::fmax (worst, std::fabs (a - a2));
+    }
+    check (worst == 0.0, "VC crossing 0 on stage 3: planned output identical to the never-skipping output (diff " + std::to_string (worst) + ")");
+}
+
 int main()
 {
     testParams();
@@ -332,6 +370,7 @@ int main()
     testSymmetry();
     testAudioRateVc();
     testAliasing();
+    testPlanBlock();
     std::printf ("%d checks, %d failed\n%s\n", checks, failures, failures == 0 ? "ORIGAMI TESTS PASS" : "ORIGAMI TESTS FAIL");
     return failures == 0 ? 0 : 1;
 }

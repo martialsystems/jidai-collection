@@ -96,8 +96,15 @@ void OrigamiDevice::prepare (double sampleRate)
 
 void OrigamiDevice::beginBlock()
 {
-    if (! dirty_.exchange (false))
-        return;
+    if (dirty_.exchange (false))
+        syncParams();
+    // Once per block: which shaper stages are true wires (jidai-common 1.1.1, never decided per sample).
+    const bool vcPatched[3] { unit_->connected()[Vc1], unit_->connected()[Vc2], unit_->connected()[Vc3] };
+    core_.planBlock (vcPatched, false);
+}
+
+void OrigamiDevice::syncParams()
+{
     for (int p = 0; p < origami::kParamCount; ++p)
     {
         const double v = params_[(size_t) p].load (std::memory_order_relaxed);

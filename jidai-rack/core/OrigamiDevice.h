@@ -35,6 +35,7 @@ public:
 
     void prepare (double sampleRate) override;
     void beginBlock() override;
+    void syncParams();   // audio thread: copy changed params into the core
     int latencySamples() const override;
     std::vector<JackGroup> jackGroups() const override;
 

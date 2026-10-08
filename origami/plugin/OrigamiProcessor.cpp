@@ -123,6 +123,10 @@ void OrigamiProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     const int inCh = main.getNumChannels(), outCh = out.getNumChannels();
     const double atk = 1.0 - std::exp (-1.0 / (core_.param (kAttack) * 0.001 * sampleRate_));
     const double rel = 1.0 - std::exp (-1.0 / (core_.param (kRelease) * 0.001 * sampleRate_));
+    {
+        const bool noVcJacks[3] { false, false, false };     // the plugin has no VC jacks; VC comes from SRC
+        core_.planBlock (noVcJacks, scLive);
+    }
     for (int i = 0; i < n; ++i)
     {
         OrigamiCore::Inputs in;
