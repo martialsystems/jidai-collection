@@ -17,18 +17,19 @@ FetchContent_Declare(JUCE
 FetchContent_Declare(bushido
   GIT_REPOSITORY https://github.com/martialsystems/bushido.git
   # Bushido branch redesign/bushido (PR #4): JCS v1.1 engine, rack/PitchLaw.h over the vendored jidai-common, no retired-prefix aliases.
+  # e3148e3: factory bank (22 patterns), README as a product page, rule citations dropped from tab text; on top of c565c33.
   # Pushed to origin on that branch. If it lands by squash or rebase, re-pin to the merged commit.
-  # c565c33: warnings-only fix on top of 5ce7e2f (float-equal and int-to-float under the rack's flags; same object code).
-  GIT_TAG c565c3344d18026ad79b3340e8561fc25f00d324
+  GIT_TAG e3148e3c3c9a92a4cb1b8a7369b0cb1d221b70de
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_Declare(ronin
   GIT_REPOSITORY https://github.com/martialsystems/Ronin.git
   # Ronin branch redesign/ronin (draft PR #6): JCS v1.1 engine, EG real-time law, TRIANGLE VCO, state format 2, HQ 2x,
-  # jidai-common 1.1.1 (24ee621) vendored, VCO 8' = the exact jcs::pitch::kC3Hz (matches BUSHIDO 5ce7e2f web/rack.html).
+  # jidai-common 1.1.1 (24ee621) vendored, VCO 8' = the exact jcs::pitch::kC3Hz. 38bfc11: factory bank (22 programs),
+  # strict-warnings build, docs; on top of ecde6dd.
   # RONIN vendors jidai-common (third_party/jidai-common); the rack compiles RONIN's sources against the rack's own,
   # newer jidai-common (one copy of each header in the binary), which keeps the API RONIN uses.
   # Pushed to origin on that branch. If it lands by squash or rebase, re-pin to the merged commit.
-  GIT_TAG ecde6dd0b70b579f9a5077e1b6e2ff901fbfd9f8
+  GIT_TAG 38bfc11917fab48d18da01663a4ca7920ebcc97b
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_MakeAvailable(JUCE bushido ronin)
 
