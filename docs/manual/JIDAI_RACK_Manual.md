@@ -474,6 +474,7 @@ The standalone app uses your default audio input and output. Choose devices and 
 | Can't see a cable | Check the cable view (K). In HIDE PASS-THRU, long cables are stubs tagged with their far end. In HIDE, only plugs are shown. A closed device's cables are on the back. |
 | A cable won't connect | Two outputs or two inputs can't be joined. The jack you drop on explains why it refuses. |
 | Older rack looks different | Racks from earlier versions are converted on load. The header shows a notice of what changed. |
+| A SHOGUN cable is missing after loading | Earlier versions of SHOGUN had a CLOCK › FILL IN and a MOD › LANE A jack that did nothing. They are gone, so cables on them are removed when the rack loads, and the notice says how many. |
 
 ---
 
