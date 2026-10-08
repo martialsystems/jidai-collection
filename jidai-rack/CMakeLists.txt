@@ -30,11 +30,13 @@ FetchContent_Declare(ronin
   # strict-warnings build, docs; on top of ecde6dd. 6226b90: PRESET list in balanced columns (plugin UI only; the rack
   # does not compile that file). 1a53da6 (frozen): jidai-common 1.1.2 vendored, EXT IN GATE declared S-TRIG (so the
   # rack's roles are RONIN's declared roles with no exception), PatchGraph::cableBadge (the rack's badge rule); tab text
-  # in plain words; engine unchanged.
+  # in plain words; engine unchanged. e2f1086 (final): its CMake turns FP contraction off on its engine targets
+  # (RoninFloatFlags) and guards its test warning flags; PluginProcessor declares using AudioProcessor::processBlock.
+  # Neither is compiled by the rack (the rack builds RONIN's engine sources with its own flags); engine hashes unchanged.
   # RONIN vendors jidai-common (third_party/jidai-common); the rack compiles RONIN's sources against the rack's own,
   # newer jidai-common (one copy of each header in the binary), which keeps the API RONIN uses.
   # Pushed to origin on that branch. If it lands by squash or rebase, re-pin to the merged commit.
-  GIT_TAG 1a53da63d80e3c03d1c52c44c412c24ca289ad41
+  GIT_TAG e2f1086de2b9d5361f2b238e0b9192951d85b4fa
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_Declare(shogun
   GIT_REPOSITORY https://github.com/martialsystems/shogun.git
