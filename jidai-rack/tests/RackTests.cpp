@@ -59,15 +59,15 @@ void testAddBushido()
     Device* d = rack.addDevice (DeviceKind::Bushido);
     check (d != nullptr && d->kind() == DeviceKind::Bushido, "add Bushido: device made");
     check (rack.deviceCount() == 1, "add Bushido: one device in the rack");
-    check (d->rackId() == "SQ-10#1", "add Bushido: rack id SQ-10#1, got " + d->rackId());
+    check (d->rackId() == "BUSHIDO#1", "add Bushido: rack id BUSHIDO#1, got " + d->rackId());
     check (d->jacks().size() == 25, "add Bushido: 25 jacks");
     Device* found = nullptr;
     int jack = -1;
-    check (rack.resolve ("SQ-10#1/OUTPUTS:CV A", found, jack) && found == d, "add Bushido: SQ-10#1/OUTPUTS:CV A resolves");
-    check (rack.resolve ("SQ-10#1/INPUTS:START/STOP", found, jack), "add Bushido: a jack label with a slash resolves");
+    check (rack.resolve ("BUSHIDO#1/OUTPUTS:CV A", found, jack) && found == d, "add Bushido: BUSHIDO#1/OUTPUTS:CV A resolves");
+    check (rack.resolve ("BUSHIDO#1/INPUTS:START/STOP", found, jack), "add Bushido: a jack label with a slash resolves");
 
     Device* second = rack.addDevice (DeviceKind::Bushido);
-    check (second->rackId() == "SQ-10#2", "add Bushido: a second BUSHIDO is SQ-10#2");
+    check (second->rackId() == "BUSHIDO#2", "add Bushido: a second BUSHIDO is BUSHIDO#2");
     check (rack.deviceCount() == 2, "add Bushido: more than one of each is allowed");
 
     Rack empty;
@@ -83,11 +83,11 @@ void testAddRonin()
     rack.prepare (48000.0, 512);
     Device* d = rack.addDevice (DeviceKind::Ronin);
     check (d != nullptr && d->kind() == DeviceKind::Ronin, "add Ronin: device made");
-    check (d->rackId() == "MS-50#1", "add Ronin: rack id MS-50#1");
+    check (d->rackId() == "RONIN#1", "add Ronin: rack id RONIN#1");
     check (d->units().size() == 16, "add Ronin: sixteen RONIN modules in the graph");
     auto* ronin = static_cast<RoninDevice*> (d);
-    check (ronin->program() == kDefaultFactoryPreset, "add Ronin: starts on the Voice program");
-    check (countInternal (rack, "MS-50#1/") == 8, "add Ronin: the Voice program's 8 cables, got " + std::to_string (countInternal (rack, "MS-50#1/")));
+    check (ronin->program() == kDefaultFactoryPreset, "add Ronin: starts on the INIT program");
+    check (countInternal (rack, "RONIN#1/") == 8, "add Ronin: the INIT program's 8 cables, got " + std::to_string (countInternal (rack, "RONIN#1/")));
     check (rack.liveCableCount() == 8, "add Ronin: 8 cables live in the graph");
     check (ronin->effectOn(), "add Ronin: Effect on");
 
@@ -107,8 +107,8 @@ void testAddRonin()
     Device* second = rack.addDevice (DeviceKind::Ronin);
     static_cast<RoninDevice*> (second)->setEffectOn (false);
     rack.process (in.data(), in.data(), l.data(), r.data(), 256);
-    check (near (rack.jackVolts ("MS-50#2/EXT IN:L"), 0.0f), "second RONIN: EXT IN stays silent");
-    check (near (rack.jackVolts ("MS-50#1/EXT IN:L"), 1.25f, 1.0e-4f), "first RONIN: EXT IN L is host x 5 V");
+    check (near (rack.jackVolts ("RONIN#2/EXT IN:L"), 0.0f), "second RONIN: EXT IN stays silent");
+    check (near (rack.jackVolts ("RONIN#1/EXT IN:L"), 1.25f, 1.0e-4f), "first RONIN: EXT IN L is host x 5 V");
 }
 
 void testBushidoCvIntoRoninHzV()
@@ -121,11 +121,11 @@ void testBushidoCvIntoRoninHzV()
         setParam (*b, ("A:" + std::to_string (s)).c_str(), 0.6f);     // RANGE A is 5 V: every step is 3 V
     press (*b, "MODE:START/STOP");
 
-    check (rack.check ("SQ-10#1/OUTPUTS:CV A", "MS-50#1/VCO:HZ/V") == Rack::Check::Ok, "CV A -> VCO HZ/V is a legal cable");
-    check (rack.connect ("SQ-10#1/OUTPUTS:CV A", "MS-50#1/VCO:HZ/V", 2) == Rack::Check::Ok, "patch CV A -> VCO HZ/V");
+    check (rack.check ("BUSHIDO#1/OUTPUTS:CV A", "RONIN#1/VCO:HZ/V") == Rack::Check::Ok, "CV A -> VCO HZ/V is a legal cable");
+    check (rack.connect ("BUSHIDO#1/OUTPUTS:CV A", "RONIN#1/VCO:HZ/V", 2) == Rack::Check::Ok, "patch CV A -> VCO HZ/V");
     run (rack, 4800);
-    const float cv = rack.jackVolts ("SQ-10#1/OUTPUTS:CV A");
-    const float hz = rack.jackVolts ("MS-50#1/VCO:HZ/V");
+    const float cv = rack.jackVolts ("BUSHIDO#1/OUTPUTS:CV A");
+    const float hz = rack.jackVolts ("RONIN#1/VCO:HZ/V");
     check (near (cv, 3.0f, 1.0e-3f), "CV A plays 3 V, got " + std::to_string (cv));
     check (near (hz, cv), "VCO HZ/V reads the same volts as CV A, got " + std::to_string (hz));
 
@@ -136,12 +136,12 @@ void testBushidoCvIntoRoninHzV()
             setParam (*b, ("A:" + std::to_string (s)).c_str(), volts / 5.0f);
         run (rack, 4800);
         int crossings = 0;
-        float prev = rack.jackVolts ("MS-50#1/VCO:SAW");
+        float prev = rack.jackVolts ("RONIN#1/VCO:SAW");
         std::vector<float> l (1), rr (1);
         for (int i = 0; i < 48000; ++i)
         {
             rack.process (nullptr, nullptr, l.data(), rr.data(), 1);
-            const float now = rack.jackVolts ("MS-50#1/VCO:SAW");
+            const float now = rack.jackVolts ("RONIN#1/VCO:SAW");
             if (prev > 0.0f && now <= 0.0f && prev - now > 1.0f)
                 ++crossings;
             prev = now;
@@ -154,7 +154,7 @@ void testBushidoCvIntoRoninHzV()
     check (low > 0 && std::abs (high - 2 * low) <= 2, "VCO HZ/V: 2 V plays twice the frequency of 1 V, got " + std::to_string (low) + " and " + std::to_string (high) + " Hz");
 
     // Back the other way: a RONIN output into a BUSHIDO input in the same patch.
-    check (rack.connect ("MS-50#1/MG:TRI", "SQ-10#1/CLOCK:TEMPO CV") == Rack::Check::Ok, "and back: MG TRI -> BUSHIDO TEMPO CV");
+    check (rack.connect ("RONIN#1/MG:TRI", "BUSHIDO#1/CLOCK:TEMPO CV") == Rack::Check::Ok, "and back: MG TRI -> BUSHIDO TEMPO CV");
 }
 
 void testRoninMgIntoBushidoClock()
@@ -173,13 +173,13 @@ void testRoninMgIntoBushidoClock()
     run (rack, 48000);
     check (b->engine().currentStep() == before, "EXT clock with no cable: the step does not move");
 
-    check (rack.connect ("MS-50#1/MG:TRI", "SQ-10#1/CLOCK:CLOCK") == Rack::Check::Ok, "patch MG TRI -> BUSHIDO CLOCK");
+    check (rack.connect ("RONIN#1/MG:TRI", "BUSHIDO#1/CLOCK:CLOCK") == Rack::Check::Ok, "patch MG TRI -> BUSHIDO CLOCK");
     int moves = 0, last = b->engine().currentStep();
     std::vector<float> l (64), rr (64);
     for (int block = 0; block < 48000 / 64; ++block)
     {
         rack.process (nullptr, nullptr, l.data(), rr.data(), 64);
-        check (near (rack.jackVolts ("SQ-10#1/CLOCK:CLOCK"), rack.jackVolts ("MS-50#1/MG:TRI")), "CLOCK jack reads MG TRI");
+        check (near (rack.jackVolts ("BUSHIDO#1/CLOCK:CLOCK"), rack.jackVolts ("RONIN#1/MG:TRI")), "CLOCK jack reads MG TRI");
         if (b->engine().currentStep() != last)
         {
             ++moves;
@@ -196,29 +196,29 @@ void testRemoveDevice()
     rack.addDevice (DeviceKind::Bushido);
     Device* ronin = rack.addDevice (DeviceKind::Ronin);
     rack.addDevice (DeviceKind::Ronin);
-    rack.connect ("SQ-10#1/OUTPUTS:CV A", "MS-50#1/VCO:HZ/V");
-    rack.connect ("MS-50#1/MG:TRI", "SQ-10#1/CLOCK:CLOCK");
-    rack.connect ("SQ-10#1/OUTPUTS:GATE A", "MS-50#2/EG 1:TRIG");
-    rack.connect ("SQ-10#1/1:TRIG", "SQ-10#1/INPUTS:RESET");
+    rack.connect ("BUSHIDO#1/OUTPUTS:CV A", "RONIN#1/VCO:HZ/V");
+    rack.connect ("RONIN#1/MG:TRI", "BUSHIDO#1/CLOCK:CLOCK");
+    rack.connect ("BUSHIDO#1/OUTPUTS:GATE A", "RONIN#2/EG 1:TRIG");
+    rack.connect ("BUSHIDO#1/1:TRIG", "BUSHIDO#1/INPUTS:RESET");
     run (rack, 512);
-    const int before = (int) rack.cables().size();     // 8 + 8 Voice cables, 4 patched
+    const int before = (int) rack.cables().size();     // 8 + 8 INIT cables, 4 patched
 
     check (rack.removeDevice (ronin), "remove RONIN 1");
     check (rack.deviceCount() == 2, "remove: two devices left");
     bool touches = false;
     for (auto& c : rack.cables())
-        touches = touches || c.a.rfind ("MS-50#1/", 0) == 0 || c.b.rfind ("MS-50#1/", 0) == 0;
+        touches = touches || c.a.rfind ("RONIN#1/", 0) == 0 || c.b.rfind ("RONIN#1/", 0) == 0;
     check (! touches, "remove: no cable left on RONIN 1's jacks");
     check ((int) rack.cables().size() == before - 10, "remove: its 8 own cables and 2 cross cables went, got " + std::to_string (before - (int) rack.cables().size()));
     check (rack.liveCableCount() == (int) rack.cables().size(), "remove: the graph runs exactly the cables left");
     Device* d = nullptr;
     int j = -1;
-    check (! rack.resolve ("MS-50#1/VCO:HZ/V", d, j), "remove: MS-50#1 jacks no longer resolve");
+    check (! rack.resolve ("RONIN#1/VCO:HZ/V", d, j), "remove: RONIN#1 jacks no longer resolve");
     run (rack, 512);    // still runs with the device gone
-    check (rack.check ("SQ-10#1/OUTPUTS:GATE A", "MS-50#2/EG 1:TRIG") == Rack::Check::Ok, "remove: RONIN 2 keeps its cable");
+    check (rack.check ("BUSHIDO#1/OUTPUTS:GATE A", "RONIN#2/EG 1:TRIG") == Rack::Check::Ok, "remove: RONIN 2 keeps its cable");
 
     Device* again = rack.addDevice (DeviceKind::Ronin, 0);
-    check (again->rackId() == "MS-50#1" && rack.indexOf (again) == 0, "a new RONIN takes the free number and the drop position");
+    check (again->rackId() == "RONIN#1" && rack.indexOf (again) == 0, "a new RONIN takes the free number and the drop position");
 
     rack.clear();
     check (rack.deviceCount() == 0 && rack.cables().empty() && rack.liveCableCount() == 0, "empty rack is valid");
@@ -236,11 +236,11 @@ void testOneSampleFeedback()
     rack.replaceInternalCables (r, {});
     setParam (*b, "MIXER:LEVEL 1", 1.0f);
     setParam (*b, "MIXER:LEVEL 2", 0.5f);
-    rack.connect ("MS-50#1/EXT IN:L", "SQ-10#1/MIXER:IN 1");
-    rack.connect ("SQ-10#1/MIXER:OUT", "MS-50#1/INV:IN");
-    rack.connect ("MS-50#1/INV:OUT", "SQ-10#1/MIXER:IN 2");
+    rack.connect ("RONIN#1/EXT IN:L", "BUSHIDO#1/MIXER:IN 1");
+    rack.connect ("BUSHIDO#1/MIXER:OUT", "RONIN#1/INV:IN");
+    rack.connect ("RONIN#1/INV:OUT", "BUSHIDO#1/MIXER:IN 2");
     check (rack.delayedCableCount() == 1, "feedback: exactly one delayed cable");
-    check (rack.cables().back().a == "MS-50#1/INV:OUT", "feedback: the newest cable closes the loop");
+    check (rack.cables().back().a == "RONIN#1/INV:OUT", "feedback: the newest cable closes the loop");
 
     const int n = 8;
     std::vector<float> in ((size_t) n, 0.0f), l (1), rr (1);
@@ -249,9 +249,9 @@ void testOneSampleFeedback()
     for (int i = 0; i < n; ++i)
     {
         rack.process (&in[(size_t) i], &in[(size_t) i], l.data(), rr.data(), 1);
-        mix.push_back (rack.jackVolts ("SQ-10#1/MIXER:OUT"));
-        inv.push_back (rack.jackVolts ("MS-50#1/INV:OUT"));
-        mixIn2.push_back (rack.jackVolts ("SQ-10#1/MIXER:IN 2"));
+        mix.push_back (rack.jackVolts ("BUSHIDO#1/MIXER:OUT"));
+        inv.push_back (rack.jackVolts ("RONIN#1/INV:OUT"));
+        mixIn2.push_back (rack.jackVolts ("BUSHIDO#1/MIXER:IN 2"));
     }
     const float expect[n] = { 0.0f, 0.0f, 1.0f, -0.5f, 0.25f, -0.125f, 0.0625f, -0.03125f };
     for (int i = 0; i < n; ++i)
@@ -264,16 +264,16 @@ void testOneSampleFeedback()
 
     // Patch the same loop in another order: now MIX OUT -> INV IN is the newest, so that one is delayed.
     rack.setCables ({});
-    rack.connect ("MS-50#1/EXT IN:L", "SQ-10#1/MIXER:IN 1");
-    rack.connect ("MS-50#1/INV:OUT", "SQ-10#1/MIXER:IN 2");
-    rack.connect ("SQ-10#1/MIXER:OUT", "MS-50#1/INV:IN");
+    rack.connect ("RONIN#1/EXT IN:L", "BUSHIDO#1/MIXER:IN 1");
+    rack.connect ("RONIN#1/INV:OUT", "BUSHIDO#1/MIXER:IN 2");
+    rack.connect ("BUSHIDO#1/MIXER:OUT", "RONIN#1/INV:IN");
     run (rack, 64);
     std::vector<float> invIn, mix2;
     for (int i = 0; i < n; ++i)
     {
         rack.process (&in[(size_t) i], &in[(size_t) i], l.data(), rr.data(), 1);
-        invIn.push_back (rack.jackVolts ("MS-50#1/INV:IN"));
-        mix2.push_back (rack.jackVolts ("SQ-10#1/MIXER:OUT"));
+        invIn.push_back (rack.jackVolts ("RONIN#1/INV:IN"));
+        mix2.push_back (rack.jackVolts ("BUSHIDO#1/MIXER:OUT"));
     }
     check (rack.delayedCableCount() == 1, "feedback, other order: one delayed cable");
     for (int i = 1; i < n; ++i)
@@ -281,7 +281,7 @@ void testOneSampleFeedback()
 
     // A loop inside one RONIN follows the same rule (RONIN's Feedback-style self patch).
     rack.setCables ({});
-    rack.connect ("MS-50#1/INV:OUT", "MS-50#1/INV:IN");
+    rack.connect ("RONIN#1/INV:OUT", "RONIN#1/INV:IN");
     check (rack.delayedCableCount() == 1, "self patch: the cable is delayed one sample");
 }
 
@@ -293,26 +293,26 @@ void testGateLaw()
     rack.prepare (48000.0, 512);
     auto* b = static_cast<BushidoDevice*> (rack.addDevice (DeviceKind::Bushido));
     auto* r = static_cast<RoninDevice*> (rack.addDevice (DeviceKind::Ronin));
-    rack.connect ("SQ-10#1/OUTPUTS:GATE A", "MS-50#1/EG 1:TRIG");
+    rack.connect ("BUSHIDO#1/OUTPUTS:GATE A", "RONIN#1/EG 1:TRIG");
     run (rack, 64);
-    check (near (rack.jackVolts ("MS-50#1/EG 1:TRIG"), 10.0f), "inputs sum: Voice's EXT IN GATE (+5 V released) plus a low BUSHIDO gate (+5 V)");
+    check (near (rack.jackVolts ("RONIN#1/EG 1:TRIG"), 10.0f), "inputs sum: INIT's EXT IN GATE (+5 V released) plus a low BUSHIDO gate (+5 V)");
     rack.replaceInternalCables (r, {});
     run (rack, 64);
-    check (near (rack.jackVolts ("MS-50#1/EG 1:TRIG"), 5.0f), "stopped BUSHIDO: EG 1 TRIG rests at +5 V (released)");
+    check (near (rack.jackVolts ("RONIN#1/EG 1:TRIG"), 5.0f), "stopped BUSHIDO: EG 1 TRIG rests at +5 V (released)");
     press (*b, "MODE:START/STOP");
     run (rack, 480);
-    check (rack.jackVolts ("SQ-10#1/OUTPUTS:GATE A") > 1.0f, "running BUSHIDO: GATE A high");
-    check (near (rack.jackVolts ("MS-50#1/EG 1:TRIG"), 0.0f), "high gate reaches EG 1 TRIG as 0 V (held)");
+    check (rack.jackVolts ("BUSHIDO#1/OUTPUTS:GATE A") > 1.0f, "running BUSHIDO: GATE A high");
+    check (near (rack.jackVolts ("RONIN#1/EG 1:TRIG"), 0.0f), "high gate reaches EG 1 TRIG as 0 V (held)");
 
-    rack.connect ("MS-50#1/EXT IN:GATE", "SQ-10#1/INPUTS:STEP");
+    rack.connect ("RONIN#1/EXT IN:GATE", "BUSHIDO#1/INPUTS:STEP");
     r->setHold (true);
     run (rack, 64);
-    check (near (rack.jackVolts ("SQ-10#1/INPUTS:STEP"), 5.0f), "RONIN HOLD gate reaches BUSHIDO STEP as 5 V");
+    check (near (rack.jackVolts ("BUSHIDO#1/INPUTS:STEP"), 5.0f), "RONIN HOLD gate reaches BUSHIDO STEP as 5 V");
     r->setHold (false);
     run (rack, 64);
-    check (near (rack.jackVolts ("SQ-10#1/INPUTS:STEP"), 0.0f), "released RONIN gate reaches BUSHIDO as 0 V");
+    check (near (rack.jackVolts ("BUSHIDO#1/INPUTS:STEP"), 0.0f), "released RONIN gate reaches BUSHIDO as 0 V");
 
-    check (rack.check ("SQ-10#1/OUTPUTS:CV A", "MS-50#1/VCF:OUT") == Rack::Check::TwoOutputs, "two outputs carry nothing");
+    check (rack.check ("BUSHIDO#1/OUTPUTS:CV A", "RONIN#1/VCF:OUT") == Rack::Check::TwoOutputs, "two outputs carry nothing");
 }
 
 void testBypass()
@@ -325,7 +325,7 @@ void testBypass()
     check (b->noteEventCount() == 0 || b->noteEvent (0).on, "MIDI convenience: a note on is collected");
     b->setBypassed (true);
     run (rack, 480);
-    check (rack.jackVolts ("SQ-10#1/OUTPUTS:GATE A") == 0.0f, "BYPASS: GATE A stays low");
+    check (rack.jackVolts ("BUSHIDO#1/OUTPUTS:GATE A") == 0.0f, "BYPASS: GATE A stays low");
     check (b->engine().isRunning(), "BYPASS: the engine keeps running");
 }
 

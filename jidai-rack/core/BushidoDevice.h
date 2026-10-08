@@ -2,13 +2,13 @@
 
 #pragma once
 
-// BUSHIDO in the rack: the BUSHIDO engine (engine/Sq10Module, compiled from the BUSHIDO sources) as one unit
+// BUSHIDO in the rack: the BUSHIDO engine (engine/BushidoModule, compiled from the BUSHIDO sources) as one unit
 // of the rack graph, run one sample at a time like the web rack.
 // In the rack the MIXER IN normals are off: host audio goes to the first RONIN's EXT IN, never into BUSHIDO.
 
 #include "Device.h"
 
-#include "engine/Sq10Module.h"
+#include "engine/BushidoModule.h"
 
 #include <array>
 #include <atomic>
@@ -24,7 +24,7 @@ public:
     void prepare (double sampleRate) override;
     void beginBlock() override;
 
-    Sq10Module& engine() { return sq; }
+    BushidoModule& engine() { return sq; }
     int paramIndex (const std::string& id) const;     // engine parameter by layout id ("CH:PORTA A"), -1 if none
     void setParam (const std::string& id, float value);
     float param (const std::string& id) const;
@@ -47,7 +47,7 @@ public:
 
 private:
     class EngineUnit;
-    Sq10Module sq;
+    BushidoModule sq;
     std::unique_ptr<EngineUnit> unit_;
     std::atomic<bool> bypass_ { false };
     std::array<NoteEvent, kMaxNoteEvents> notes_ {};

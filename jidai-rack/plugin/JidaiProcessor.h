@@ -50,7 +50,7 @@ public:
     bool browserOpen = true;         // window only: the device browser is shown, or folded to a thin strip; saved with the rack
 
     // Both screens: banks A and B, up to 999 entries. Bank A is that instrument's factory set.
-    // Bank B starts with the rack patches (LOOP BASS, RING SEED, and any later entries in rack_patches.json).
+    // Bank B starts with the rack patches in rack_patches.json (cleared for now, so bank B holds user entries only).
     // A rack patch sets the device whose screen was used, the first device of the other kind, and the cables on those two.
     // A BUSHIDO pattern sets that BUSHIDO only. A RONIN factory preset sets that RONIN only.
     // Saved BUSHIDO patterns go to the BUSHIDO plugin's user file, after its factory patterns.
@@ -68,6 +68,8 @@ public:
 
     // Tests point user files here before constructing a processor. An empty file is Application Support.
     static void setUserStoreRootForTest (const juce::File& root);
+    // Tests swap in a rack patch list (rack_patches.json format) before constructing a processor. Empty is the compiled file.
+    static void setRackPatchesForTest (const juce::String& json);
 
 #if JIDAI_PRESET_TEST
     void testRestore (const juce::XmlElement& xml) { restoreFromXml (xml); }

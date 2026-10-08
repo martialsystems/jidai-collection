@@ -117,7 +117,7 @@ int main (int argc, char** argv)
         const auto r = b.rowBounds (2).toFloat().getCentre();
         click (b, r);
         pump();
-        expect (proc.rack().deviceCount() == 3 && proc.rack().device (2)->rackId() == "MS-50#2", "clicking RONIN (Effect) adds RONIN 2 at the bottom");
+        expect (proc.rack().deviceCount() == 3 && proc.rack().device (2)->rackId() == "RONIN#2", "clicking RONIN (Effect) adds RONIN 2 at the bottom");
         expect (b.countOnRack (jidai::DeviceKind::Ronin) == 2, "the RONIN count reads 2");
         rack.removeDevice (proc.rack().device (2));
         pump();
@@ -150,31 +150,31 @@ int main (int argc, char** argv)
     juce::DragAndDropTarget::SourceDetails drop ("add:RONIN", &editor->deviceList(), { 10, rack.getHeight() - 5 });
     rack.itemDropped (drop);
     pump();
-    expect (proc.rack().deviceCount() == 3 && proc.rack().device (2)->rackId() == "MS-50#2", "drop RONIN at the bottom: RONIN 2 added");
+    expect (proc.rack().deviceCount() == 3 && proc.rack().device (2)->rackId() == "RONIN#2", "drop RONIN at the bottom: RONIN 2 added");
     expect (rack.slotCount() == 3, "window shows three panels");
 
     // Drop a BUSHIDO at the top.
     juce::DragAndDropTarget::SourceDetails dropTop ("add:BUSHIDO", &editor->deviceList(), { 10, 2 });
     rack.itemDropped (dropTop);
     pump();
-    expect (proc.rack().device (0)->rackId() == "SQ-10#2", "drop BUSHIDO at the top: BUSHIDO 2 is first");
+    expect (proc.rack().device (0)->rackId() == "BUSHIDO#2", "drop BUSHIDO at the top: BUSHIDO 2 is first");
 
     // Patch BUSHIDO 1 CV A to RONIN 2 HZ/V by dragging a cable between the two jacks on the cable layer.
     auto* layer = rack.cableLayer();
-    const int a = layer->jackIndex ("SQ-10#1/OUTPUTS:CV A");
-    const int b = layer->jackIndex ("MS-50#2/VCO:HZ/V");
+    const int a = layer->jackIndex ("BUSHIDO#1/OUTPUTS:CV A");
+    const int b = layer->jackIndex ("RONIN#2/VCO:HZ/V");
     expect (a >= 0 && b >= 0, "both jacks are on the one cable layer");
     const float s = layer->getWidth() / RackView::kPanelWidth;
     drag (*layer, layer->jackPosDesign (a) * s, layer->jackPosDesign (b) * s);
     pump();
-    expect (hasCable (proc, "SQ-10#1/OUTPUTS:CV A", "MS-50#2/VCO:HZ/V"), "dragged cable: BUSHIDO 1 CV A -> RONIN 2 HZ/V is in the rack");
+    expect (hasCable (proc, "BUSHIDO#1/OUTPUTS:CV A", "RONIN#2/VCO:HZ/V"), "dragged cable: BUSHIDO 1 CV A -> RONIN 2 HZ/V is in the rack");
 
     // And back: RONIN 1 MG TRI into BUSHIDO 1 CLOCK.
-    const int mg = layer->jackIndex ("MS-50#1/MG:TRI");
-    const int clk = layer->jackIndex ("SQ-10#1/CLOCK:CLOCK");
+    const int mg = layer->jackIndex ("RONIN#1/MG:TRI");
+    const int clk = layer->jackIndex ("BUSHIDO#1/CLOCK:CLOCK");
     drag (*layer, layer->jackPosDesign (mg) * s, layer->jackPosDesign (clk) * s);
     pump();
-    expect (hasCable (proc, "MS-50#1/MG:TRI", "SQ-10#1/CLOCK:CLOCK"), "dragged cable: RONIN 1 MG TRI -> BUSHIDO 1 CLOCK is in the rack");
+    expect (hasCable (proc, "RONIN#1/MG:TRI", "BUSHIDO#1/CLOCK:CLOCK"), "dragged cable: RONIN 1 MG TRI -> BUSHIDO 1 CLOCK is in the rack");
 
     // Run the audio side once so the needle and lamps have something to show, then picture it.
     juce::AudioBuffer<float> buffer (2, 256);
@@ -189,7 +189,7 @@ int main (int argc, char** argv)
 
     // Turn a RONIN knob through its panel: drag VCF CUTOFF up.
     {
-        auto* ronin = dynamic_cast<jidai::RoninDevice*> (proc.rack().findDevice ("MS-50#1"));
+        auto* ronin = dynamic_cast<jidai::RoninDevice*> (proc.rack().findDevice ("RONIN#1"));
         const int cutoff = panelKnobIndex ("VCF", "CUTOFF");
         const float before = ronin->knob (cutoff);
         for (int i = 0; i < rack.getNumChildComponents(); ++i)
@@ -211,7 +211,7 @@ int main (int argc, char** argv)
         auto* peer = editor->getPeer();
         expect (peer != nullptr, "the probe window has a peer for wheel events");
         PatternScreen* screen = nullptr;
-        const int ronin1 = rack.indexOfSlotFor (*proc.rack().findDevice ("MS-50#1"));
+        const int ronin1 = rack.indexOfSlotFor (*proc.rack().findDevice ("RONIN#1"));
         std::function<void (juce::Component&)> find = [&] (juce::Component& c)
         {
             for (auto* child : c.getChildren())
@@ -258,7 +258,7 @@ int main (int argc, char** argv)
 
     // Fold RONIN 2 with the arrow on its ear: it becomes a strip, its cables stay in the rack, and opening it shows them again.
     {
-        auto* r2 = proc.rack().findDevice ("MS-50#2");
+        auto* r2 = proc.rack().findDevice ("RONIN#2");
         const int slot = rack.indexOfSlotFor (*r2);
         const int tall = rack.slotBounds (slot).getHeight();
         const auto box = rack.foldButtonBounds (slot).getCentre();
@@ -266,14 +266,14 @@ int main (int argc, char** argv)
             click (*c, (box - c->getPosition()).toFloat());
         pump();
         expect (r2->folded && rack.slotBounds (rack.indexOfSlotFor (*r2)).getHeight() < tall / 5, "fold arrow folds RONIN 2 to a strip");
-        expect (rack.cableLayer()->jackIndex ("MS-50#2/VCO:HZ/V") < 0, "a folded device's jacks are off the cable layer");
+        expect (rack.cableLayer()->jackIndex ("RONIN#2/VCO:HZ/V") < 0, "a folded device's jacks are off the cable layer");
         // Patch something else while it is folded: the folded device's cable must survive the layer's commit.
-        const int m1 = rack.cableLayer()->jackIndex ("MS-50#1/MG:SAW");
-        const int n1 = rack.cableLayer()->jackIndex ("MS-50#1/VCA 2:IN");
+        const int m1 = rack.cableLayer()->jackIndex ("RONIN#1/MG:SAW");
+        const int n1 = rack.cableLayer()->jackIndex ("RONIN#1/VCA 2:IN");
         const float ls = rack.cableLayer()->getWidth() / RackView::kPanelWidth;
         drag (*rack.cableLayer(), rack.cableLayer()->jackPosDesign (m1) * ls, rack.cableLayer()->jackPosDesign (n1) * ls);
         pump();
-        expect (hasCable (proc, "SQ-10#1/OUTPUTS:CV A", "MS-50#2/VCO:HZ/V"), "its cable stays in the rack while folded");
+        expect (hasCable (proc, "BUSHIDO#1/OUTPUTS:CV A", "RONIN#2/VCO:HZ/V"), "its cable stays in the rack while folded");
         editor->viewport().setViewPosition (0, juce::jmax (0, rack.slotBounds (rack.indexOfSlotFor (*r2)).getBottom() - editor->viewport().getHeight() + 200));
         snapshot (*editor, out.getChildFile ("2b_folded.png"));
         editor->viewport().setViewPosition (0, 0);
@@ -281,31 +281,31 @@ int main (int argc, char** argv)
         if (auto* c = rack.getComponentAt (open))
             click (*c, (open - c->getPosition()).toFloat());
         pump();
-        expect (! r2->folded && rack.cableLayer()->jackIndex ("MS-50#2/VCO:HZ/V") >= 0, "the arrow opens it again, jacks back on the layer");
+        expect (! r2->folded && rack.cableLayer()->jackIndex ("RONIN#2/VCO:HZ/V") >= 0, "the arrow opens it again, jacks back on the layer");
     }
 
     // Remove RONIN 2 with the x on its ear; its cables go with it.
     {
-        const int slot = rack.indexOfSlotFor (*proc.rack().findDevice ("MS-50#2"));
+        const int slot = rack.indexOfSlotFor (*proc.rack().findDevice ("RONIN#2"));
         const auto box = rack.removeButtonBounds (slot).getCentre();
         auto* c = rack.getComponentAt (box);
         expect (c != nullptr && c != rack.cableLayer(), "the remove button on the ear is not under the cable layer");
         if (c != nullptr)
             click (*c, (box - c->getPosition()).toFloat());
         pump();
-        expect (proc.rack().findDevice ("MS-50#2") == nullptr, "x removes RONIN 2");
-        expect (! hasCable (proc, "SQ-10#1/OUTPUTS:CV A", "MS-50#2/VCO:HZ/V"), "its cable went with it");
-        expect (hasCable (proc, "MS-50#1/MG:TRI", "SQ-10#1/CLOCK:CLOCK"), "other cables stay");
+        expect (proc.rack().findDevice ("RONIN#2") == nullptr, "x removes RONIN 2");
+        expect (! hasCable (proc, "BUSHIDO#1/OUTPUTS:CV A", "RONIN#2/VCO:HZ/V"), "its cable went with it");
+        expect (hasCable (proc, "RONIN#1/MG:TRI", "BUSHIDO#1/CLOCK:CLOCK"), "other cables stay");
     }
 
     // Drag a device off onto the device list: the list takes it and removes it.
     {
-        juce::DragAndDropTarget::SourceDetails off ("move:SQ-10#2", &rack, { 10, 10 });
+        juce::DragAndDropTarget::SourceDetails off ("move:BUSHIDO#2", &rack, { 10, 10 });
         auto* list = dynamic_cast<juce::DragAndDropTarget*> (&editor->deviceList());
         expect (list != nullptr && list->isInterestedInDragSource (off), "the device list takes a device dragged off the rack");
         list->itemDropped (off);
         pump();
-        expect (proc.rack().findDevice ("SQ-10#2") == nullptr, "dragged onto the list: BUSHIDO 2 removed");
+        expect (proc.rack().findDevice ("BUSHIDO#2") == nullptr, "dragged onto the list: BUSHIDO 2 removed");
     }
 
     // State round trip.

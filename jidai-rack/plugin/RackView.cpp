@@ -301,10 +301,10 @@ public:
         return std::abs (v - std::round (v)) < 0.05 ? juce::String ((int) std::round (v)) : juce::String (v, 1);
     }
     bool readoutEnabled (const juce::String&) override { return get ("CLOCK:SOURCE") < 0.5f; }
-    double readoutValue (const juce::String&) override { return Sq10Module::bpm (get ("CLOCK:TEMPO"), get ("CLOCK:DIV")); }
+    double readoutValue (const juce::String&) override { return BushidoModule::bpm (get ("CLOCK:TEMPO"), get ("CLOCK:DIV")); }
     void setReadoutValue (const juce::String&, double bpm) override
     {
-        set ("CLOCK:TEMPO", Sq10Module::tempoForBpm (juce::jmax (0.1, bpm), get ("CLOCK:DIV")));
+        set ("CLOCK:TEMPO", BushidoModule::tempoForBpm (juce::jmax (0.1, bpm), get ("CLOCK:DIV")));
     }
     BushidoDevice& b;
 };
@@ -493,9 +493,9 @@ void RackView::rebuild()
         }
         else if (auto* b = dynamic_cast<BushidoDevice*> (d))
         {
-            auto layout = PanelLayout::fromJson (juce::String::fromUTF8 (BinaryData::sq10_layout_json, BinaryData::sq10_layout_jsonSize));
-            layout.rack = juce::String (d->rackId());          // SQ-10#N: one BUSHIDO's jacks among many
-            auto bg = juce::Drawable::createFromImageData (BinaryData::sq10_panel_bg_svg, BinaryData::sq10_panel_bg_svgSize);
+            auto layout = PanelLayout::fromJson (juce::String::fromUTF8 (BinaryData::bushido_layout_json, BinaryData::bushido_layout_jsonSize));
+            layout.rack = juce::String (d->rackId());          // BUSHIDO#N: one BUSHIDO's jacks among many
+            auto bg = juce::Drawable::createFromImageData (BinaryData::bushido_panel_bg_svg, BinaryData::bushido_panel_bg_svgSize);
             slot->binding = std::make_unique<BushidoBinding> (*b);
             slot->height = layout.height;
             slot->panel = std::make_unique<RackPanel> (layout, std::move (bg), *slot->binding);

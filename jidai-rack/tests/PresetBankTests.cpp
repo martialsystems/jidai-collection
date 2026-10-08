@@ -1,7 +1,8 @@
 // Copyright (c) 2026 Martial Systems LLC. All rights reserved.
 //
-// Preset banks through JidaiProcessor. Bank A is each instrument's factory set.
-// Bank B starts with the compiled rack patches. User files stay in a temp directory.
+// Preset banks through JidaiProcessor. Bank A is each instrument's factory set, INIT only for now.
+// Bank B starts with the rack patches. The compiled list is empty for now, so the rack patch tests
+// load a fixture list (TEST LOOP, TEST RING) through setRackPatchesForTest. User files stay in a temp directory.
 
 #include "plugin/JidaiEditor.h"
 
@@ -54,10 +55,10 @@ int countInternal (const jidai::Rack& rack, const std::string& prefix)
     return n;
 }
 
-bool anySq10 (const jidai::Rack& rack)
+bool anyBushido (const jidai::Rack& rack)
 {
     for (auto& c : rack.cables())
-        if (c.a.rfind ("SQ-10", 0) == 0 || c.b.rfind ("SQ-10", 0) == 0)
+        if (c.a.rfind ("BUSHIDO", 0) == 0 || c.b.rfind ("BUSHIDO", 0) == 0)
             return true;
     return false;
 }
@@ -82,31 +83,50 @@ jidai::RoninDevice* roninAt (JidaiProcessor& p, int nth = 0)
     return nullptr;
 }
 
-const char* kRoninA[] = {
-    "DRY", "NOISE MIXER", "VOICE", "RING", "S&H", "FEEDBACK", "HOLD",
-    "FILTER LOOP", "MG FILTER", "STEP CUTOFF", "RING DRONE", "DELAY BOUNCE", "SELF RING"
-};
+// Two rack patches in the rack_patches.json format. They exercise the rack patch loader while the
+// compiled list is empty: a filter loop sequenced by BUSHIDO, and a self ring seeded by its CV C.
+const char* kFixturePatches = R"JSON({
+ "patches": [
+  { "name": "TEST LOOP",
+    "rack": { "preset": 0,
+      "knobs": { "VCO:RANGE": 0, "VCF:CUTOFF": 0.4, "VCF:PEAK": 0.7, "VCF:MOD": 0.68,
+                 "EG 1:ATTACK": 0, "EG 1:DECAY": 0.25, "EG 1:SUSTAIN": 0.2, "EG 1:RELEASE": 0.15 },
+      "params": { "MODE:MODE": 0, "CH:C MODE": 0, "CLOCK:TEMPO": 0.6, "CLOCK:SOURCE": 0, "CH:RANGE A": 1, "CH:PORTA A": 0,
+                  "A:1": 0.4, "C:1": 0.15, "A:2": 0.4, "C:2": 0.35, "A:3": 0.8, "C:3": 0.6 },
+      "cables": [ ["RONIN/VCO:SAW", "RONIN/VCF:IN"], ["RONIN/VCF:OUT", "RONIN/VCA 1:IN"], ["RONIN/VCA 1:OUT", "RONIN/VCA 2:IN"],
+                  ["RONIN/VCA 2:OUT", "RONIN/OUTPUT:WET"], ["RONIN/VCF:OUT", "RONIN/VCF:CUTOFF"],
+                  ["BUSHIDO/OUTPUTS:CV A", "RONIN/VCO:HZ/V"], ["BUSHIDO/OUTPUTS:CV C", "RONIN/VCF:CUTOFF"],
+                  ["BUSHIDO/OUTPUTS:GATE A", "RONIN/EG 1:TRIG"], ["RONIN/EG 1:OUT A", "RONIN/VCA 2:CV"] ],
+      "power": true } },
+  { "name": "TEST RING",
+    "rack": { "preset": 0,
+      "knobs": { "VCO:RANGE": 0.5, "VCF:CUTOFF": 0.55, "VCF:PEAK": 0.3 },
+      "params": { "CLOCK:TEMPO": 0.5, "CH:PORTA A": 0.25 },
+      "cables": [ ["RONIN/VCO:SAW", "RONIN/RING:A"], ["RONIN/RING:OUT", "RONIN/RING:B"], ["RONIN/RING:OUT", "RONIN/VCF:IN"],
+                  ["RONIN/VCF:OUT", "RONIN/VCA 1:IN"], ["RONIN/VCA 1:OUT", "RONIN/VCA 2:IN"], ["RONIN/VCA 2:OUT", "RONIN/OUTPUT:WET"],
+                  ["BUSHIDO/OUTPUTS:CV A", "RONIN/VCO:HZ/V"], ["BUSHIDO/OUTPUTS:CV C", "RONIN/RING:B"],
+                  ["BUSHIDO/OUTPUTS:GATE A", "RONIN/EG 1:TRIG"], ["RONIN/EG 1:OUT A", "RONIN/VCA 2:CV"] ],
+      "power": true } }
+ ]
+})JSON";
 
-void expectNames (JidaiProcessor& p)
+void expectInitBanks (JidaiProcessor& p, int rackPatches)
 {
     const auto ba = p.patternNames (0);
-    check (ba.size() == 28, "Bushido bank A has 28 factory patterns, got " + std::to_string (ba.size()));
-    check (ba[0] == "LOOP 8", "Bushido bank A opens on LOOP 8");
-    check (ba[ba.size() - 1] == "DUB TECHNO", "Bushido bank A ends on DUB TECHNO");
-    const auto bb = p.patternNames (1);
-    check (bb.size() == 2, "Bushido bank B starts with the two rack patches, got " + std::to_string (bb.size()));
-    check (bb[0] == "LOOP BASS" && bb[1] == "RING SEED", "Bushido bank B is LOOP BASS then RING SEED");
-    check (p.patternNames (2).isEmpty(), "Bushido bank past B is empty");
-
+    check (ba.size() == 1 && ba[0] == "INIT", "Bushido bank A is INIT only, got " + std::to_string (ba.size()));
     const auto ra = p.roninPresetNames (0);
-    check (ra.size() == 13, "Ronin bank A has 13 factory presets, got " + std::to_string (ra.size()));
-    bool names = ra.size() == 13;
-    for (int i = 0; names && i < 13; ++i)
-        names = ra[i] == kRoninA[i];
-    check (names, "Ronin bank A uses the screen names");
-    check (ra[2] == "VOICE" && ra[7] == "FILTER LOOP" && ra[12] == "SELF RING", "Ronin bank A marks Voice, Filter loop, Self ring");
+    check (ra.size() == 1 && ra[0] == "INIT", "Ronin bank A is INIT only, got " + std::to_string (ra.size()));
+    check (kFactoryPresetCount == 1 && kDefaultFactoryPreset == 0, "the Ronin factory list is INIT only");
+    const auto bb = p.patternNames (1);
     const auto rb = p.roninPresetNames (1);
-    check (rb.size() == 2 && rb[0] == "LOOP BASS" && rb[1] == "RING SEED", "Ronin bank B is LOOP BASS then RING SEED");
+    check (bb.size() == rackPatches, "Bushido bank B holds the rack patches, got " + std::to_string (bb.size()));
+    check (rb.size() == rackPatches, "Ronin bank B holds the rack patches, got " + std::to_string (rb.size()));
+    if (rackPatches == 2)
+    {
+        check (bb[0] == "TEST LOOP" && bb[1] == "TEST RING", "Bushido bank B lists the fixture in file order");
+        check (rb[0] == "TEST LOOP" && rb[1] == "TEST RING", "Ronin bank B lists the fixture in file order");
+    }
+    check (p.patternNames (2).isEmpty(), "Bushido bank past B is empty");
     check (p.roninPresetNames (3).isEmpty(), "Ronin bank past B is empty");
 }
 
@@ -117,40 +137,76 @@ void expectDefault (JidaiProcessor& p)
     check (r != nullptr && b != nullptr, "default rack has one Bushido and one Ronin");
     if (r == nullptr || b == nullptr)
         return;
-    check (r->program() == kDefaultFactoryPreset, "default Ronin is Voice");
-    check (countInternal (p.rack(), "MS-50#1/") == 8, "default Ronin has Voice's 8 cables");
+    check (r->program() == kDefaultFactoryPreset, "default Ronin is INIT");
+    check (countInternal (p.rack(), "RONIN#1/") == 8, "default Ronin has INIT's 8 cables");
     check (r->effectOn(), "default Ronin effect is on");
-    check (p.loadedPattern (r) == std::pair<int, int> (0, 2), "default Ronin screen is A003 VOICE");
-    check (p.loadedPattern (b).first == 0 && p.loadedPattern (b).second == 0, "default Bushido screen is A001");
+    check (p.loadedPattern (r) == std::pair<int, int> (0, 0), "default Ronin screen is A001 INIT");
+    check (p.loadedPattern (b).first == 0 && p.loadedPattern (b).second == 0, "default Bushido screen is A001 INIT");
+}
+
+// The compiled banks: INIT on both bank A screens, an empty rack patch list, and the INIT pattern holds
+// no cables. Bank B then holds user entries from index 0.
+void testCompiledBanks (const juce::File& store)
+{
+    JidaiProcessor::setRackPatchesForTest ({});
+    JidaiProcessor::setUserStoreRootForTest (store);
+    auto proc = std::make_unique<JidaiProcessor>();
+    expectInitBanks (*proc, 0);
+    expectDefault (*proc);
+    auto* b = bushidoAt (*proc);
+    auto* r = roninAt (*proc);
+    if (b == nullptr || r == nullptr)
+        return;
+
+    b->setParam ("CLOCK:TEMPO", 0.9f);
+    proc->loadPattern (b, 0, 0);
+    check (near (b->param ("CLOCK:TEMPO"), 0.5f), "INIT puts CLOCK:TEMPO back at 0.5");
+    check (near (b->param ("MIXER:LEVEL 1"), 0.7f), "INIT puts MIXER:LEVEL 1 at the layout default 0.7");
+    check (! anyBushido (proc->rack()), "the INIT pattern lays no cables");
+    check (countInternal (proc->rack(), "RONIN#1/") == 8, "the INIT pattern leaves the Ronin cables");
+
+    r->setKnob (panelKnobIndex ("VCF", "CUTOFF"), 0.1f);
+    proc->loadRoninPreset (r, 0, 0);
+    check (r->program() == 0 && proc->loadedPattern (r) == std::pair<int, int> (0, 0), "INIT loads from Ronin bank A");
+    check (near (r->knob (panelKnobIndex ("VCF", "CUTOFF")), 0.45f), "INIT puts VCF CUTOFF back on the default table");
+    proc->loadRoninPreset (r, 1, 0);
+    check (proc->loadedPattern (r) == std::pair<int, int> (0, 0), "an empty bank B loads nothing");
+
+    check (proc->savePattern (b, 1, "B FIRST") == 0, "with no rack patches a Bushido bank B save is index 0");
+    check (proc->saveRoninPreset (r, 1, "R FIRST") == 0, "with no rack patches a Ronin bank B save is index 0");
+    check (proc->saveRoninPreset (r, 0, "R AFTER") == 1, "a Ronin bank A save follows INIT");
+    proc.reset();
+
+    JidaiProcessor::setUserStoreRootForTest ({});
 }
 
 void expectLoopBass (JidaiProcessor& p)
 {
     auto* r = roninAt (p);
     auto* b = bushidoAt (p);
-    check (r != nullptr && b != nullptr, "LOOP BASS still has both devices");
+    check (r != nullptr && b != nullptr, "TEST LOOP still has both devices");
     if (r == nullptr || b == nullptr)
         return;
-    check (r->program() == 7, "LOOP BASS loads factory preset 7, Filter loop");
-    check (r->effectOn(), "LOOP BASS leaves the effect on");
-    check (near (r->knob (panelKnobIndex ("VCF", "MOD")), 0.68f), "LOOP BASS sets VCF MOD to 0.68");
-    check (near (r->knob (panelKnobIndex ("VCO", "RANGE")), 0.0f), "LOOP BASS sets VCO RANGE to 0");
-    check (near (r->knob (panelKnobIndex ("VCF", "CUTOFF")), 0.4f), "LOOP BASS sets VCF CUTOFF to 0.4");
-    check (near (r->knob (panelKnobIndex ("VCF", "PEAK")), 0.7f), "LOOP BASS sets VCF PEAK to 0.7");
-    check (near (r->knob (panelKnobIndex ("MIX", "LEVEL 1")), 0.8f), "LOOP BASS leaves an unnamed Ronin knob on the program table");
-    check (near (b->param ("CLOCK:TEMPO"), 0.6f), "LOOP BASS sets CLOCK:TEMPO to 0.6");
-    check (near (b->param ("MIXER:LEVEL 1"), 0.7f), "LOOP BASS resets MIXER:LEVEL 1 to the layout default 0.7");
-    check (b->bypassed(), "LOOP BASS leaves Bushido bypass as it was");
-    check ((int) p.rack().cables().size() == 9, "LOOP BASS lays 9 cables, got " + std::to_string (p.rack().cables().size()));
-    check (cableColor (p.rack(), "SQ-10#1/OUTPUTS:CV A", "MS-50#1/VCO:HZ/V") == 2, "LOOP BASS CV A cable is yellow");
-    check (cableColor (p.rack(), "MS-50#1/VCA 2:OUT", "MS-50#1/OUTPUT:WET") == 3, "LOOP BASS wet cable is green");
-    check (hasCable (p.rack(), "MS-50#1/VCF:OUT", "MS-50#1/VCF:CUTOFF"), "LOOP BASS patches the filter loop");
-    check (p.loadedPattern (b) == std::pair<int, int> (1, 0), "LOOP BASS shows on the Bushido screen");
-    check (p.loadedPattern (r) == std::pair<int, int> (1, 0), "LOOP BASS shows on the Ronin screen");
-    check (p.rack().delayedCableCount() == 1, "LOOP BASS delays the one feedback cable");
+    check (r->program() == 0, "TEST LOOP loads factory preset 0, INIT");
+    check (r->effectOn(), "TEST LOOP leaves the effect on");
+    check (near (r->knob (panelKnobIndex ("VCF", "MOD")), 0.68f), "TEST LOOP sets VCF MOD to 0.68");
+    check (near (r->knob (panelKnobIndex ("VCO", "RANGE")), 0.0f), "TEST LOOP sets VCO RANGE to 0");
+    check (near (r->knob (panelKnobIndex ("VCF", "CUTOFF")), 0.4f), "TEST LOOP sets VCF CUTOFF to 0.4");
+    check (near (r->knob (panelKnobIndex ("VCF", "PEAK")), 0.7f), "TEST LOOP sets VCF PEAK to 0.7");
+    check (near (r->knob (panelKnobIndex ("MIX", "LEVEL 1")), 0.8f), "TEST LOOP leaves an unnamed Ronin knob on the program table");
+    check (near (b->param ("CLOCK:TEMPO"), 0.6f), "TEST LOOP sets CLOCK:TEMPO to 0.6");
+    check (near (b->param ("MIXER:LEVEL 1"), 0.7f), "TEST LOOP resets MIXER:LEVEL 1 to the layout default 0.7");
+    check (b->bypassed(), "TEST LOOP leaves Bushido bypass as it was");
+    check ((int) p.rack().cables().size() == 9, "TEST LOOP lays 9 cables, got " + std::to_string (p.rack().cables().size()));
+    check (cableColor (p.rack(), "BUSHIDO#1/OUTPUTS:CV A", "RONIN#1/VCO:HZ/V") == 2, "TEST LOOP CV A cable is yellow");
+    check (cableColor (p.rack(), "RONIN#1/VCA 2:OUT", "RONIN#1/OUTPUT:WET") == 3, "TEST LOOP wet cable is green");
+    check (hasCable (p.rack(), "RONIN#1/VCF:OUT", "RONIN#1/VCF:CUTOFF"), "TEST LOOP patches the filter loop");
+    check (p.loadedPattern (b) == std::pair<int, int> (1, 0), "TEST LOOP shows on the Bushido screen");
+    check (p.loadedPattern (r) == std::pair<int, int> (1, 0), "TEST LOOP shows on the Ronin screen");
+    check (p.rack().delayedCableCount() == 1, "TEST LOOP delays the one feedback cable");
 
     p.prepareToPlay (48000.0, 64);
-    check (p.getLatencySamples() == 0, "LOOP BASS process reports latency 0");
+    check (p.getLatencySamples() == 0, "TEST LOOP process reports latency 0");
     juce::AudioBuffer<float> buffer (2, 64);
     buffer.clear();
     for (int i = 0; i < 64; ++i)
@@ -163,17 +219,17 @@ void expectLoopBass (JidaiProcessor& p)
     for (int ch = 0; ch < 2 && finite; ++ch)
         for (int i = 0; i < 64; ++i)
             finite = std::isfinite (buffer.getSample (ch, i));
-    check (finite, "LOOP BASS process stays finite");
+    check (finite, "TEST LOOP process stays finite");
 }
 
 void testLoopBassThenFactory()
 {
     auto proc = std::make_unique<JidaiProcessor>();
-    expectNames (*proc);
+    expectInitBanks (*proc, 2);
     expectDefault (*proc);
     auto* b = bushidoAt (*proc);
     auto* r = roninAt (*proc);
-    check (b != nullptr && r != nullptr, "LOOP BASS setup");
+    check (b != nullptr && r != nullptr, "TEST LOOP setup");
     if (b == nullptr || r == nullptr)
         return;
     b->setBypassed (true);
@@ -181,25 +237,27 @@ void testLoopBassThenFactory()
     proc->loadPattern (b, 1, 0);
     expectLoopBass (*proc);
 
-    proc->loadRoninPreset (r, 0, 2);
-    check (countInternal (proc->rack(), "MS-50#1/") == 8, "Voice replaces the Ronin cables and leaves the cross cables");
-    check (hasCable (proc->rack(), "SQ-10#1/OUTPUTS:CV A", "MS-50#1/VCO:HZ/V"), "Voice keeps the CV A cross cable");
-    check (proc->loadedPattern (r) == std::pair<int, int> (0, 2), "Voice shows on bank A");
-    check (proc->loadedPattern (b) == std::pair<int, int> (1, 0), "Voice leaves the Bushido screen on LOOP BASS");
-    check (near (b->param ("CLOCK:TEMPO"), 0.6f), "Voice leaves CLOCK:TEMPO");
+    proc->loadRoninPreset (r, 0, 0);
+    check (countInternal (proc->rack(), "RONIN#1/") == 8, "INIT replaces the Ronin cables and leaves the cross cables");
+    check (hasCable (proc->rack(), "BUSHIDO#1/OUTPUTS:CV A", "RONIN#1/VCO:HZ/V"), "INIT keeps the CV A cross cable");
+    check (proc->loadedPattern (r) == std::pair<int, int> (0, 0), "INIT shows on bank A");
+    check (proc->loadedPattern (b) == std::pair<int, int> (1, 0), "INIT leaves the Bushido screen on TEST LOOP");
+    check (near (b->param ("CLOCK:TEMPO"), 0.6f), "INIT leaves CLOCK:TEMPO");
+    check (near (r->knob (panelKnobIndex ("VCF", "CUTOFF")), 0.45f), "INIT puts VCF CUTOFF back on the default table");
 
     const float tempo = b->param ("CLOCK:TEMPO");
-    proc->loadRoninPreset (r, 0, 4);
-    check (proc->loadedPattern (b) == std::pair<int, int> (1, 0), "S&H leaves the Bushido screen");
-    check (near (b->param ("CLOCK:TEMPO"), tempo), "S&H leaves CLOCK:TEMPO");
-    check (proc->loadedPattern (r) == std::pair<int, int> (0, 4), "S&H shows on bank A");
-    check (hasCable (proc->rack(), "SQ-10#1/OUTPUTS:CV A", "MS-50#1/VCO:HZ/V"), "S&H keeps the cross cable");
+    r->setKnob (panelKnobIndex ("VCF", "PEAK"), 0.9f);
+    proc->loadRoninPreset (r, 0, 0);
+    check (proc->loadedPattern (b) == std::pair<int, int> (1, 0), "INIT again leaves the Bushido screen");
+    check (near (b->param ("CLOCK:TEMPO"), tempo), "INIT again leaves CLOCK:TEMPO");
+    check (near (r->knob (panelKnobIndex ("VCF", "PEAK")), 0.2f), "INIT again resets VCF PEAK");
+    check (hasCable (proc->rack(), "BUSHIDO#1/OUTPUTS:CV A", "RONIN#1/VCO:HZ/V"), "INIT again keeps the cross cable");
 
     const int program = r->program();
     proc->loadPattern (b, 0, 0);
-    check (proc->loadedPattern (r) == std::pair<int, int> (0, 4), "a Bushido pattern leaves the Ronin screen");
+    check (proc->loadedPattern (r) == std::pair<int, int> (0, 0), "a Bushido pattern leaves the Ronin screen");
     check (r->program() == program, "a Bushido pattern leaves the Ronin program");
-    check (hasCable (proc->rack(), "SQ-10#1/OUTPUTS:CV A", "MS-50#1/VCO:HZ/V"), "a Bushido pattern leaves the cross cable");
+    check (hasCable (proc->rack(), "BUSHIDO#1/OUTPUTS:CV A", "RONIN#1/VCO:HZ/V"), "a Bushido pattern leaves the cross cable");
 
     const int before = r->program();
     proc->loadRoninPreset (r, 0, 99);
@@ -214,34 +272,34 @@ void testRingSeed()
     auto proc = std::make_unique<JidaiProcessor>();
     auto* r = roninAt (*proc);
     proc->loadRoninPreset (r, 1, 1);
-    check (r->program() == 12, "RING SEED loads factory preset 12, Self ring");
-    check (near (r->knob (panelKnobIndex ("VCO", "RANGE")), 0.5f), "RING SEED sets VCO RANGE to 0.5");
-    check ((int) proc->rack().cables().size() == 10, "RING SEED lays 10 cables, got " + std::to_string (proc->rack().cables().size()));
-    check (hasCable (proc->rack(), "MS-50#1/RING:OUT", "MS-50#1/RING:B"), "RING SEED patches the ring to itself");
-    check (hasCable (proc->rack(), "SQ-10#1/OUTPUTS:CV A", "MS-50#1/VCO:HZ/V"), "RING SEED patches CV A");
-    check (proc->loadedPattern (r) == std::pair<int, int> (1, 1), "RING SEED shows on the Ronin screen");
-    check (proc->loadedPattern (bushidoAt (*proc)) == std::pair<int, int> (1, 1), "RING SEED shows on the Bushido screen");
-    check (proc->rack().delayedCableCount() == 1, "RING SEED delays the self ring");
-    check (near (bushidoAt (*proc)->param ("CLOCK:TEMPO"), 0.5f), "RING SEED sets CLOCK:TEMPO to 0.5");
+    check (r->program() == 0, "TEST RING loads factory preset 0, INIT");
+    check (near (r->knob (panelKnobIndex ("VCO", "RANGE")), 0.5f), "TEST RING sets VCO RANGE to 0.5");
+    check ((int) proc->rack().cables().size() == 10, "TEST RING lays 10 cables, got " + std::to_string (proc->rack().cables().size()));
+    check (hasCable (proc->rack(), "RONIN#1/RING:OUT", "RONIN#1/RING:B"), "TEST RING patches the ring to itself");
+    check (hasCable (proc->rack(), "BUSHIDO#1/OUTPUTS:CV A", "RONIN#1/VCO:HZ/V"), "TEST RING patches CV A");
+    check (proc->loadedPattern (r) == std::pair<int, int> (1, 1), "TEST RING shows on the Ronin screen");
+    check (proc->loadedPattern (bushidoAt (*proc)) == std::pair<int, int> (1, 1), "TEST RING shows on the Bushido screen");
+    check (proc->rack().delayedCableCount() == 1, "TEST RING delays the self ring");
+    check (near (bushidoAt (*proc)->param ("CLOCK:TEMPO"), 0.5f), "TEST RING sets CLOCK:TEMPO to 0.5");
 }
 
 void testSecondRoninStays()
 {
     auto proc = std::make_unique<JidaiProcessor>();
     auto* second = dynamic_cast<jidai::RoninDevice*> (proc->addDevice (jidai::DeviceKind::Ronin));
-    check (second != nullptr && second->rackId() == "MS-50#2", "a second Ronin is MS-50#2");
+    check (second != nullptr && second->rackId() == "RONIN#2", "a second Ronin is RONIN#2");
     if (second == nullptr)
         return;
     const int range = panelKnobIndex ("VCO", "RANGE");
     second->setKnob (range, 0.1f);
-    const std::string keptA = "MS-50#2/EXT IN:MONO";
-    const std::string keptB = "MS-50#2/VCF:IN";
-    check (hasCable (proc->rack(), keptA, keptB), "the second Ronin starts with its Voice cable");
+    const std::string keptA = "RONIN#2/EXT IN:MONO";
+    const std::string keptB = "RONIN#2/VCF:IN";
+    check (hasCable (proc->rack(), keptA, keptB), "the second Ronin starts with its INIT cable");
     proc->loadPattern (bushidoAt (*proc), 1, 0);
-    check (hasCable (proc->rack(), keptA, keptB), "LOOP BASS on the first pair leaves the second Ronin's Voice cable");
-    check (near (second->knob (range), 0.1f), "LOOP BASS leaves the second Ronin's range");
-    check (near (roninAt (*proc)->knob (range), 0.0f), "LOOP BASS sets the first Ronin's range");
-    check (proc->loadedPattern (second) == std::pair<int, int> (0, kDefaultFactoryPreset), "the second Ronin screen stays on Voice");
+    check (hasCable (proc->rack(), keptA, keptB), "TEST LOOP on the first pair leaves the second Ronin's INIT cable");
+    check (near (second->knob (range), 0.1f), "TEST LOOP leaves the second Ronin's range");
+    check (near (roninAt (*proc)->knob (range), 0.0f), "TEST LOOP sets the first Ronin's range");
+    check (proc->loadedPattern (second) == std::pair<int, int> (0, kDefaultFactoryPreset), "the second Ronin screen stays on INIT");
 }
 
 void testMissingBushido()
@@ -251,10 +309,10 @@ void testMissingBushido()
     auto* r = roninAt (*proc);
     proc->removeDevice (b);
     proc->loadRoninPreset (r, 1, 1);
-    check (near (r->knob (panelKnobIndex ("VCO", "RANGE")), 0.5f), "RING SEED without Bushido still sets VCO RANGE");
-    check (! anySq10 (proc->rack()), "RING SEED without Bushido skips the SQ-10 cables");
-    check (hasCable (proc->rack(), "MS-50#1/VCO:SAW", "MS-50#1/RING:A"), "RING SEED without Bushido keeps the Ronin cables");
-    check (proc->loadedPattern (r) == std::pair<int, int> (1, 1), "RING SEED without Bushido still shows on the Ronin screen");
+    check (near (r->knob (panelKnobIndex ("VCO", "RANGE")), 0.5f), "TEST RING without Bushido still sets VCO RANGE");
+    check (! anyBushido (proc->rack()), "TEST RING without Bushido skips the BUSHIDO cables");
+    check (hasCable (proc->rack(), "RONIN#1/VCO:SAW", "RONIN#1/RING:A"), "TEST RING without Bushido keeps the Ronin cables");
+    check (proc->loadedPattern (r) == std::pair<int, int> (1, 1), "TEST RING without Bushido still shows on the Ronin screen");
 }
 
 void testUserFiles()
@@ -265,9 +323,9 @@ void testUserFiles()
     first->loadPattern (b, 1, 0);
     b->setParam ("CLOCK:TEMPO", 0.25f);
     const int bushidoShown = first->savePattern (b, 1, "BUSER");
-    check (bushidoShown == 2, "a Bushido bank B save is index 2, got " + std::to_string (bushidoShown));
-    check (first->patternNames (1)[0] == "LOOP BASS", "the Bushido save leaves LOOP BASS in front");
-    check (first->loadedPattern (r) == std::pair<int, int> (1, 0), "the Bushido save leaves the Ronin screen on LOOP BASS");
+    check (bushidoShown == 2, "a Bushido bank B save is index 2, behind the two rack patches, got " + std::to_string (bushidoShown));
+    check (first->patternNames (1)[0] == "TEST LOOP", "the Bushido save leaves TEST LOOP in front");
+    check (first->loadedPattern (r) == std::pair<int, int> (1, 0), "the Bushido save leaves the Ronin screen on TEST LOOP");
     first->loadPattern (b, 1, bushidoShown);
     check (near (b->param ("CLOCK:TEMPO"), 0.25f), "the saved Bushido pattern reloads its tempo");
     check (first->loadedPattern (r) == std::pair<int, int> (1, 0), "reloading the Bushido pattern leaves the Ronin screen");
@@ -275,10 +333,10 @@ void testUserFiles()
     r->setKnob (panelKnobIndex ("VCF", "CUTOFF"), 0.2f);
     r->setEffectOn (false);
     const int roninA = first->saveRoninPreset (r, 0, "MINE");
-    check (roninA == 13, "a Ronin bank A save is index 13, got " + std::to_string (roninA));
+    check (roninA == 1, "a Ronin bank A save is index 1, after INIT, got " + std::to_string (roninA));
     const int roninB = first->saveRoninPreset (r, 1, "RUSER");
     check (roninB == 2, "a Ronin bank B save is index 2, got " + std::to_string (roninB));
-    check (first->roninPresetNames (1)[0] == "LOOP BASS", "the Ronin save leaves LOOP BASS in front");
+    check (first->roninPresetNames (1)[0] == "TEST LOOP", "the Ronin save leaves TEST LOOP in front");
     check (near (b->param ("CLOCK:TEMPO"), 0.25f), "the Ronin save leaves CLOCK:TEMPO");
     check (first->loadedPattern (b) == std::pair<int, int> (1, 2), "the Ronin save leaves the Bushido screen on BUSER");
     first->loadRoninPreset (r, 1, roninB);
@@ -288,22 +346,22 @@ void testUserFiles()
     first.reset();
 
     auto second = std::make_unique<JidaiProcessor>();
-    check (second->roninPresetNames (0).size() == 14, "the next processor reads the Ronin user preset");
-    check (second->roninPresetNames (0)[13] == "MINE", "the reloaded name is MINE");
+    check (second->roninPresetNames (0).size() == 2, "the next processor reads the Ronin user preset");
+    check (second->roninPresetNames (0)[0] == "INIT" && second->roninPresetNames (0)[1] == "MINE", "the reloaded name MINE follows INIT");
     check (second->patternNames (1)[2] == "BUSER", "the next processor reads the Bushido user pattern");
     auto* r2 = roninAt (*second);
     auto* b2 = bushidoAt (*second);
-    second->loadRoninPreset (r2, 0, 13);
+    second->loadRoninPreset (r2, 0, 1);
     check (near (r2->knob (panelKnobIndex ("VCF", "CUTOFF")), 0.2f), "MINE reloads VCF CUTOFF 0.2");
     check (! r2->effectOn(), "MINE reloads effect off");
-    check (countInternal (second->rack(), r2->rackId() + "/") == 6, "MINE reloads the six LOOP BASS cables that stay on the Ronin");
+    check (countInternal (second->rack(), r2->rackId() + "/") == 6, "MINE reloads the six TEST LOOP cables that stay on the Ronin");
     check (second->loadedPattern (b2) == std::pair<int, int> (0, 0), "loading MINE leaves the Bushido screen");
     second->loadPattern (b2, 1, 2);
     check (near (b2->param ("CLOCK:TEMPO"), 0.25f), "BUSER reloads CLOCK:TEMPO 0.25");
-    check (second->loadedPattern (r2) == std::pair<int, int> (0, 13), "BUSER leaves the Ronin screen on MINE");
+    check (second->loadedPattern (r2) == std::pair<int, int> (0, 1), "BUSER leaves the Ronin screen on MINE");
 
     const int blank = second->saveRoninPreset (r2, 0, "   ");
-    check (blank == 14 && second->roninPresetNames (0)[14] == "PRESET", "an empty Ronin name is stored as PRESET");
+    check (blank == 2 && second->roninPresetNames (0)[2] == "PRESET", "an empty Ronin name is stored as PRESET");
 }
 
 void testStateRoundTrip()
@@ -324,16 +382,16 @@ void testStateRoundTrip()
     check (near (r->knob (panelKnobIndex ("VCF", "MOD")), 0.68f), "the saved rack keeps VCF MOD");
     check (near (b->param ("CLOCK:TEMPO"), 0.6f), "the saved rack keeps CLOCK:TEMPO");
     check ((int) restored->rack().cables().size() == 9, "the saved rack keeps the 9 cables");
-    check (hasCable (restored->rack(), "SQ-10#1/OUTPUTS:CV A", "MS-50#1/VCO:HZ/V"), "the saved rack keeps CV A");
-    check (restored->loadedPattern (b) == std::pair<int, int> (1, 0), "the saved Bushido screen is LOOP BASS");
-    check (restored->loadedPattern (r) == std::pair<int, int> (1, 0), "the saved Ronin screen is LOOP BASS");
+    check (hasCable (restored->rack(), "BUSHIDO#1/OUTPUTS:CV A", "RONIN#1/VCO:HZ/V"), "the saved rack keeps CV A");
+    check (restored->loadedPattern (b) == std::pair<int, int> (1, 0), "the saved Bushido screen is TEST LOOP");
+    check (restored->loadedPattern (r) == std::pair<int, int> (1, 0), "the saved Ronin screen is TEST LOOP");
 }
 
-void testVersion1Screen()
+std::unique_ptr<juce::XmlElement> version1State (int ronProgram)
 {
-    juce::XmlElement xml ("JIDAIRACK");
-    xml.setAttribute ("version", 1);
-    auto* bushido = xml.createNewChildElement ("DEVICE");
+    auto xml = std::make_unique<juce::XmlElement> ("JIDAIRACK");
+    xml->setAttribute ("version", 1);
+    auto* bushido = xml->createNewChildElement ("DEVICE");
     bushido->setAttribute ("kind", "BUSHIDO");
     bushido->setAttribute ("number", 1);
     bushido->setAttribute ("bank", 1);
@@ -341,14 +399,18 @@ void testVersion1Screen()
     auto* tempo = bushido->createNewChildElement ("PARAM");
     tempo->setAttribute ("id", "CLOCK:TEMPO");
     tempo->setAttribute ("value", 0.25);
-    auto* ronin = xml.createNewChildElement ("DEVICE");
+    auto* ronin = xml->createNewChildElement ("DEVICE");
     ronin->setAttribute ("kind", "RONIN");
     ronin->setAttribute ("number", 1);
-    ronin->setAttribute ("program", 5);
+    ronin->setAttribute ("program", ronProgram);
     ronin->setAttribute ("effect", 0);
+    return xml;
+}
 
+void testVersion1Screen()
+{
     auto proc = std::make_unique<JidaiProcessor>();
-    proc->testRestore (xml);
+    proc->testRestore (*version1State (0));
     auto* b = bushidoAt (*proc);
     auto* r = roninAt (*proc);
     check (b != nullptr && r != nullptr, "version 1 state restores both devices");
@@ -356,8 +418,15 @@ void testVersion1Screen()
         return;
     check (proc->loadedPattern (b) == std::pair<int, int> (1, 2), "version 1 bank B index 0 moves behind the rack patches");
     check (near (b->param ("CLOCK:TEMPO"), 0.25f), "version 1 keeps the stored tempo");
-    check (proc->loadedPattern (r) == std::pair<int, int> (0, 5), "a Ronin with no screen bank shows its program on bank A");
+    check (proc->loadedPattern (r) == std::pair<int, int> (0, 0), "a Ronin with no screen bank shows its program on bank A");
     check (! r->effectOn(), "version 1 keeps effect off");
+
+    // A session saved before the bank was cleared can name a program that is gone. The Ronin stays on INIT.
+    auto old = std::make_unique<JidaiProcessor>();
+    old->testRestore (*version1State (5));
+    auto* r2 = roninAt (*old);
+    check (r2 != nullptr && r2->program() == kDefaultFactoryPreset, "a cleared program number restores as INIT");
+    check (r2 != nullptr && old->loadedPattern (r2) == std::pair<int, int> (0, 0), "a cleared program number shows A001 INIT");
 }
 
 void testEditor()
@@ -395,6 +464,7 @@ int main()
         ~Guard()
         {
             JidaiProcessor::setUserStoreRootForTest ({});
+            JidaiProcessor::setRackPatchesForTest ({});
             dir.deleteRecursively();
             if (! bushidoExisted && bushidoDir.exists())
                 std::printf ("FAIL user store leaked into %s\n", bushidoDir.getFullPathName().toRawUTF8());
@@ -403,7 +473,10 @@ int main()
         }
     } guard { temp, bushidoExisted, roninExisted, bushidoDir, roninDir };
 
+    testCompiledBanks (temp.getChildFile ("compiled"));
+
     JidaiProcessor::setUserStoreRootForTest (temp);
+    JidaiProcessor::setRackPatchesForTest (kFixturePatches);
     testLoopBassThenFactory();
     testRingSeed();
     testSecondRoninStays();

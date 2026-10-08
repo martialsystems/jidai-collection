@@ -6,14 +6,14 @@
 
 namespace jidai {
 
-// The BUSHIDO engine as one graph unit. Port types follow the web rack (web/sq10_dsp.js):
+// The BUSHIDO engine as one graph unit. Port types follow the web rack (web/bushido_dsp.js):
 // inputs read raw volts, so they are CV (MIXER IN 1/2 are Audio); GATE and TRIG outputs are 0/5 V logic, typed Gate,
 // so RONIN's S-15 law turns them into S-trig volts when they feed a RONIN CV or audio input.
 class BushidoDevice::EngineUnit : public Unit {
 public:
     static constexpr int kMaxJacks = 32;
 
-    EngineUnit (Sq10Module& engine, const std::atomic<bool>& bypass) : sq (engine), bypassed (bypass)
+    EngineUnit (BushidoModule& engine, const std::atomic<bool>& bypass) : sq (engine), bypassed (bypass)
     {
         const auto& jacks = sq.jacks();
         count = (int) jacks.size();
@@ -30,11 +30,11 @@ public:
     PortDesc port (int i) const override
     {
         const char* name = sq.jacks()[(size_t) i].id.c_str();
-        const PortDir dir = i < Sq10Module::CV_A ? PortDir::In : PortDir::Out;
+        const PortDir dir = i < BushidoModule::CV_A ? PortDir::In : PortDir::Out;
         PortType type = PortType::CV;
-        if (i == Sq10Module::MIX_IN1 || i == Sq10Module::MIX_IN2 || i == Sq10Module::MIX_OUT)
+        if (i == BushidoModule::MIX_IN1 || i == BushidoModule::MIX_IN2 || i == BushidoModule::MIX_OUT)
             type = PortType::Audio;
-        if (i == Sq10Module::GATE_A || i == Sq10Module::GATE_B || i >= Sq10Module::TRIG1)
+        if (i == BushidoModule::GATE_A || i == BushidoModule::GATE_B || i >= BushidoModule::TRIG1)
             type = PortType::Gate;
         return { name, type, dir, 0.0f, false };
     }
@@ -49,12 +49,12 @@ public:
         sq.process (inPtr, outPtr, 1);
         if (bypassed.load (std::memory_order_relaxed))
         {
-            value[Sq10Module::GATE_A] = 0.0f;
-            value[Sq10Module::GATE_B] = 0.0f;
+            value[BushidoModule::GATE_A] = 0.0f;
+            value[BushidoModule::GATE_B] = 0.0f;
         }
     }
 
-    Sq10Module& sq;
+    BushidoModule& sq;
     const std::atomic<bool>& bypassed;
     int count = 0;
     float value[kMaxJacks] {};
@@ -104,12 +104,12 @@ void BushidoDevice::collectMidi (int sampleInBlock)
     for (int ch = 0; ch < 2; ++ch)
     {
         const float* v = unit_->value;
-        const bool high = ! bypass_.load (std::memory_order_relaxed) && v[ch == 0 ? Sq10Module::GATE_A : Sq10Module::GATE_B] > 1.0f;
+        const bool high = ! bypass_.load (std::memory_order_relaxed) && v[ch == 0 ? BushidoModule::GATE_A : BushidoModule::GATE_B] > 1.0f;
         if (high && ! gatePrev_[ch])
         {
             if (midiNote_[ch] >= 0)
                 add (ch + 1, midiNote_[ch], false);
-            midiNote_[ch] = rack::hzv::midiNote (v[ch == 0 ? Sq10Module::CV_A : Sq10Module::CV_B]);
+            midiNote_[ch] = rack::hzv::midiNote (v[ch == 0 ? BushidoModule::CV_A : BushidoModule::CV_B]);
             if (midiNote_[ch] >= 0)
                 add (ch + 1, midiNote_[ch], true);
         }

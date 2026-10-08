@@ -7,7 +7,7 @@
 namespace jidai {
 
 const char* deviceKindName (DeviceKind kind) { return kind == DeviceKind::Bushido ? "BUSHIDO" : "RONIN"; }
-const char* deviceKindPrefix (DeviceKind kind) { return kind == DeviceKind::Bushido ? "SQ-10" : "MS-50"; }
+const char* deviceKindPrefix (DeviceKind kind) { return kind == DeviceKind::Bushido ? "BUSHIDO" : "RONIN"; }
 
 int Device::findJack (const std::string& id) const
 {
