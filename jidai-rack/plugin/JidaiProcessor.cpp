@@ -3,6 +3,7 @@
 #include "JidaiProcessor.h"
 #include "JidaiEditor.h"
 #include "BinaryData.h"
+#include "StarterRacks.h"
 
 #include "UI/PatchBayLogic.h"
 #include "engine/BushidoState.h"
@@ -273,6 +274,30 @@ JidaiProcessor::JidaiProcessor()
 JidaiProcessor::~JidaiProcessor()
 {
     latencyTimer_.stopTimer();
+}
+
+int JidaiProcessor::getNumPrograms()
+{
+    return (int) starterRacks().size();
+}
+
+const juce::String JidaiProcessor::getProgramName (int index)
+{
+    const auto& racks = starterRacks();
+    return index >= 0 && index < (int) racks.size() ? racks[(size_t) index].displayName() : juce::String();
+}
+
+void JidaiProcessor::setCurrentProgram (int index)
+{
+    const auto& racks = starterRacks();
+    if (index < 0 || index >= (int) racks.size())
+        return;
+    const int scale = scalePercent;          // the window size is the user's, not the rack's
+    restoreFromXml (*racks[(size_t) index].state);
+    scalePercent = scale;
+    currentProgram_ = index;
+    sendChangeMessage();
+    updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withProgramChanged (true));
 }
 
 void JidaiProcessor::resetToDefaultRack()

@@ -1,0 +1,375 @@
+#!/usr/bin/env python3
+# Copyright (c) 2026 Martial Systems LLC. All rights reserved.
+# Writes racks/starter_racks.xml, the JIDAI RACK starter racks:
+#   python3 tools/make_starter_racks.py <origami factory.xml> racks/starter_racks.xml
+# Each starter rack is a complete rack state (JIDAIRACK version 3), the same XML the rack saves. Units are set by their
+# own parameters (BUSHIDO PARAM ids, RONIN KNOB ids, ORIGAMI params from ORIGAMI's factory bank by name), never by a
+# unit's preset name, and every connection is a cable on the jacks (the back of the rack shows them all).
+# The presets test (JidaiPresetTests) loads every rack, checks each cable against the Jidai Cable Standard, and plays it.
+import sys
+import xml.etree.ElementTree as ET
+
+# ---------------------------------------------------------------------------------------------------- units
+BUSHIDO_PARAMS = ([f"{r}:{i}" for r in "ABC" for i in range(1, 13)] +
+                  ["CH:PORTA A", "CH:PORTA B", "CH:RANGE A", "CH:RANGE B", "CH:C MODE", "CLOCK:TEMPO", "CLOCK:SOURCE",
+                   "MODE:MODE", "MIXER:LEVEL 1", "MIXER:LEVEL 2", "CLOCK:DIV", "CLOCK:EXT SOURCE", "CLOCK:SETTLE",
+                   "CLOCK:TRIG MODE", "STEPS:LAW A", "STEPS:LAW B", "STEPS:QUANT A", "STEPS:QUANT B", "MIDI:CH A",
+                   "MIDI:CH B", "MIDI:VEL A", "MIDI:VEL B"])
+BUSHIDO_DEFAULTS = {**{f"{r}:{i}": 0.5 for r in "ABC" for i in range(1, 13)},
+                    "CH:PORTA A": 0, "CH:PORTA B": 0, "CH:RANGE A": 1, "CH:RANGE B": 1, "CH:C MODE": 0, "CLOCK:TEMPO": 0.5,
+                    "CLOCK:SOURCE": 0, "MODE:MODE": 0.5, "MIXER:LEVEL 1": 0.7, "MIXER:LEVEL 2": 0.7, "CLOCK:DIV": 0.5,
+                    "CLOCK:EXT SOURCE": 0, "CLOCK:SETTLE": 0, "CLOCK:TRIG MODE": 0, "STEPS:LAW A": 0, "STEPS:LAW B": 0,
+                    "STEPS:QUANT A": 0, "STEPS:QUANT B": 0, "MIDI:CH A": 0, "MIDI:CH B": 1 / 15, "MIDI:VEL A": 0,
+                    "MIDI:VEL B": 0}
+
+# RONIN panel knobs in kPanelKnobs order with their defaults (RONIN Source/UI/PanelGeometry.inc).
+RONIN_KNOBS = [("VCO:RANGE", 0.5), ("VCO:FINE", 0.5), ("VCO:PW", 0.5), ("VCO:FM 1", 0), ("VCO:FM 2", 0),
+               ("VCF:CUTOFF", 0.45), ("VCF:PEAK", 0.2), ("VCF:MOD", 0.4), ("VCA 1:INITIAL", 0), ("VCA 1:MOD", 0.85),
+               ("VCA 1:LOW CUT", 0), ("VCA 2:INITIAL", 0), ("VCA 2:MOD", 1), ("MG:RATE", 0.5), ("MG:PW", 0.5),
+               ("EG 1:ATTACK", 0.2079), ("EG 1:DECAY", 0.39), ("EG 1:SUSTAIN", 0.6), ("EG 1:RELEASE", 0.39),
+               ("EG 2:HOLD", 0.3), ("EG 2:DELAY", 0), ("EG 2:ATTACK", 0.2079), ("EG 2:RELEASE", 0.39),
+               ("S&H:RATE", 0.5), ("DIV:RATIO SWITCH", 0), ("INT:TIME", 0.5), ("MIX:LEVEL 1", 0.8), ("MIX:LEVEL 2", 0.8),
+               ("MIX:LEVEL 3", 0.8), ("EXT IN:THRESHOLD", 0.3758), ("EXT IN:RELEASE", 0.5316), ("OUTPUT:MIX", 1),
+               ("OUTPUT:LEVEL", 0.7)]
+RONIN_KNOB_IDS = {k for k, _ in RONIN_KNOBS}
+
+# RONIN knob helpers. VCO RANGE: 0, 1/3, 2/3, 1 = 32', 16', 8', 4' (8' = C3 at 0 V). VCF CUTOFF: 20 Hz x 900^k.
+# EG times (EG 1 all, EG 2 ATTACK/RELEASE): 1 ms x 60000^k. EG 2 HOLD/DELAY: 1 ms x 10^(4k).
+import math
+FOOT = {32: 0.0, 16: 1 / 3, 8: 2 / 3, 4: 1.0}
+def cutoff(hz): return round(math.log(hz / 20.0) / math.log(900.0), 4)
+def eg(seconds): return round(math.log(seconds / 0.001) / math.log(60000.0), 4)
+def hold(seconds): return round(math.log10(seconds / 0.001) / 4.0, 4)
+
+# ---------------------------------------------------------------------------------------------------- ORIGAMI
+ORIGAMI_IDS = []
+ORIGAMI_PRESETS = {}
+def load_origami(path):
+    root = ET.parse(path).getroot()
+    assert root.tag == "ORIGAMI_FACTORY"
+    for p in root.findall("PRESET"):
+        vals = {}
+        for e in p.find("ORIGAMI").findall("PARAM"):
+            vals[e.get("id")] = e.get("value")
+            if e.get("id") not in ORIGAMI_IDS:
+                ORIGAMI_IDS.append(e.get("id"))
+        ORIGAMI_PRESETS[p.get("name")] = vals
+
+def fmt(v):
+    if isinstance(v, str):
+        return v
+    s = repr(float(v))
+    return s[:-2] if s.endswith(".0") else s
+
+def esc(s): return s.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+
+# ---------------------------------------------------------------------------------------------------- devices
+class Rack:
+    def __init__(self, name, category, about, view="back"):
+        self.name, self.category, self.about, self.view = name, category, about, view
+        self.devices, self.cables, self.level = [], [], 1.0
+
+    def bushido(self, number=1, name="", steps_a=None, steps_b=None, steps_c=None, **params):
+        p = dict(BUSHIDO_DEFAULTS)
+        # Host clock (JCS R5.7): runs with the DAW transport, one step per 16th unless DIV says otherwise.
+        p.update({"CLOCK:SOURCE": 1, "CLOCK:EXT SOURCE": 1, "MODE:MODE": 0})
+        for row, vals in (("A", steps_a), ("B", steps_b), ("C", steps_c)):
+            if vals is not None:
+                assert len(vals) == 12
+                for i, v in enumerate(vals):
+                    assert 0.0 <= v <= 1.0, (row, i, v)
+                    p[f"{row}:{i + 1}"] = round(v, 6)
+        for k, v in params.items():
+            key = k.replace("__", ":").replace("_", " ")
+            assert key in p, key
+            p[key] = v
+        self.devices.append(("BUSHIDO", number, name, p))
+        return f"BUSHIDO#{number}"
+
+    def ronin(self, number=1, name="", **knobs):
+        k = dict(RONIN_KNOBS)
+        for key, v in knobs.items():
+            kid = key.replace("__", ":").replace("_", " ")
+            kid = kid.replace("S H", "S&H")
+            assert kid in RONIN_KNOB_IDS, kid
+            k[kid] = v
+        self.devices.append(("RONIN", number, name, k))
+        return f"RONIN#{number}"
+
+    def origami(self, preset, number=1, name="", **changes):
+        vals = dict(ORIGAMI_PRESETS[preset])
+        for key, v in changes.items():
+            assert key in vals, key
+            vals[key] = fmt(v)
+        self.devices.append(("ORIGAMI", number, name, vals))
+        return f"ORIGAMI#{number}"
+
+    def cable(self, a, b):
+        self.cables.append((a, b))
+
+    def xml(self, indent="    "):
+        out = [f'{indent}<JIDAIRACK version="3" browser="1" view="{self.view}" cablesFront="HIDE PASS-THRU" '
+               f'cablesBack="ALL" scale="100">']
+        out.append(f'{indent}  <DEVICE kind="RACK I/O" number="1" front="open" format="1" level="{fmt(self.level)}"/>')
+        for kind, number, name, vals in self.devices:
+            nm = f' name="{esc(name)}"' if name else ""
+            if kind == "BUSHIDO":
+                out.append(f'{indent}  <DEVICE kind="BUSHIDO" number="{number}"{nm} front="open" format="1" bypass="0" '
+                           f'bank="-1" pattern="-1">')
+                for pid in BUSHIDO_PARAMS:
+                    out.append(f'{indent}    <PARAM id="{esc(pid)}" value="{fmt(vals[pid])}"/>')
+            elif kind == "RONIN":
+                out.append(f'{indent}  <DEVICE kind="RONIN" number="{number}"{nm} front="open" format="2" program="0" '
+                           f'effect="1" triShape="triangle">')
+                for kid, _ in RONIN_KNOBS:
+                    out.append(f'{indent}    <KNOB id="{esc(kid)}" value="{fmt(vals[kid])}"/>')
+            else:
+                out.append(f'{indent}  <DEVICE kind="ORIGAMI" number="{number}"{nm} front="open" format="1">')
+                out.append(f'{indent}    <ORIGAMI format="1" unit="ORIGAMI">')
+                for pid in ORIGAMI_IDS:
+                    out.append(f'{indent}      <PARAM id="{pid}" value="{vals[pid]}"/>')
+                out.append(f'{indent}    </ORIGAMI>')
+            out.append(f'{indent}  </DEVICE>')
+        for age, (a, b) in enumerate(self.cables):
+            out.append(f'{indent}  <CABLE a="{esc(a)}" b="{esc(b)}" age="{age}"/>')
+        out.append(f'{indent}</JIDAIRACK>')
+        return out
+
+
+def semis(*notes, span=12):
+    """Step knobs for a V/OCT row: semitones above the row's 0 V note, over RANGE (1 V = 12, 5 V = 60 semitones)."""
+    return [n / span for n in notes]
+
+
+def to_main(rack, src_l, src_r=None):
+    rack.cable(src_l, "RACK#1/MAIN:OUT L")
+    rack.cable(src_r or src_l, "RACK#1/MAIN:OUT R")
+
+
+def ronin_voice(rack, r, pitch=None, gate=None, filter_cv=None):
+    """RONIN as a mono voice: VCO SAW -> VCF -> VCA 1 -> OUTPUT WET, EG 1 opening VCA 1 and the filter."""
+    rack.cable(f"{r}/VCO:SAW", f"{r}/VCF:IN")
+    rack.cable(f"{r}/VCF:OUT", f"{r}/VCA 1:IN")
+    rack.cable(f"{r}/VCA 1:OUT", f"{r}/OUTPUT:WET")
+    rack.cable(f"{r}/EG 1:OUT A", f"{r}/VCA 1:ENV")
+    if filter_cv is None:
+        rack.cable(f"{r}/EG 1:OUT A", f"{r}/VCF:CUTOFF")
+    if pitch:
+        rack.cable(pitch, f"{r}/VCO:V/OCT")
+    if gate:
+        rack.cable(gate, f"{r}/EG 1:TRIG")
+
+
+# ---------------------------------------------------------------------------------------------------- the racks
+def build():
+    racks = []
+
+    # 0. INIT: the empty rack, RACK I/O only (what a new JIDAI RACK opens with).
+    racks.append(Rack("INIT", "INIT", "RACK I/O only: the empty rack.", view="front"))
+
+    # 1. ACID LINE: a 12-step line, slides from PORTA A, accents from row C opening the filter through RONIN's MIX.
+    r = Rack("Acid Line", "ACID",
+             "BUSHIDO plays a 12-step acid line on the host clock (1/16). PORTA A glides every note; row C (C MODE CV) "
+             "is the accent: CV C is mixed with EG 1 in RONIN's MIX and opens the resonant filter further.")
+    b = r.bushido(name="ACID SEQ",
+                  steps_a=semis(0, 0, 12, 0, 3, 0, 7, 10, 0, 12, 5, 3),
+                  steps_c=[1, 0, 0, 0.8, 0, 0, 1, 0, 0, 0.6, 0, 0.9],
+                  CH__PORTA_A=0.14, CH__RANGE_A=0, STEPS__QUANT_A=1)
+    v = r.ronin(name="ACID BASS", VCO__RANGE=FOOT[16], VCF__CUTOFF=cutoff(170), VCF__PEAK=0.8, VCF__MOD=0.55,
+                EG_1__ATTACK=0.0, EG_1__DECAY=eg(0.18), EG_1__SUSTAIN=0.08, EG_1__RELEASE=eg(0.05),
+                MIX__LEVEL_1=0.8, MIX__LEVEL_2=0.55, OUTPUT__LEVEL=0.7)
+    ronin_voice(r, v, pitch=f"{b}/OUTPUTS:CV A", gate=f"{b}/OUTPUTS:GATE A", filter_cv="mix")
+    r.cable(f"{v}/EG 1:OUT A", f"{v}/MIX:IN 1")
+    r.cable(f"{b}/OUTPUTS:CV C", f"{v}/MIX:IN 2")
+    r.cable(f"{v}/MIX:OUT", f"{v}/VCF:CUTOFF")
+    to_main(r, f"{v}/HOST:OUT L", f"{v}/HOST:OUT R")
+    racks.append(r)
+
+    # 2. ACID FOLD: gate lengths from row C (C MODE TIME: long gates on the slid notes), accents from TRIG jacks
+    #    firing EG 2, which folds harder through ORIGAMI's VC 1.
+    r = Rack("Acid Fold", "ACID",
+             "A 12-step acid line through ORIGAMI. Row C sets each gate's length (C MODE TIME): the long steps glide "
+             "into the next note with PORTA A. TRIG 1, 6 and 11 are the accents: summed in RONIN's MIX they fire EG 2, "
+             "which opens the filter and folds harder through ORIGAMI's VC 1.")
+    b = r.bushido(name="ACID SEQ",
+                  steps_a=semis(0, 12, 0, 0, 3, 12, 0, 7, 0, 10, 12, 3),
+                  steps_c=[0.35, 0.95, 0.3, 0.3, 0.95, 0.3, 0.35, 0.3, 0.3, 0.95, 0.3, 0.3],
+                  CH__PORTA_A=0.17, CH__RANGE_A=0, CH__C_MODE=1, STEPS__QUANT_A=1)
+    v = r.ronin(name="ACID BASS", VCO__RANGE=FOOT[16], VCF__CUTOFF=cutoff(150), VCF__PEAK=0.82, VCF__MOD=0.6,
+                EG_1__ATTACK=0.0, EG_1__DECAY=eg(0.22), EG_1__SUSTAIN=0.1, EG_1__RELEASE=eg(0.04),
+                EG_2__HOLD=hold(0.03), EG_2__ATTACK=0.0, EG_2__RELEASE=eg(0.15),
+                MIX__LEVEL_1=1.0, MIX__LEVEL_2=1.0, MIX__LEVEL_3=1.0, OUTPUT__LEVEL=0.7)
+    o = r.origami("Acid Squelch Fold", name="ACID FOLD", vc1_src=0, vc1_amt=0.5)
+    ronin_voice(r, v, pitch=f"{b}/OUTPUTS:CV A", gate=f"{b}/OUTPUTS:GATE A", filter_cv="sum")
+    for i, n in enumerate((1, 6, 11)):
+        r.cable(f"{b}/{n}:TRIG", f"{v}/MIX:IN {i + 1}")
+    r.cable(f"{v}/MIX:OUT", f"{v}/EG 2:TRIG")
+    r.cable(f"{v}/EG 2:OUT +", f"{v}/VCF:CUTOFF")
+    r.cable(f"{v}/EG 2:OUT +", f"{o}/VC:VC 1")
+    r.cable(f"{v}/HOST:OUT L", f"{o}/IN:IN L")
+    r.cable(f"{v}/HOST:OUT R", f"{o}/IN:IN R")
+    to_main(r, f"{o}/OUT:OUT L", f"{o}/OUT:OUT R")
+    racks.append(r)
+
+    # 3. DRIVING BASS: an 8-step 16th bass (TRIG 9 -> RESET), octave jumps, through ORIGAMI.
+    r = Rack("Driving Bass", "EDM",
+             "An 8-step rolling 16th bass, one bar of 4/4 on the host clock: TRIG 9 patched into RESET makes BUSHIDO's "
+             "12 steps an 8-step loop. RONIN plays a short saw with a little resonance; ORIGAMI adds drive that keeps "
+             "the low end clean.")
+    b = r.bushido(name="BASS SEQ",
+                  steps_a=semis(0, 0, 12, 0, 0, 12, 0, 10, 0, 0, 0, 0),
+                  CH__RANGE_A=0, STEPS__QUANT_A=1)
+    v = r.ronin(name="BASS", VCO__RANGE=FOOT[16], VCF__CUTOFF=cutoff(260), VCF__PEAK=0.35, VCF__MOD=0.5,
+                EG_1__ATTACK=0.0, EG_1__DECAY=eg(0.12), EG_1__SUSTAIN=0.25, EG_1__RELEASE=eg(0.03), OUTPUT__LEVEL=0.7)
+    o = r.origami("Sub-Safe Bass Drive", name="DRIVE")
+    ronin_voice(r, v, pitch=f"{b}/OUTPUTS:CV A", gate=f"{b}/OUTPUTS:GATE A")
+    r.cable(f"{b}/9:TRIG", f"{b}/INPUTS:RESET")
+    r.cable(f"{v}/HOST:OUT L", f"{o}/IN:IN L")
+    r.cable(f"{v}/HOST:OUT R", f"{o}/IN:IN R")
+    to_main(r, f"{o}/OUT:OUT L", f"{o}/OUT:OUT R")
+    racks.append(r)
+
+    # 4. PLUCK LEAD: an 8-step lead over two octaves (RANGE 5 V), fast filter pluck, MG on the pulse width.
+    r = Rack("Pluck Lead", "EDM",
+             "An 8-step pluck lead on the host clock (TRIG 9 -> RESET). Row A spans RANGE 5 V, quantized to semitones; "
+             "RONIN's pulse wave has its width moved by the MG, and a fast EG 1 plucks the filter. ORIGAMI adds bite.")
+    b = r.bushido(name="LEAD SEQ",
+                  steps_a=semis(12, 19, 24, 19, 15, 24, 22, 19, 0, 0, 0, 0, span=60),
+                  CH__RANGE_A=1, STEPS__QUANT_A=1)
+    v = r.ronin(name="PLUCK", VCO__RANGE=FOOT[8], VCF__CUTOFF=cutoff(600), VCF__PEAK=0.45, VCF__MOD=0.6,
+                EG_1__ATTACK=0.0, EG_1__DECAY=eg(0.14), EG_1__SUSTAIN=0.0, EG_1__RELEASE=eg(0.12),
+                MG__RATE=0.35, OUTPUT__LEVEL=0.6)
+    o = r.origami("Pluck Edge", name="BITE")
+    r.cable(f"{v}/VCO:PULSE", f"{v}/VCF:IN")
+    r.cable(f"{v}/MG:TRI", f"{v}/VCO:PWM")
+    r.cable(f"{v}/VCF:OUT", f"{v}/VCA 1:IN")
+    r.cable(f"{v}/VCA 1:OUT", f"{v}/OUTPUT:WET")
+    r.cable(f"{v}/EG 1:OUT A", f"{v}/VCA 1:ENV")
+    r.cable(f"{v}/EG 1:OUT A", f"{v}/VCF:CUTOFF")
+    r.cable(f"{b}/OUTPUTS:CV A", f"{v}/VCO:V/OCT")
+    r.cable(f"{b}/OUTPUTS:GATE A", f"{v}/EG 1:TRIG")
+    r.cable(f"{b}/9:TRIG", f"{b}/INPUTS:RESET")
+    r.cable(f"{v}/HOST:OUT L", f"{o}/IN:IN L")
+    r.cable(f"{v}/HOST:OUT R", f"{o}/IN:IN R")
+    to_main(r, f"{o}/OUT:OUT L", f"{o}/OUT:OUT R")
+    racks.append(r)
+
+    # 5. TWO VOICES: one BUSHIDO, two RONINs. Row A is the bass (CV A), row C a counter line (C MODE CV, CV C).
+    r = Rack("Two Voices", "EDM",
+             "One BUSHIDO plays two RONINs: row A is the bass on CV A, row C a counter line on CV C (C MODE CV, "
+             "0..5 V = five octaves). GATE A fires both envelopes. BUSHIDO's own mixer sums the two voices into ORIGAMI.")
+    b = r.bushido(name="SEQ",
+                  steps_a=semis(0, 0, 0, 7, 0, 0, 3, 0, 0, 0, 10, 0),
+                  steps_c=semis(24, 27, 31, 24, 34, 31, 27, 36, 24, 31, 29, 27, span=60),
+                  CH__RANGE_A=0, STEPS__QUANT_A=1, MIXER__LEVEL_1=0.8, MIXER__LEVEL_2=0.6)
+    v1 = r.ronin(1, name="BASS", VCO__RANGE=FOOT[16], VCF__CUTOFF=cutoff(220), VCF__PEAK=0.4, VCF__MOD=0.5,
+                 EG_1__ATTACK=0.0, EG_1__DECAY=eg(0.15), EG_1__SUSTAIN=0.3, EG_1__RELEASE=eg(0.05), OUTPUT__LEVEL=0.6)
+    v2 = r.ronin(2, name="COUNTER", VCO__RANGE=FOOT[32], VCF__CUTOFF=cutoff(900), VCF__PEAK=0.3, VCF__MOD=0.45,
+                 EG_1__ATTACK=0.0, EG_1__DECAY=eg(0.1), EG_1__SUSTAIN=0.0, EG_1__RELEASE=eg(0.1), OUTPUT__LEVEL=0.6)
+    o = r.origami("Warm Bus Glue", name="GLUE")
+    ronin_voice(r, v1, pitch=f"{b}/OUTPUTS:CV A", gate=f"{b}/OUTPUTS:GATE A")
+    ronin_voice(r, v2, pitch=f"{b}/OUTPUTS:CV C", gate=f"{b}/OUTPUTS:GATE A")
+    r.cable(f"{v1}/HOST:OUT L", f"{b}/MIXER:IN 1")
+    r.cable(f"{v2}/HOST:OUT L", f"{b}/MIXER:IN 2")
+    r.cable(f"{b}/MIXER:OUT", f"{o}/IN:IN L")
+    to_main(r, f"{o}/OUT:OUT L", f"{o}/OUT:OUT R")
+    racks.append(r)
+
+    # 6. STEPPED FOLD: BUSHIDO sequences ORIGAMI's fold as well as the notes (row C on VC 1, TRIG 5 on VC 3).
+    r = Rack("Stepped Fold", "EDM",
+             "BUSHIDO sequences the fold as well as the notes: row C (C MODE CV) drives ORIGAMI's VC 1, so every step "
+             "has its own fold depth, and TRIG 5 kicks VC 3 once a loop. RONIN is a held saw drone gated by GATE A.")
+    b = r.bushido(name="FOLD SEQ",
+                  steps_a=semis(0, 0, 0, 0, 5, 5, 3, 3, 0, 0, 7, 7),
+                  steps_c=[0.0, 0.3, 0.6, 1.0, 0.2, 0.5, 0.8, 0.4, 0.0, 0.7, 1.0, 0.5],
+                  CH__RANGE_A=0, STEPS__QUANT_A=1, CH__PORTA_A=0.08)
+    v = r.ronin(name="DRONE", VCO__RANGE=FOOT[16], VCF__CUTOFF=cutoff(700), VCF__PEAK=0.25, VCF__MOD=0.3,
+                EG_1__ATTACK=eg(0.003), EG_1__DECAY=eg(0.3), EG_1__SUSTAIN=0.7, EG_1__RELEASE=eg(0.08),
+                OUTPUT__LEVEL=0.55)
+    o = r.origami("Stepped Fold Sequence", name="STEP FOLD")
+    ronin_voice(r, v, pitch=f"{b}/OUTPUTS:CV A", gate=f"{b}/OUTPUTS:GATE A")
+    r.cable(f"{b}/OUTPUTS:CV C", f"{o}/VC:VC 1")
+    r.cable(f"{b}/5:TRIG", f"{o}/VC:VC 3")
+    r.cable(f"{v}/HOST:OUT L", f"{o}/IN:IN L")
+    r.cable(f"{v}/HOST:OUT R", f"{o}/IN:IN R")
+    to_main(r, f"{o}/OUT:OUT L", f"{o}/OUT:OUT R")
+    racks.append(r)
+
+    # 7. KEYS THROUGH FOLD: RACK I/O MIDI plays RONIN (the DAW's notes), through ORIGAMI.
+    r = Rack("MIDI Fold Synth", "EDM",
+             "Play RONIN from your DAW: RACK I/O's MIDI NOTE, GATE and VEL jacks drive RONIN's VCO, EG 1 and filter, "
+             "and RONIN plays through ORIGAMI. Send MIDI to the JIDAI RACK track.")
+    v = r.ronin(name="SYNTH", VCO__RANGE=FOOT[8], VCF__CUTOFF=cutoff(500), VCF__PEAK=0.4, VCF__MOD=0.5,
+                EG_1__ATTACK=eg(0.002), EG_1__DECAY=eg(0.4), EG_1__SUSTAIN=0.5, EG_1__RELEASE=eg(0.25),
+                MIX__LEVEL_1=0.8, MIX__LEVEL_2=0.4, OUTPUT__LEVEL=0.6)
+    o = r.origami("Lead Bite", name="BITE")
+    ronin_voice(r, v, pitch="RACK#1/MIDI:NOTE", gate="RACK#1/MIDI:GATE", filter_cv="mix")
+    r.cable(f"{v}/EG 1:OUT A", f"{v}/MIX:IN 1")
+    r.cable("RACK#1/MIDI:VEL", f"{v}/MIX:IN 2")
+    r.cable(f"{v}/MIX:OUT", f"{v}/VCF:CUTOFF")
+    r.cable(f"{v}/HOST:OUT L", f"{o}/IN:IN L")
+    r.cable(f"{v}/HOST:OUT R", f"{o}/IN:IN R")
+    to_main(r, f"{o}/OUT:OUT L", f"{o}/OUT:OUT R")
+    racks.append(r)
+
+    # 8. FILTER FOLD FX: host audio through RONIN's filter (MG sweep) and ORIGAMI.
+    r = Rack("Filter Fold FX", "FX",
+             "An insert effect for your track: host audio from RACK I/O goes through RONIN's resonant filter, swept by "
+             "the MG, then through ORIGAMI, and back to the host.")
+    v = r.ronin(name="FILTER", VCF__CUTOFF=cutoff(900), VCF__PEAK=0.55, VCF__MOD=0.45, VCA_1__INITIAL=1.0,
+                MG__RATE=0.3, OUTPUT__MIX=1.0, OUTPUT__LEVEL=0.7)
+    o = r.origami("Warm Bus Glue", name="GLUE")
+    r.cable("RACK#1/HOST:IN L", f"{v}/HOST:IN L")
+    r.cable("RACK#1/HOST:IN R", f"{v}/HOST:IN R")
+    r.cable(f"{v}/EXT IN:MONO", f"{v}/VCF:IN")
+    r.cable(f"{v}/VCF:OUT", f"{v}/VCA 1:IN")
+    r.cable(f"{v}/VCA 1:OUT", f"{v}/OUTPUT:WET")
+    r.cable(f"{v}/MG:TRI", f"{v}/VCF:CUTOFF")
+    r.cable(f"{v}/HOST:OUT L", f"{o}/IN:IN L")
+    r.cable(f"{v}/HOST:OUT R", f"{o}/IN:IN R")
+    to_main(r, f"{o}/OUT:OUT L", f"{o}/OUT:OUT R")
+    racks.append(r)
+
+    # 9. TEMPO GATE FX: host audio chopped in time with the host (TRANSPORT CLK 1/16 fires EG 1 on VCA 1), folded.
+    r = Rack("Tempo Gate FX", "FX",
+             "A tempo-synced gate for your track: RACK I/O's TRANSPORT CLK 1/16 fires RONIN's EG 1 on every 16th, "
+             "which opens VCA 1 on the host audio; ORIGAMI folds the chopped signal. Runs while the DAW plays.")
+    v = r.ronin(name="GATE", VCF__CUTOFF=1.0, VCF__PEAK=0.0, VCF__MOD=0.0, VCA_1__INITIAL=0.0, VCA_1__MOD=1.0,
+                EG_1__ATTACK=0.0, EG_1__DECAY=eg(0.09), EG_1__SUSTAIN=0.0, EG_1__RELEASE=eg(0.06),
+                OUTPUT__MIX=1.0, OUTPUT__LEVEL=0.7)
+    o = r.origami("Analog Edge", name="EDGE")
+    r.cable("RACK#1/HOST:IN L", f"{v}/HOST:IN L")
+    r.cable("RACK#1/HOST:IN R", f"{v}/HOST:IN R")
+    r.cable(f"{v}/EXT IN:MONO", f"{v}/VCF:IN")
+    r.cable(f"{v}/VCF:OUT", f"{v}/VCA 1:IN")
+    r.cable(f"{v}/VCA 1:OUT", f"{v}/OUTPUT:WET")
+    r.cable(f"{v}/EG 1:OUT A", f"{v}/VCA 1:ENV")
+    r.cable("RACK#1/TRANSPORT:CLK 1/16", f"{v}/EG 1:TRIG")
+    r.cable(f"{v}/HOST:OUT L", f"{o}/IN:IN L")
+    r.cable(f"{v}/HOST:OUT R", f"{o}/IN:IN R")
+    to_main(r, f"{o}/OUT:OUT L", f"{o}/OUT:OUT R")
+    racks.append(r)
+    return racks
+
+
+def main():
+    load_origami(sys.argv[1])
+    racks = build()
+    names = set()
+    out = ['<?xml version="1.0" encoding="UTF-8"?>',
+           '<!-- JIDAI RACK starter racks. Copyright (c) 2026 Martial Systems LLC. All rights reserved.',
+           '     Written by tools/make_starter_racks.py. Each RACK holds one complete rack state (JIDAIRACK version 3). -->',
+           '<JIDAI_STARTER_RACKS version="1">']
+    for rk in racks:
+        assert rk.name not in names
+        names.add(rk.name)
+        out.append(f'  <RACK name="{esc(rk.name)}" category="{rk.category}" about="{esc(rk.about)}">')
+        out += rk.xml()
+        out.append('  </RACK>')
+    out.append('</JIDAI_STARTER_RACKS>')
+    open(sys.argv[2], "w").write("\n".join(out) + "\n")
+    print(len(racks), "racks")
+
+
+if __name__ == "__main__":
+    main()

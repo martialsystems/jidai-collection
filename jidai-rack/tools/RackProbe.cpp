@@ -7,6 +7,7 @@
 
 #include "plugin/JidaiEditor.h"
 #include "plugin/RackCableLayer.h"
+#include "plugin/StarterRacks.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #if JUCE_LINUX
@@ -374,6 +375,55 @@ int main (int argc, char** argv)
         pump();
         snapshot (rack, out.getChildFile ("rack_back_large.png"));
         rack.setShowBack (false);
+    }
+
+    // Starter racks: the RACKS menu, then every rack loaded from it, front and back. On the back (CABLES ALL)
+    // every cable of the rack is drawn as a rope between two rear jacks: the back is the whole patch.
+    {
+        const auto menu = editor->starterRackMenu();
+        juce::StringArray tops;
+        int items = 0;
+        for (juce::PopupMenu::MenuItemIterator it (menu); it.next();)
+        {
+            tops.add (it.getItem().text);
+            if (auto* sub = it.getItem().subMenu.get())
+                for (juce::PopupMenu::MenuItemIterator si (*sub); si.next();) ++items;
+            else
+                ++items;
+        }
+        expect (tops == juce::StringArray ({ "INIT", "ACID", "EDM", "FX" }) && items == proc.getNumPrograms(),
+                "RACKS menu: INIT, then ACID, EDM and FX holding every starter rack (" + tops.joinIntoString (", ") + ")");
+        expect (! editor->headerButtonBounds (JidaiEditor::BtnRacks).isEmpty(), "the header has a RACKS button");
+        editor->setSize (1964, 1100);
+        pump();
+        const auto& racks = starterRacks();
+        for (int i = 0; i < (int) racks.size(); ++i)
+        {
+            proc.setCurrentProgram (i);
+            pump (60);
+            const auto slug = racks[(size_t) i].name.toLowerCase().replaceCharacter (' ', '_').retainCharacters ("abcdefghijklmnopqrstuvwxyz0123456789_");
+            const auto stem = juce::String ("starter_") + juce::String (i).paddedLeft ('0', 2) + "_" + slug;
+            rack.setShowBack (true);
+            rack.setCableMode (JidaiProcessor::CablesAll);
+            pump (60);
+            int ropes = 0, onRear = 0;
+            for (auto& d : layer.drawn())
+                ropes += d.shown == RackCableLayer::Shown::Rope ? 1 : 0;
+            for (auto& c : proc.rack().cables())
+                onRear += rack.spotFor (c.a) != nullptr && rack.spotFor (c.b) != nullptr ? 1 : 0;
+            const int n = (int) proc.rack().cables().size();
+            expect (proc.getCurrentProgram() == i && ropes == n && onRear == n,
+                    "starter rack " + racks[(size_t) i].name + ": back view draws all " + juce::String (n) + " cables as ropes between rear jacks (ropes "
+                    + juce::String (ropes) + ", both ends on the back " + juce::String (onRear) + ")");
+            snapshot (rack, out.getChildFile (stem + "_back.png"));
+            rack.setShowBack (false);
+            rack.setCableMode (JidaiProcessor::CablesHidePassThru);
+            pump (60);
+            snapshot (rack, out.getChildFile (stem + "_front.png"));
+        }
+        proc.setCurrentProgram (0);
+        pump();
+        expect (proc.rack().deviceCount() == 1 && proc.rack().device (0)->kind() == jidai::DeviceKind::RackIO, "INIT starter rack: RACK I/O only");
     }
 
     editor.reset();

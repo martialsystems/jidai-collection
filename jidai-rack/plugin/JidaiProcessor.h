@@ -33,10 +33,11 @@ public:
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 0.0; }
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram (int) override {}
-    const juce::String getProgramName (int) override { return "Rack"; }
+    // Programs are the starter racks (StarterRacks.h), INIT first. Choosing one replaces the whole rack.
+    int getNumPrograms() override;
+    int getCurrentProgram() override { return currentProgram_; }
+    void setCurrentProgram (int index) override;
+    const juce::String getProgramName (int index) override;
     void changeProgramName (int, const juce::String&) override {}
     void getStateInformation (juce::MemoryBlock&) override;
     void setStateInformation (const void*, int) override;
@@ -50,7 +51,7 @@ public:
     void moveDevice (jidai::Device* device, int position);
     void setCables (const std::vector<jidai::CableSpec>& cables);
     void loadRoninProgram (jidai::RoninDevice* ronin, int index);   // factory program on this RONIN only; the screen shows it on bank A
-    void resetToDefaultRack();       // RACK I/O only (decision 14: no factory racks yet)
+    void resetToDefaultRack();       // RACK I/O only: the INIT starter rack
     // Message thread: picks up device latency changes (ORIGAMI 2x) and reports the rack's latency to the host.
     // Called after every edit made through the processor and by a 10 Hz timer.
     void refreshLatency();
@@ -125,6 +126,7 @@ private:
     jidai::BushidoDevice* firstBushido() const;
 
     jidai::Rack rack_;
+    int currentProgram_ = 0;
     std::vector<Pattern> banks_[2];
     std::vector<RoninStored> roninUser_[2];
     std::vector<RackPatch> rackPatches_;

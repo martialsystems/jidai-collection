@@ -3,7 +3,7 @@
 #pragma once
 
 // The JIDAI RACK window (JIDAI_RACK_Redesign 3.1, mockup rack_front.png): a header (FRONT / BACK, CABLES modes,
-// FOLD ALL, total LAT, UI scale), the device browser on the left and the rack on the right. 1200 x 672 by default,
+// FOLD ALL, RACKS (the starter racks), total LAT, UI scale), the device browser on the left and the rack on the right. 1200 x 672 by default,
 // 960 x 540 at the smallest; the rack scrolls.
 // Keys: Tab flips FRONT/BACK; K cycles the cable mode; F folds the selected device, Shift+F folds or opens every
 // device; C opens or closes the selected device; Esc cancels a cable drag (or clears the selection); Delete removes
@@ -40,8 +40,10 @@ public:
     static constexpr int kListWidth = 184, kHeaderHeight = 40;
 
     // Header buttons (probe): FRONT, BACK, the four cable modes, FOLD ALL, scale.
-    enum HeaderButton { BtnFront, BtnBack, BtnModeAll, BtnModeHidePass, BtnModeSelected, BtnModeHide, BtnFoldAll, BtnScale, BtnNotice, kHeaderButtons };
+    enum HeaderButton { BtnFront, BtnBack, BtnModeAll, BtnModeHidePass, BtnModeSelected, BtnModeHide, BtnFoldAll, BtnScale, BtnNotice, BtnRacks, kHeaderButtons };
     juce::Rectangle<int> headerButtonBounds (int button) const;      // in the editor
+    // RACKS: the starter racks, INIT first, then one submenu per category. Item id = program index + 1.
+    juce::PopupMenu starterRackMenu() const;
 
 protected:
     void dragOperationStarted (const juce::DragAndDropTarget::SourceDetails&) override;

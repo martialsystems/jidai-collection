@@ -3,6 +3,7 @@
 #include "JidaiEditor.h"
 #include "RackCableLayer.h"
 #include "RackStyle.h"
+#include "StarterRacks.h"
 
 using namespace jidai;
 using namespace rackstyle;
@@ -33,9 +34,10 @@ public:
             case BtnModeHide: return { 628.0f * k, y, 52.0f * k, h };
             case BtnFoldAll: return { 714.0f * k, y, 90.0f * k, h };
             case BtnScale: return { (float) getWidth() - 74.0f * k, y, 64.0f * k, h };
+            case BtnRacks: return { 812.0f * k, y, 78.0f * k, h };
             case BtnNotice:
                 return ed.proc.migrationNotice.isEmpty() ? juce::Rectangle<float>()
-                                                         : juce::Rectangle<float> (930.0f * k, y, (float) getWidth() - 1014.0f * k, h);
+                                                         : juce::Rectangle<float> (990.0f * k, y, (float) getWidth() - 1074.0f * k, h);
             default: break;
         }
         return {};
@@ -84,10 +86,11 @@ public:
             pill (BtnModeAll + m, RackView::cableModeName (m), mode == m);
         hint ("K", 686.0f, 20.0f);
         pill (BtnFoldAll, ed.rack.allFolded() ? "OPEN ALL" : "FOLD ALL", false);
+        pill (BtnRacks, juce::String::fromUTF8 ("RACKS \xe2\x96\xbe"), false);
         const int lat = ed.proc.rack().latency();
         g.setColour (lat > 0 ? kAmber : kDim);
         g.setFont (font (13.0f * k, true));
-        g.drawText ("LAT " + juce::String (lat), juce::Rectangle<float> (826.0f * k, 0.0f, 96.0f * k, r.getHeight()), juce::Justification::centredLeft);
+        g.drawText ("LAT " + juce::String (lat), juce::Rectangle<float> (902.0f * k, 0.0f, 84.0f * k, r.getHeight()), juce::Justification::centredLeft);
         if (! ed.proc.migrationNotice.isEmpty())
         {
             const auto nr = button (BtnNotice);
@@ -131,6 +134,16 @@ public:
                 case BtnModeAll: case BtnModeHidePass: case BtnModeSelected: case BtnModeHide: rv.setCableMode (b - BtnModeAll); break;
                 case BtnFoldAll: rv.foldAll (! rv.allFolded()); break;
                 case BtnNotice: sp->proc.migrationNotice.clear(); break;
+                case BtnRacks:
+                    sp->starterRackMenu().showMenuAsync (
+                        juce::PopupMenu::Options().withTargetComponent (sp->head.get())
+                                                  .withTargetScreenArea (sp->head->localAreaToGlobal (sp->head->button (BtnRacks).toNearestInt())),
+                        [sp] (int id)
+                        {
+                            if (sp != nullptr && id > 0)
+                                sp->proc.setCurrentProgram (id - 1);
+                        });
+                    break;
                 case BtnScale:
                 {
                     int next = kScaleSteps[0];
@@ -194,6 +207,29 @@ JidaiEditor::~JidaiEditor()
 {
     removeMouseListener (this);
     proc.removeChangeListener (this);
+}
+
+juce::PopupMenu JidaiEditor::starterRackMenu() const
+{
+    juce::PopupMenu menu;
+    juce::StringArray categories;
+    const auto& racks = starterRacks();
+    for (size_t i = 0; i < racks.size(); ++i)
+    {
+        if (racks[i].category.isEmpty() || racks[i].category == "INIT")
+            menu.addItem ((int) i + 1, racks[i].name);
+        else
+            categories.addIfNotAlreadyThere (racks[i].category);
+    }
+    for (const auto& c : categories)
+    {
+        juce::PopupMenu sub;
+        for (size_t i = 0; i < racks.size(); ++i)
+            if (racks[i].category == c)
+                sub.addItem ((int) i + 1, racks[i].name);
+        menu.addSubMenu (c, sub);
+    }
+    return menu;
 }
 
 juce::Component& JidaiEditor::deviceList() { return *list; }
