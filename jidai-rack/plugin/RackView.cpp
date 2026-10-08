@@ -466,6 +466,8 @@ void RackView::rebuild()
     for (int i = 0; i < rack.deviceCount(); ++i)
     {
         Device* d = rack.device (i);
+        if (d->kind() != DeviceKind::Bushido && d->kind() != DeviceKind::Ronin)
+            continue;          // interim (phase 3b): RACK I/O and ORIGAMI are drawn by the new rack view (phase 3c)
         auto slot = std::make_unique<Slot>();
         slot->device = d;
         slot->top = y;

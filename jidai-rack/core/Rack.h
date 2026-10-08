@@ -78,6 +78,9 @@ public:
     // reproducing the v2 hidden routing.
     void applyLegacyHostRouting();
     RackIODevice* rackIO() const { return rackIO_; }
+    // Migration M3: whether the v2 gate law (S-15 into every RONIN input) sounds different from JCS R2/R3s on a
+    // cable between these jacks. Only those cables get legacyInvert when a v2 rack loads.
+    bool legacyInversionDiffers (const std::string& jackA, const std::string& jackB) const;
     bool removeDevice (Device* device);           // also removes every cable on its jacks; RACK I/O stays
     bool moveDevice (Device* device, int position);
     int deviceCount() const { return (int) devices_.size(); }

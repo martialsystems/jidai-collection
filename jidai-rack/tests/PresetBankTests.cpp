@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Martial Systems LLC. All rights reserved.
 //
 // Preset banks through JidaiProcessor. Bank A is each instrument's factory set, INIT only for now.
+// A new rack holds RACK I/O only (decision 14), so the bank tests first insert the old default pair, one BUSHIDO
+// above one RONIN, without auto-route (makeClassic), and the cable counts below are the same as before.
 // Bank B starts with the rack patches. The compiled list is empty for now, so the rack patch tests
 // load a fixture list (TEST LOOP, TEST RING) through setRackPatchesForTest. User files stay in a temp directory.
 
@@ -130,18 +132,33 @@ void expectInitBanks (JidaiProcessor& p, int rackPatches)
     check (p.roninPresetNames (3).isEmpty(), "Ronin bank past B is empty");
 }
 
+void expectDefaultRack (JidaiProcessor& p)
+{
+    check (p.rack().deviceCount() == 1 && p.rack().rackIO() != nullptr && p.rack().cables().empty(),
+           "a new rack holds RACK I/O only, no cables (decision 14)");
+}
+
+std::unique_ptr<JidaiProcessor> makeClassic()
+{
+    auto p = std::make_unique<JidaiProcessor>();
+    expectDefaultRack (*p);
+    p->addDevice (jidai::DeviceKind::Bushido, -1, false);
+    p->addDevice (jidai::DeviceKind::Ronin, -1, false);
+    return p;
+}
+
 void expectDefault (JidaiProcessor& p)
 {
     auto* r = roninAt (p);
     auto* b = bushidoAt (p);
-    check (r != nullptr && b != nullptr, "default rack has one Bushido and one Ronin");
+    check (r != nullptr && b != nullptr, "the classic pair: one Bushido and one Ronin");
     if (r == nullptr || b == nullptr)
         return;
-    check (r->program() == kDefaultFactoryPreset, "default Ronin is INIT");
-    check (countInternal (p.rack(), "RONIN#1/") == 8, "default Ronin has INIT's 8 cables");
-    check (r->effectOn(), "default Ronin effect is on");
-    check (p.loadedPattern (r) == std::pair<int, int> (0, 0), "default Ronin screen is A001 INIT");
-    check (p.loadedPattern (b).first == 0 && p.loadedPattern (b).second == 0, "default Bushido screen is A001 INIT");
+    check (r->program() == kDefaultFactoryPreset, "a new Ronin is INIT");
+    check (countInternal (p.rack(), "RONIN#1/") == 8, "a new Ronin has INIT's 8 cables");
+    check (r->effectOn(), "a new Ronin's effect is on");
+    check (p.loadedPattern (r) == std::pair<int, int> (0, 0), "a new Ronin's screen is A001 INIT");
+    check (p.loadedPattern (b).first == 0 && p.loadedPattern (b).second == 0, "a new Bushido's screen is A001 INIT");
 }
 
 // The compiled banks: INIT on both bank A screens, an empty rack patch list, and the INIT pattern holds
@@ -150,7 +167,7 @@ void testCompiledBanks (const juce::File& store)
 {
     JidaiProcessor::setRackPatchesForTest ({});
     JidaiProcessor::setUserStoreRootForTest (store);
-    auto proc = std::make_unique<JidaiProcessor>();
+    auto proc = makeClassic();
     expectInitBanks (*proc, 0);
     expectDefault (*proc);
     auto* b = bushidoAt (*proc);
@@ -198,8 +215,19 @@ void expectLoopBass (JidaiProcessor& p)
     check (near (b->param ("MIXER:LEVEL 1"), 0.7f), "TEST LOOP resets MIXER:LEVEL 1 to the layout default 0.7");
     check (b->bypassed(), "TEST LOOP leaves Bushido bypass as it was");
     check ((int) p.rack().cables().size() == 9, "TEST LOOP lays 9 cables, got " + std::to_string (p.rack().cables().size()));
-    check (cableColor (p.rack(), "BUSHIDO#1/OUTPUTS:CV A", "RONIN#1/VCO:HZ/V") == 2, "TEST LOOP CV A cable is yellow");
-    check (cableColor (p.rack(), "RONIN#1/VCA 2:OUT", "RONIN#1/OUTPUT:WET") == 3, "TEST LOOP wet cable is green");
+    // Rack patch cables take role colours (JCS R14): CV A carries row A's PITCH LAW (V/OCT by default), so the
+    // cable into RONIN's linear HZ/V input shows the not-equal badge (R4.3); VCA 2 is a CV VCA, so the wet cable is CV.
+    check (cableColor (p.rack(), "BUSHIDO#1/OUTPUTS:CV A", "RONIN#1/VCO:HZ/V") == -1, "TEST LOOP CV A cable takes its role colour");
+    check (cableColor (p.rack(), "RONIN#1/VCA 2:OUT", "RONIN#1/OUTPUT:WET") == -1, "TEST LOOP wet cable takes its role colour");
+    for (size_t i = 0; i < p.rack().cables().size(); ++i)
+    {
+        const auto& c = p.rack().cables()[i];
+        if (c.a == "BUSHIDO#1/OUTPUTS:CV A")
+            check (p.rack().cableInfo()[i].role == jidai::jcs::Role::VOct && p.rack().cableInfo()[i].badge == jidai::jcs::Badge::PitchLaw,
+                   "TEST LOOP CV A: V/OCT role, not-equal badge into HZ/V");
+        if (c.a == "RONIN#1/VCA 2:OUT")
+            check (p.rack().cableInfo()[i].role == jidai::jcs::Role::CV, "TEST LOOP VCA 2 OUT (a CV VCA): CV role");
+    }
     check (hasCable (p.rack(), "RONIN#1/VCF:OUT", "RONIN#1/VCF:CUTOFF"), "TEST LOOP patches the filter loop");
     check (p.loadedPattern (b) == std::pair<int, int> (1, 0), "TEST LOOP shows on the Bushido screen");
     check (p.loadedPattern (r) == std::pair<int, int> (1, 0), "TEST LOOP shows on the Ronin screen");
@@ -224,7 +252,7 @@ void expectLoopBass (JidaiProcessor& p)
 
 void testLoopBassThenFactory()
 {
-    auto proc = std::make_unique<JidaiProcessor>();
+    auto proc = makeClassic();
     expectInitBanks (*proc, 2);
     expectDefault (*proc);
     auto* b = bushidoAt (*proc);
@@ -269,7 +297,7 @@ void testLoopBassThenFactory()
 
 void testRingSeed()
 {
-    auto proc = std::make_unique<JidaiProcessor>();
+    auto proc = makeClassic();
     auto* r = roninAt (*proc);
     proc->loadRoninPreset (r, 1, 1);
     check (r->program() == 0, "TEST RING loads factory preset 0, INIT");
@@ -285,7 +313,7 @@ void testRingSeed()
 
 void testSecondRoninStays()
 {
-    auto proc = std::make_unique<JidaiProcessor>();
+    auto proc = makeClassic();
     auto* second = dynamic_cast<jidai::RoninDevice*> (proc->addDevice (jidai::DeviceKind::Ronin));
     check (second != nullptr && second->rackId() == "RONIN#2", "a second Ronin is RONIN#2");
     if (second == nullptr)
@@ -304,7 +332,7 @@ void testSecondRoninStays()
 
 void testMissingBushido()
 {
-    auto proc = std::make_unique<JidaiProcessor>();
+    auto proc = makeClassic();
     auto* b = bushidoAt (*proc);
     auto* r = roninAt (*proc);
     proc->removeDevice (b);
@@ -317,7 +345,7 @@ void testMissingBushido()
 
 void testUserFiles()
 {
-    auto first = std::make_unique<JidaiProcessor>();
+    auto first = makeClassic();
     auto* b = bushidoAt (*first);
     auto* r = roninAt (*first);
     first->loadPattern (b, 1, 0);
@@ -345,7 +373,7 @@ void testUserFiles()
     check (! r->effectOn(), "the Ronin user preset reloads effect off");
     first.reset();
 
-    auto second = std::make_unique<JidaiProcessor>();
+    auto second = makeClassic();
     check (second->roninPresetNames (0).size() == 2, "the next processor reads the Ronin user preset");
     check (second->roninPresetNames (0)[0] == "INIT" && second->roninPresetNames (0)[1] == "MINE", "the reloaded name MINE follows INIT");
     check (second->patternNames (1)[2] == "BUSER", "the next processor reads the Bushido user pattern");
@@ -366,7 +394,7 @@ void testUserFiles()
 
 void testStateRoundTrip()
 {
-    auto proc = std::make_unique<JidaiProcessor>();
+    auto proc = makeClassic();
     proc->loadPattern (bushidoAt (*proc), 1, 0);
     juce::MemoryBlock state;
     proc->getStateInformation (state);
@@ -445,6 +473,8 @@ void testEditor()
 
 }
 
+void runRackStateTests (int& checks, int& failures);
+
 int main()
 {
     juce::ScopedJuceInitialiser_GUI gui;
@@ -485,6 +515,7 @@ int main()
     testStateRoundTrip();
     testVersion1Screen();
     testEditor();
+    runRackStateTests (checks, failures);
 
     check (! bushidoExisted || bushidoDir.exists(), "an existing BUSHIDO user folder is still there");
     if (! bushidoExisted)

@@ -437,6 +437,30 @@ bool Rack::setCableColor (int index, int color)
     return true;
 }
 
+bool Rack::legacyInversionDiffers (const std::string& a, const std::string& b) const
+{
+    Device* da = nullptr;
+    Device* db = nullptr;
+    int ja = -1, jb = -1;
+    if (! resolve (a, da, ja) || ! resolve (b, db, jb))
+        return false;
+    const JackDesc& A = da->jacks()[(size_t) ja];
+    const JackDesc& B = db->jacks()[(size_t) jb];
+    if (A.unit == nullptr || B.unit == nullptr || A.desc.dir == B.desc.dir)
+        return false;
+    const JackDesc& out = A.desc.dir == PortDir::Out ? A : B;
+    const JackDesc& in = A.desc.dir == PortDir::Out ? B : A;
+    if (out.desc.type != PortType::Gate)
+        return false;
+    const bool destPlain = in.unit->plainVoltGates();
+    const bool destStrig = in.unit->strigInput (in.port);
+    if (! destPlain)
+        // v2 inverted a non-S-trig gate into any non-Gate RONIN input; JCS inverts only into S-trig inputs.
+        return ! out.desc.strigVolts && in.desc.type != PortType::Gate && ! destStrig;
+    // v2 turned an S-trig source into a plain input positive (held = 5 V); JCS passes it raw (held = 0 V).
+    return out.desc.strigVolts && ! out.unit->plainVoltGates();
+}
+
 jidai::jcs::Role Rack::jackRole (const std::string& id) const
 {
     Device* d = nullptr;

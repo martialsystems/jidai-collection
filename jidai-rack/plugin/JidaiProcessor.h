@@ -2,8 +2,10 @@
 
 #pragma once
 
-// JIDAI RACK: one plugin, one rack graph, BUSHIDO and RONIN compiled in.
-// VST3 effect: stereo in, stereo out. Host audio feeds the first RONIN's EXT IN.
+// JIDAI RACK: one plugin, one rack graph, BUSHIDO, RONIN and ORIGAMI compiled in.
+// VST3 effect: stereo in, stereo out, MIDI in (for RACK I/O's MIDI -> CV jacks; JIDAI_RACK_Redesign open question 3).
+// RACK I/O is the host connection (JCS R13): host audio, MIDI and transport come out of its jacks, and the host
+// hears what is patched into MAIN OUT. The reported latency is the rack's path latency (JCS R11).
 
 #include "core/Rack.h"
 
@@ -27,7 +29,7 @@ public:
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
     const juce::String getName() const override { return "JIDAI RACK"; }
-    bool acceptsMidi() const override { return false; }
+    bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 0.0; }
@@ -41,13 +43,27 @@ public:
 
     // ---- the rack, for the editor (message thread) ----
     jidai::Rack& rack() { return rack_; }
-    jidai::Device* addDevice (jidai::DeviceKind kind, int position = -1);    // a new BUSHIDO opens on pattern A001
+    // A user insert: a new BUSHIDO opens on pattern A001 and takes its new-instance defaults (HOST clock while the
+    // host plays); then auto-route (JIDAI_RACK_Redesign 3.6) unless autoRoute is false (Shift held).
+    jidai::Device* addDevice (jidai::DeviceKind kind, int position = -1, bool autoRoute = true);
     void removeDevice (jidai::Device* device);
     void moveDevice (jidai::Device* device, int position);
     void setCables (const std::vector<jidai::CableSpec>& cables);
     void loadRoninProgram (jidai::RoninDevice* ronin, int index);   // factory program on this RONIN only; the screen shows it on bank A
-    void resetToDefaultRack();       // one BUSHIDO above one RONIN
-    bool browserOpen = true;         // window only: the device browser is shown, or folded to a thin strip; saved with the rack
+    void resetToDefaultRack();       // RACK I/O only (decision 14: no factory racks yet)
+    // Message thread: picks up device latency changes (ORIGAMI 2x) and reports the rack's latency to the host.
+    // Called after every edit made through the processor and by a 10 Hz timer.
+    void refreshLatency();
+
+    // Window state, saved with the rack (state v3).
+    enum CableMode { CablesAll = 0, CablesHidePassThru, CablesSelected, CablesHide };
+    bool browserOpen = true;         // the device browser is shown, or folded to a thin strip
+    bool showBack = false;           // FRONT / BACK (Tab)
+    int cableModeFront = CablesHidePassThru;
+    int cableModeBack = CablesAll;
+    int scalePercent = 100;
+    juce::String migrationNotice;    // set when an older rack was migrated ("N cables kept their old S-trig inversion")
+    static constexpr int kStateVersion = 3;
 
     // Both screens: banks A and B, up to 999 entries. Bank A is that instrument's factory set.
     // Bank B starts with the rack patches in rack_patches.json (cleared for now, so bank B holds user entries only).
@@ -111,8 +127,9 @@ private:
     std::vector<std::pair<juce::String, float>> bushidoDefaults_;
     int factoryCount_ = 0;
     std::map<const jidai::Device*, std::pair<int, int>> loaded_;
-    juce::HeapBlock<float> silence_;
-    int silenceSize_ = 0;
+    std::vector<jidai::MidiNote> midiScratch_;
+    struct LatencyTimer : juce::Timer { JidaiProcessor& p; explicit LatencyTimer (JidaiProcessor& o) : p (o) {} void timerCallback() override { p.refreshLatency(); } };
+    LatencyTimer latencyTimer_ { *this };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JidaiProcessor)
 };

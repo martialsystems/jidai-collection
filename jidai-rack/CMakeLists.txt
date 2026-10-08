@@ -105,7 +105,7 @@ juce_add_plugin(JidaiRack
   FORMATS VST3 Standalone
   PRODUCT_NAME "JIDAI RACK"
   IS_SYNTH FALSE
-  NEEDS_MIDI_INPUT FALSE
+  NEEDS_MIDI_INPUT TRUE
   NEEDS_MIDI_OUTPUT FALSE
   IS_MIDI_EFFECT FALSE
   EDITOR_WANTS_KEYBOARD_FOCUS TRUE
@@ -138,7 +138,7 @@ target_link_libraries(JidaiRackProbe PRIVATE
 
 # Preset banks: factory lists, the compiled rack patches, and a temp user-file directory.
 juce_add_console_app(JidaiPresetTests PRODUCT_NAME "JidaiPresetTests")
-target_sources(JidaiPresetTests PRIVATE tests/PresetBankTests.cpp ${JIDAI_UI_SOURCES})
+target_sources(JidaiPresetTests PRIVATE tests/PresetBankTests.cpp tests/RackStateTests.cpp ${JIDAI_UI_SOURCES})
 target_compile_definitions(JidaiPresetTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JIDAI_NO_PLUGIN_ENTRY=1 JIDAI_PRESET_TEST=1)
 target_link_libraries(JidaiPresetTests PRIVATE
   jidai_core
