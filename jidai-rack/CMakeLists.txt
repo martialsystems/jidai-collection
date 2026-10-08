@@ -28,6 +28,11 @@ FetchContent_Declare(ronin
 FetchContent_MakeAvailable(JUCE bushido ronin)
 
 set(BUSHIDO_DIR ${bushido_SOURCE_DIR})
+
+# The shared Jidai Cable Standard headers (and their tests) live next to the rack in this repo.
+enable_testing()
+set(JIDAI_COMMON_TESTS ON CACHE BOOL "" FORCE)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../jidai-common ${CMAKE_CURRENT_BINARY_DIR}/jidai-common)
 set(RONIN_DIR ${ronin_SOURCE_DIR})
 
 # ---- rack core: no JUCE. The rack graph, the devices, and both engines' DSP. ----
@@ -57,6 +62,7 @@ add_library(jidai_core STATIC
   ${RONIN_DIR}/Source/Modular/SampleHold.cpp
   ${RONIN_DIR}/Source/UI/PatchBayLogic.cpp)
 target_include_directories(jidai_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${BUSHIDO_DIR} ${RONIN_DIR}/Source)
+target_link_libraries(jidai_core PUBLIC jidai::common)
 set_target_properties(jidai_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 enable_testing()
