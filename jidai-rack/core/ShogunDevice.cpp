@@ -38,12 +38,53 @@ public:
     float* values() override { return value; }
     bool* connected() override { return isConnected; }
     bool plainVoltGates() const override { return true; }   // SHOGUN gates are 0/5 V (kPlainVoltGates)
-    void processSample() override { engine.processSample (value, isConnected); }
+    void processSample() override;
 
     shogun::Engine& engine;
+    const RetUnit* ret = nullptr;    // the RET input stage, read at the start of every sample
     float value[kJackCount] {};
     bool isConnected[kJackCount] {};
 };
+
+// The 16 RET inputs (one per voice), run before the engine. The engine unit reads their values and patch state at the
+// start of its sample (the graph resets the engine unit's own, unpatched RET ports first). A separate unit so the rack
+// can give RET paths their extra latency (upsampler + decimator).
+class ShogunDevice::RetUnit : public Unit {
+public:
+    explicit RetUnit (EngineUnit& e) : engineUnit (e)
+    {
+        for (int v = 0; v < shogun::kVoices; ++v)
+        {
+            port_[v] = shogun::isDrum (v) ? shogun::drumPort (v, shogun::DJ_RET) : shogun::synthPort (v - shogun::LEAD, shogun::SJ_RET);
+            value[v] = shogun::kPortTable[port_[v]].rest;
+        }
+    }
+    int numPorts() const override { return shogun::kVoices; }
+    PortDesc port (int i) const override { return engineUnit.port (port_[i]); }
+    float* values() override { return value; }
+    bool* connected() override { return isConnected; }
+    bool plainVoltGates() const override { return true; }
+    void processSample() override {}
+    int enginePort (int i) const { return port_[i]; }
+
+    EngineUnit& engineUnit;
+    float value[shogun::kVoices] {};
+    bool isConnected[shogun::kVoices] {};
+
+private:
+    int port_[shogun::kVoices] {};
+};
+
+void ShogunDevice::EngineUnit::processSample()
+{
+    if (ret != nullptr)
+        for (int v = 0; v < shogun::kVoices; ++v)
+        {
+            value[ret->enginePort (v)] = ret->value[v];
+            isConnected[ret->enginePort (v)] = ret->isConnected[v];
+        }
+    engine.processSample (value, isConnected);
+}
 
 ShogunDevice::ShogunDevice()
 {
@@ -59,13 +100,21 @@ ShogunDevice::ShogunDevice()
         edits_.inLaw[(size_t) i] = (std::uint8_t) engine_.inputLaw (i);
     }
     unit_ = std::make_unique<EngineUnit> (engine_);
+    ret_ = std::make_unique<RetUnit> (*unit_);
+    unit_->ret = ret_.get();
+    units_.push_back (ret_.get());
     units_.push_back (unit_.get());
+    int retIndex[kJackCount];
+    for (int i = 0; i < kJackCount; ++i)
+        retIndex[i] = -1;
+    for (int v = 0; v < shogun::kVoices; ++v)
+        retIndex[ret_->enginePort (v)] = v;
     for (int i = 0; i < kJackCount; ++i)
     {
         JackDesc j;
         j.id = shogun::kPortTable[i].id;
-        j.unit = unit_.get();
-        j.port = i;
+        j.unit = retIndex[i] >= 0 ? static_cast<Unit*> (ret_.get()) : static_cast<Unit*> (unit_.get());
+        j.port = retIndex[i] >= 0 ? retIndex[i] : i;
         j.desc = unit_->port (i);
         j.backOnly = false;     // every SHOGUN jack is on its rear bay; the MAIN face has no jacks
         jacks_.push_back (j);
@@ -75,6 +124,10 @@ ShogunDevice::ShogunDevice()
 }
 
 ShogunDevice::~ShogunDevice() = default;
+
+std::vector<const Unit*> ShogunDevice::latencyUnits() const { return { ret_.get(), unit_.get() }; }
+
+std::vector<OrderEdge> ShogunDevice::orderEdges() const { return { { ret_.get(), unit_.get() } }; }
 
 std::vector<JackGroup> ShogunDevice::jackGroups() const
 {

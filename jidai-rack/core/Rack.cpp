@@ -631,6 +631,22 @@ void Rack::rebuild()
         {
             if (std::find (named.begin(), named.end(), units[(size_t) u]) != named.end())
                 L[(size_t) u] = lat;
+            // A named unit with no audio outputs is an input stage (SHOGUN's RET): its latency is on the signal that
+            // passes through it, so it counts only while an audio cable feeds it.
+            bool audioOut = false;
+            for (int p = 0; p < units[(size_t) u]->numPorts() && ! audioOut; ++p)
+            {
+                const PortDesc pd = units[(size_t) u]->port (p);
+                audioOut = pd.dir == PortDir::Out && pd.type == PortType::Audio;
+            }
+            if (! audioOut)
+            {
+                bool fed = false;
+                for (size_t k = 0; k < graphCables.size() && ! fed; ++k)
+                    fed = status[k] == 0 && sourceAudio[k] && graphCables[k].dest == units[(size_t) u];
+                if (! fed)
+                    L[(size_t) u] = 0;
+            }
             continue;
         }
         for (int p = 0; p < units[(size_t) u]->numPorts(); ++p)

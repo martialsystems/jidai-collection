@@ -44,6 +44,11 @@ public:
     void beginBlock() override;
     void setTransport (const Transport& t) override;
     int latencySamples() const override { return latency_.load(); }
+    // The RET jacks sit on their own input stage (RetUnit), run before the engine. Audio into a RET passes SHOGUN's
+    // upsampler and then its decimator, so RET -> MIX is twice the latency of SHOGUN's own voices (46 / 52 samples at
+    // 2x / 4x). Both units carry L; the rack counts the input stage only on paths that feed it.
+    std::vector<const Unit*> latencyUnits() const override;
+    std::vector<OrderEdge> orderEdges() const override;
     std::vector<JackGroup> jackGroups() const override;
     jidai::jcs::Role jackRole (int jack) const override;
 
@@ -90,8 +95,10 @@ public:
 private:
     int program_ = 0;
     class EngineUnit;
+    class RetUnit;
     shogun::Engine engine_;
     std::unique_ptr<EngineUnit> unit_;
+    std::unique_ptr<RetUnit> ret_;
     std::array<std::atomic<double>, shogun::kParamCount> params_ {};
     std::array<double, shogun::kParamCount> applied_ {};
     std::atomic<bool> dirty_ { true };

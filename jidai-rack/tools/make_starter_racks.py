@@ -399,11 +399,12 @@ def build():
 
     # 8. ACID DRUM JAM: every unit. SHOGUN plays an EDM kit clocked from RACK I/O (CLK 1/16 into CLK IN, RESET into
     #    RST IN, CLOCK:SOURCE EXT); BUSHIDO plays a 12-step acid line on the host clock into RONIN's resonant filter;
-    #    ORIGAMI folds the bass, which returns into SHOGUN's mix on BASS RET (SHOGUN's own BASS voice is unused).
+    #    ORIGAMI folds the bass. Drums and bass meet at MAIN OUT, where the rack lines them up to the sample (a RET
+    #    return would put the bass through SHOGUN's oversampling twice, 23 samples behind its own drums at 2x).
     r = Rack("Acid Drum Jam", "EDM",
              "Every unit: SHOGUN plays a four-on-the-floor kit clocked from RACK I/O (CLK 1/16 -> CLK IN, RESET -> RST IN). "
              "BUSHIDO plays a 12-step acid line into RONIN's ACID DRIVE voice (INT slides, row C accents), ORIGAMI "
-             "folds it, and the bass returns into SHOGUN's mix on BASS RET. SHOGUN's MIX goes to the host.")
+             "folds it. Drums and bass meet at MAIN OUT, where the rack lines them up to the sample.")
     sg = r.shogun(name="KIT", pattern="ACID JAM", running=1,
                   params={"CLOCK:SOURCE": shogun_choice("CLOCK:SOURCE", 2), "CLOCK:CLK IN": shogun_choice("CLOCK:CLK IN", 0),
                           "MASTER:GLUE": 0.3, "CH:LEVEL": 0.42, "OH:LEVEL": 0.38, "CP:LEVEL": 0.5},
@@ -421,16 +422,16 @@ def build():
     r.cable("RACK#1/TRANSPORT:CLK 1/16", f"{sg}/CLOCK:CLK IN")
     r.cable("RACK#1/TRANSPORT:RESET", f"{sg}/CLOCK:RST IN")
     r.cable(f"{v}/HOST:OUT L", f"{o}/IN:IN L")
-    r.cable(f"{o}/OUT:OUT L", f"{sg}/BASS:RET")
     to_main(r, f"{sg}/MIX:L", f"{sg}/MIX:R")
+    to_main(r, f"{o}/OUT:OUT L", f"{o}/OUT:OUT R")
     racks.append(r)
 
     # 9. FULL EDM JAM: SHOGUN on the host clock with its full kit and its own LEAD synth; BUSHIDO's 8-step driving bass
-    #    on RONIN returns into SHOGUN on BASS RET; ORIGAMI sits on SHOGUN's mix bus.
+    #    on RONIN goes to MAIN OUT (aligned there by the rack); ORIGAMI sits on SHOGUN's mix bus.
     r = Rack("Full EDM Jam", "EDM",
              "Every unit, host-clocked: SHOGUN plays kick, clap, hats, open hat and a tom fill plus a lead riff on its own "
-             "LEAD synth. BUSHIDO's 8-step bass (TRIG 9 -> RESET) plays RONIN, which returns into SHOGUN on BASS RET. "
-             "SHOGUN's whole mix runs through ORIGAMI as a glue fold on the bus.")
+             "LEAD synth. BUSHIDO's 8-step bass (TRIG 9 -> RESET) plays RONIN. SHOGUN's whole mix runs through ORIGAMI "
+             "as a glue fold on the bus; the bass joins at MAIN OUT, where the rack lines it up with the drums.")
     sg = r.shogun(name="KIT", pattern="FULL JAM",
                   params={"CLOCK:SOURCE": shogun_choice("CLOCK:SOURCE", 0), "MASTER:GLUE": 0.35, "MASTER:DRIVE": 0.1,
                           "CH:LEVEL": 0.4, "OH:LEVEL": 0.36, "CP:LEVEL": 0.5, "LTC:LEVEL": 0.45,
@@ -451,10 +452,10 @@ def build():
     o = r.origami("Drum-Bus Glue", name="BUS GLUE")
     ronin_voice(r, v, pitch=f"{b}/OUTPUTS:CV A", gate=f"{b}/OUTPUTS:GATE A")
     r.cable(f"{b}/9:TRIG", f"{b}/INPUTS:RESET")
-    r.cable(f"{v}/HOST:OUT L", f"{sg}/BASS:RET")
     r.cable(f"{sg}/MIX:L", f"{o}/IN:IN L")
     r.cable(f"{sg}/MIX:R", f"{o}/IN:IN R")
     to_main(r, f"{o}/OUT:OUT L", f"{o}/OUT:OUT R")
+    to_main(r, f"{v}/HOST:OUT L", f"{v}/HOST:OUT R")
     racks.append(r)
 
     # 10. FILTER FOLD FX: host audio through RONIN's filter (MG sweep) and ORIGAMI.

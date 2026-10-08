@@ -80,7 +80,8 @@ void testJacks()
     check (rack.resolve ("SHOGUN#1/BD1:TRIG", found, jack) && found == s && jack == shogun::drumPort (shogun::BD1, shogun::DJ_TRIG),
            "SHOGUN#1/BD1:TRIG resolves (JCS R6)");
     check (rack.resolve ("SHOGUN#1/MIX:R", found, jack) && jack == shogun::PORT_MIX_R, "SHOGUN#1/MIX:R resolves");
-    check (s->units().size() == 1 && s->units()[0]->plainVoltGates(), "SHOGUN: one unit, 0/5 V gates (no logic-level promotion)");
+    check (s->units().size() == 2 && s->units()[0]->plainVoltGates() && s->units()[1]->plainVoltGates(),
+           "SHOGUN: RET input stage + engine, 0/5 V gates (no logic-level promotion)");
     int groups = 0, grouped = 0;
     for (const auto& g : s->jackGroups())
     {
@@ -99,8 +100,8 @@ void testJacks()
     check (rack.check ("SHOGUN#1/BD1:OUT", "SHOGUN#1/MIX:L") != Rack::Check::Ok, "an output into an output is refused");
 }
 
-// R11 per OS: SHOGUN reports 0/23/26, the rack latency follows after updateLatency() (the device is re-prepared),
-// a zero-latency path into MAIN OUT gets that much compensation, and SHOGUN's own output moves by exactly that much.
+// Per OS: SHOGUN reports 0/23/26, the rack latency follows after updateLatency() (the device is re-prepared), a
+// zero-latency path into MAIN OUT gets that much compensation, and SHOGUN's own output moves by exactly that much.
 void testLatency()
 {
     std::vector<float> ref;
@@ -130,30 +131,70 @@ void testLatency()
                                                        + " (got " + std::to_string (compRonin) + "), SHOGUN's own +0 (got " + std::to_string (compShogun) + ")");
         check (rack.pathLatency (s) == L, tag + "SHOGUN path latency " + std::to_string (rack.pathLatency (s)));
 
-        // BD1 struck at a block start: SHOGUN's MIX at this OS is the 1x one moved by L (cross-correlation peak).
+        // BD1 struck at a block start: SHOGUN's MIX at this OS is the 1x one moved by exactly L. Measured two ways over
+        // the whole kick (8192 samples, so the tail is not cut off: a short window biases the correlation early):
+        // the peak sample and the cross-correlation peak.
         process (rack, 512);
         s->trigger (shogun::BD1);
         std::vector<float> out;
-        for (int b = 0; b < 8; ++b)
+        for (int b = 0; b < 32; ++b)
             process (rack, 256, &out);
         if (os == 1)
             ref = out;
         int best = -1;
         double bestC = -1.0e30;
-        for (int lag = 0; lag <= 40; ++lag)
+        for (int lag = 0; lag <= 60; ++lag)
         {
             double c = 0.0;
             for (size_t i = 0; i + (size_t) lag < out.size() && i < ref.size(); ++i)
                 c += (double) ref[i] * (double) out[i + (size_t) lag];
             if (c > bestC) { bestC = c; best = lag; }
         }
+        auto peakAt = [] (const std::vector<float>& x) {
+            size_t k = 0;
+            for (size_t i = 0; i < x.size(); ++i)
+                if (std::fabs (x[i]) > std::fabs (x[k])) k = i;
+            return (int) k;
+        };
+        const int moved = peakAt (out) - peakAt (ref);
         double peak = 0.0;
         for (float v : out) peak = std::fmax (peak, std::fabs ((double) v));
         check (peak > 0.01 && std::isfinite (peak), tag + "BD1 struck: MIX reaches MAIN OUT (peak " + std::to_string (peak) + ")");
-        // The oversampling filters' group delay is not a whole number of samples, and their phase changes the waveform,
-        // so the correlation peak lands within a sample of the reported latency.
-        check (std::abs (best - L) <= 1, tag + "MIX onset moves by " + std::to_string (best) + " samples vs 1x (reported " + std::to_string (L) + ", within 1)");
-        std::printf ("INFO %s latency %d, comp RONIN %d, xcorr lag %d, peak %.3f\n", tag.c_str(), L, compRonin, best, peak);
+        check (best == L && moved == L, tag + "MIX moves by exactly L vs 1x: xcorr " + std::to_string (best) + ", peak "
+                                            + std::to_string (moved) + " (reported " + std::to_string (L) + ")");
+        std::printf ("INFO %s latency %d, comp RONIN %d, xcorr lag %d, peak moves %d, peak %.3f\n", tag.c_str(), L, compRonin, best, moved, peak);
+    }
+
+    // RET paths, measured with an impulse (as ORIGAMI's 2x and the rack's own paths are): HOST IN L -> BASS RET ->
+    // SHOGUN MIX L -> MAIN OUT L, and HOST IN L straight into MAIN OUT R. RET -> MIX is upsampler + decimator = 2L;
+    // the rack must report that and delay the dry path to match, so both impulses land on the same sample.
+    for (int os : { 1, 2, 4 })
+    {
+        const int L = os == 1 ? 0 : (os == 2 ? 23 : 26);
+        const std::string tag = "SHOGUN " + std::to_string (os) + "x RET: ";
+        Rack rack;
+        auto* s = addShogun (rack, os);
+        rack.disconnect ("SHOGUN#1/MIX:R", "RACK#1/MAIN:OUT R");
+        check (rack.pathLatency (s) == L && rack.latency() == L, tag + "unpatched RET adds nothing (path " + std::to_string (rack.pathLatency (s)) + ")");
+        rack.connect ("RACK#1/HOST:IN L", "SHOGUN#1/BASS:RET");
+        rack.connect ("RACK#1/HOST:IN L", "RACK#1/MAIN:OUT R");
+        rack.updateLatency();
+        check (rack.pathLatency (s) == 2 * L && rack.latency() == 2 * L,
+               tag + "rack reports RET -> MIX as 2L = " + std::to_string (2 * L) + " (got " + std::to_string (rack.latency()) + ")");
+        const int n = 2048, at = 700;
+        std::vector<float> inL ((size_t) n, 0.0f), outL ((size_t) n), outR ((size_t) n);
+        inL[(size_t) at] = 1.0f;
+        rack.process (inL.data(), inL.data(), outL.data(), outR.data(), n);
+        auto peakAt = [] (const std::vector<float>& x) {
+            size_t k = 0;
+            for (size_t i = 0; i < x.size(); ++i)
+                if (std::fabs (x[i]) > std::fabs (x[k])) k = i;
+            return (int) k;
+        };
+        const int pl = peakAt (outL) - at, pr = peakAt (outR) - at;
+        check (pl == 2 * L && pr == 2 * L, tag + "impulse at MAIN OUT: via RET " + std::to_string (pl) + ", dry " + std::to_string (pr)
+                                              + " (want both " + std::to_string (2 * L) + ")");
+        std::printf ("INFO %s reported %d, impulse via RET %d, dry path %d\n", tag.c_str(), rack.latency(), pl, pr);
     }
 
     // Runtime OS change: needsPrepare until the rack re-prepares it on updateLatency(), then the compensation follows.

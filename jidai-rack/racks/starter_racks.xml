@@ -983,7 +983,7 @@
       <CABLE a="ORIGAMI#1/OUT:OUT R" b="RACK#1/MAIN:OUT R" age="12"/>
     </JIDAIRACK>
   </RACK>
-  <RACK name="Acid Drum Jam" category="EDM" about="Every unit: SHOGUN plays a four-on-the-floor kit clocked from RACK I/O (CLK 1/16 -&gt; CLK IN, RESET -&gt; RST IN). BUSHIDO plays a 12-step acid line into RONIN's ACID DRIVE voice (INT slides, row C accents), ORIGAMI folds it, and the bass returns into SHOGUN's mix on BASS RET. SHOGUN's MIX goes to the host.">
+  <RACK name="Acid Drum Jam" category="EDM" about="Every unit: SHOGUN plays a four-on-the-floor kit clocked from RACK I/O (CLK 1/16 -&gt; CLK IN, RESET -&gt; RST IN). BUSHIDO plays a 12-step acid line into RONIN's ACID DRIVE voice (INT slides, row C accents), ORIGAMI folds it. Drums and bass meet at MAIN OUT, where the rack lines them up to the sample.">
     <JIDAIRACK version="3" browser="1" view="back" cablesFront="HIDE PASS-THRU" cablesBack="ALL" scale="100">
       <DEVICE kind="RACK I/O" number="1" front="open" format="1" level="1"/>
       <DEVICE kind="SHOGUN" number="1" name="KIT" front="open" format="2">
@@ -1132,12 +1132,13 @@
       <CABLE a="RACK#1/TRANSPORT:CLK 1/16" b="SHOGUN#1/CLOCK:CLK IN" age="11"/>
       <CABLE a="RACK#1/TRANSPORT:RESET" b="SHOGUN#1/CLOCK:RST IN" age="12"/>
       <CABLE a="RONIN#1/HOST:OUT L" b="ORIGAMI#1/IN:IN L" age="13"/>
-      <CABLE a="ORIGAMI#1/OUT:OUT L" b="SHOGUN#1/BASS:RET" age="14"/>
-      <CABLE a="SHOGUN#1/MIX:L" b="RACK#1/MAIN:OUT L" age="15"/>
-      <CABLE a="SHOGUN#1/MIX:R" b="RACK#1/MAIN:OUT R" age="16"/>
+      <CABLE a="SHOGUN#1/MIX:L" b="RACK#1/MAIN:OUT L" age="14"/>
+      <CABLE a="SHOGUN#1/MIX:R" b="RACK#1/MAIN:OUT R" age="15"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT L" b="RACK#1/MAIN:OUT L" age="16"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT R" b="RACK#1/MAIN:OUT R" age="17"/>
     </JIDAIRACK>
   </RACK>
-  <RACK name="Full EDM Jam" category="EDM" about="Every unit, host-clocked: SHOGUN plays kick, clap, hats, open hat and a tom fill plus a lead riff on its own LEAD synth. BUSHIDO's 8-step bass (TRIG 9 -&gt; RESET) plays RONIN, which returns into SHOGUN on BASS RET. SHOGUN's whole mix runs through ORIGAMI as a glue fold on the bus.">
+  <RACK name="Full EDM Jam" category="EDM" about="Every unit, host-clocked: SHOGUN plays kick, clap, hats, open hat and a tom fill plus a lead riff on its own LEAD synth. BUSHIDO's 8-step bass (TRIG 9 -&gt; RESET) plays RONIN. SHOGUN's whole mix runs through ORIGAMI as a glue fold on the bus; the bass joins at MAIN OUT, where the rack lines it up with the drums.">
     <JIDAIRACK version="3" browser="1" view="back" cablesFront="HIDE PASS-THRU" cablesBack="ALL" scale="100">
       <DEVICE kind="RACK I/O" number="1" front="open" format="1" level="1"/>
       <DEVICE kind="SHOGUN" number="1" name="KIT" front="open" format="2">
@@ -1280,11 +1281,12 @@
       <CABLE a="BUSHIDO#1/OUTPUTS:CV A" b="RONIN#1/VCO:V/OCT" age="5"/>
       <CABLE a="BUSHIDO#1/OUTPUTS:GATE A" b="RONIN#1/EG 1:TRIG" age="6"/>
       <CABLE a="BUSHIDO#1/9:TRIG" b="BUSHIDO#1/INPUTS:RESET" age="7"/>
-      <CABLE a="RONIN#1/HOST:OUT L" b="SHOGUN#1/BASS:RET" age="8"/>
-      <CABLE a="SHOGUN#1/MIX:L" b="ORIGAMI#1/IN:IN L" age="9"/>
-      <CABLE a="SHOGUN#1/MIX:R" b="ORIGAMI#1/IN:IN R" age="10"/>
-      <CABLE a="ORIGAMI#1/OUT:OUT L" b="RACK#1/MAIN:OUT L" age="11"/>
-      <CABLE a="ORIGAMI#1/OUT:OUT R" b="RACK#1/MAIN:OUT R" age="12"/>
+      <CABLE a="SHOGUN#1/MIX:L" b="ORIGAMI#1/IN:IN L" age="8"/>
+      <CABLE a="SHOGUN#1/MIX:R" b="ORIGAMI#1/IN:IN R" age="9"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT L" b="RACK#1/MAIN:OUT L" age="10"/>
+      <CABLE a="ORIGAMI#1/OUT:OUT R" b="RACK#1/MAIN:OUT R" age="11"/>
+      <CABLE a="RONIN#1/HOST:OUT L" b="RACK#1/MAIN:OUT L" age="12"/>
+      <CABLE a="RONIN#1/HOST:OUT R" b="RACK#1/MAIN:OUT R" age="13"/>
     </JIDAIRACK>
   </RACK>
   <RACK name="Filter Fold FX" category="FX" about="An insert effect for your track: host audio from RACK I/O goes through RONIN's resonant filter, swept by the MG, then through ORIGAMI, and back to the host.">

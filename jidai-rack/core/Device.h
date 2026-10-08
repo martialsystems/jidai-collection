@@ -68,7 +68,8 @@ public:
     // Processing latency in samples on this device's audio outputs (JCS R11 L_d). Any thread.
     virtual int latencySamples() const { return 0; }
     // The units whose outputs carry that latency. Empty (the default): every unit with an audio output, which suits
-    // single-unit devices. A multi-unit device names its output stage, so the latency counts once on a path.
+    // single-unit devices. A multi-unit device names its output stage, so the latency counts once on a path. A named
+    // unit with no audio outputs is an input stage: its latency counts only while an audio cable feeds it.
     virtual std::vector<const Unit*> latencyUnits() const { return {}; }
     // Host transport for this block (audio thread, before beginBlock).
     virtual void setTransport (const Transport&) {}

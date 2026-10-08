@@ -420,6 +420,56 @@ void testOrigamiDevice()
 
 }
 
+// Latency truth by impulse: HOST IN L through a device's audio path to MAIN OUT L, and HOST IN L straight into
+// MAIN OUT R. The rack's reported latency must equal where the impulse lands, and the compensated dry path must land
+// on the same sample (RONIN 0, ORIGAMI QUALITY 1x 0 and 2x 46). ORIGAMI at WAVE 0 measures its resampling chain alone:
+// a running fold stage is first-order ADAA, which averages neighbouring samples like a gentle low-pass and adds half
+// a sample of group delay at the rate it runs (not a buffering latency, so it is not reported).
+void testImpulseAlignment()
+{
+    struct Case { const char* name; DeviceKind kind; double quality, wave; const char* in; const char* out; int want; };
+    const Case cases[] = {
+        { "RONIN MIX", DeviceKind::Ronin, 0.0, 0.0, "RONIN#1/MIX:IN 1", "RONIN#1/MIX:OUT", 0 },
+        { "ORIGAMI 1x WAVE 0", DeviceKind::Origami, 0.0, 0.0, "ORIGAMI#1/IN:IN L", "ORIGAMI#1/OUT:OUT L", 0 },
+        { "ORIGAMI 2x WAVE 0", DeviceKind::Origami, 1.0, 0.0, "ORIGAMI#1/IN:IN L", "ORIGAMI#1/OUT:OUT L", 46 },
+    };
+    for (const auto& c : cases)
+    {
+        Rack rack;
+        rack.prepare (48000.0, 512);
+        rack.addDevice (DeviceKind::RackIO);
+        Device* d = rack.addDevice (c.kind);
+        if (auto* o = dynamic_cast<OrigamiDevice*> (d))
+        {
+            o->setParam (origami::kQuality, c.quality);
+            o->setParam ("wave", c.wave);
+        }
+        for (const auto& cs : std::vector<CableSpec> (rack.cables()))   // drop the auto-routed host cables
+            if (cs.a.rfind ("RACK#1/", 0) == 0 || cs.b.rfind ("RACK#1/", 0) == 0)
+                rack.disconnect (cs.a, cs.b);
+        rack.connect ("RACK#1/HOST:IN L", c.in);
+        rack.connect (c.out, "RACK#1/MAIN:OUT L");
+        rack.connect ("RACK#1/HOST:IN L", "RACK#1/MAIN:OUT R");
+        run (rack, 4800);
+        rack.updateLatency();
+        const int n = 2048, at = 700;
+        std::vector<float> inL ((size_t) n, 0.0f), outL ((size_t) n), outR ((size_t) n);
+        inL[(size_t) at] = 0.05f;
+        rack.process (inL.data(), inL.data(), outL.data(), outR.data(), n);
+        auto peakAt = [] (const std::vector<float>& x) {
+            size_t k = 0;
+            for (size_t i = 0; i < x.size(); ++i)
+                if (std::fabs (x[i]) > std::fabs (x[k])) k = i;
+            return (int) k;
+        };
+        const int pl = peakAt (outL) - at, pr = peakAt (outR) - at;
+        check (rack.latency() == c.want && pl == c.want && pr == c.want,
+               std::string (c.name) + ": reported " + std::to_string (rack.latency()) + ", impulse through the device "
+                   + std::to_string (pl) + ", dry path " + std::to_string (pr) + " (want " + std::to_string (c.want) + ")");
+        std::printf ("INFO %s: reported %d, impulse %d, dry %d\n", c.name, rack.latency(), pl, pr);
+    }
+}
+
 void runJcsRackTests (int& checks, int& failures);
 void runShogunRackTests (int& checks, int& failures);
 
@@ -434,6 +484,7 @@ int main()
     testGateLaw();
     testBypass();
     testOrigamiDevice();
+    testImpulseAlignment();
     runJcsRackTests (checks, failures);
     runShogunRackTests (checks, failures);
     std::printf ("%d checks, %d failed\n", checks, failures);
