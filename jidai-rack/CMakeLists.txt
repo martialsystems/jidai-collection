@@ -75,8 +75,9 @@ FetchContent_Declare(origami
   # (-ffp-contract=off on ORIGAMI's targets), LEVEL COMP reference fix; f41c9c4 user manual; 16d3029 isnan in clampParam
   # (clean under the rack's gcc -Wfloat-equal); 8beeeb0 factory preset box on the rack face (the rack compiles
   # ORIGAMI_PRESET_SOURCES and links origami::factory_data); bbde745 jidai-common 1.1.2 (WAVE 0 is a true bypass at
-  # any SYM). If it lands elsewhere by squash or rebase, re-pin.
-  GIT_TAG bbde7457b5eb59ba72caf44bee67bb653d86ab49)
+  # any SYM); e138d57 0 warnings under the rack strict set (explicit float->double in the plugin, test-file-only
+  # -Wfloat-equal off). If it lands elsewhere by squash or rebase, re-pin.
+  GIT_TAG e138d57ea4c8f184696683b0976030047a27a4dd)
 FetchContent_MakeAvailable(origami)
 if(NOT TARGET origami::dsp OR NOT ORIGAMI_UI_SOURCES OR NOT ORIGAMI_PRESET_SOURCES OR NOT TARGET origami::factory_data)
   message(FATAL_ERROR "ORIGAMI did not provide origami::dsp, ORIGAMI_UI_SOURCES, ORIGAMI_PRESET_SOURCES and origami::factory_data")
