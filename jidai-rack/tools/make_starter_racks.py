@@ -236,6 +236,13 @@ ACID_DRIVE = dict(VCO__RANGE=0.3333, VCO__PW=0.35, VCF__CUTOFF=0.4, VCF__PEAK=0.
                   EG_2__HOLD=0, EG_2__ATTACK=0.063, EG_2__RELEASE=0.4351, INT__TIME=0.3029)
 
 
+# EDM Starter tunables (the presets test checks its peak, duck depth and lock).
+EDM_STARTER_KIT = {"MASTER:VOLUME": 0.86, "MASTER:GLUE": 0.3, "BD1:LEVEL": 0.8, "CH:LEVEL": 0.4, "OH:LEVEL": 0.34,
+                   "CP:LEVEL": 0.48}
+# RONIN: VCA 1 MOD back at its 0.85 default (it carries the folded bass), MIX LEVEL 1 = duck depth (1 = deepest).
+EDM_STARTER_RONIN = dict(OUTPUT__LEVEL=0.68, VCA_1__MOD=0.85, MIX__LEVEL_1=1.0)
+
+
 def acid_voice(rack, r, pitch, gate, accent=None, pulse=False):
     """RONIN as its ACID programs, driven by a sequencer the way RONIN documents it: pitch into INT IN (INT TIME is
     the slide) and INT OUT into VCO V/OCT, the gate into EG 1 TRIG (VCA) and EG 2 TRIG (filter snap on VCF CUTOFF),
@@ -497,6 +504,50 @@ def build():
     r.cable(f"{v}/HOST:OUT L", f"{o}/IN:IN L")
     r.cable(f"{v}/HOST:OUT R", f"{o}/IN:IN R")
     to_main(r, f"{o}/OUT:OUT L", f"{o}/OUT:OUT R")
+    racks.append(r)
+
+    # 12. EDM STARTER: every unit, the first recipe of the JIDAI Patch Cookbook (docs/cookbook). Added last, so the
+    #    program numbers of the racks above stay where they were. SHOGUN plays a four-on-the-floor kit on the host
+    #    clock (CLOCK:SOURCE HOST: its steps follow the song position). Its bar pulse (CLOCK:RST OUT, every 16 steps)
+    #    restarts BUSHIDO on every downbeat, so BUSHIDO's host-clocked steps stay locked to SHOGUN's after a jump.
+    #    BUSHIDO plays a 12-step acid line into RONIN (pitch through INT for the slide, GATE A into EG 1 and EG 2,
+    #    row C accents the filter). ORIGAMI folds RONIN's filter output before RONIN's VCA 1 (fold first, then the
+    #    VCA: a duck in front of a folder would only change the tone). VCA 1 takes two cables on ENV: EG 1 (the note)
+    #    and the kick's envelope (BD1 ENV) turned upside down by RONIN's MIX, an inverting mixer whose LEVEL 1 sets
+    #    the duck depth. So every kick ducks the folded bass. Drums and bass meet at MAIN OUT, lined up by the rack.
+    r = Rack("EDM Starter", "EDM",
+             "Every unit, host-clocked and locked: SHOGUN plays kick, clap and hats, and its bar pulse (RST OUT) "
+             "restarts BUSHIDO on every downbeat. BUSHIDO plays an acid line into RONIN (INT slides, GATE A fires both "
+             "envelopes, row C accents the filter). ORIGAMI folds RONIN's filter before VCA 1, and the kick's envelope, "
+             "inverted by RONIN's MIX, ducks the bass in VCA 1. Drums and bass meet at MAIN OUT.")
+    sg = r.shogun(name="DRUMS", pattern="EDM STARTER", running=1,
+                  params={"CLOCK:SOURCE": shogun_choice("CLOCK:SOURCE", 0), **EDM_STARTER_KIT},
+                  tracks={"BD1": (16, drum_steps("X...x...x...x...")),
+                          "CP": (16, drum_steps("....x.......x...")),
+                          "CH": (16, drum_steps("x.x.x.x.x.x.x.xX")),
+                          "OH": (16, drum_steps("..x...x...x...x."))})
+    b = r.bushido(name="ACID SEQ",
+                  steps_a=semis(0, 0, 12, 0, 3, 0, 7, 10, 0, 12, 5, 3),
+                  steps_c=[ACC, 0, 0, 0.8 * ACC, 0, 0, ACC, 0, 0, 0.6 * ACC, 0, 0.9 * ACC],
+                  CH__RANGE_A=0, STEPS__QUANT_A=1)
+    v = r.ronin(name="ACID BASS", **{**ACID_DRIVE, **EDM_STARTER_RONIN})
+    o = r.origami("Acid Grit", name="BASS FOLD")
+    r.cable(f"{v}/VCO:SAW", f"{v}/VCF:IN")
+    r.cable(f"{v}/EG 2:OUT +", f"{v}/VCF:CUTOFF")
+    r.cable(f"{v}/INT:OUT", f"{v}/VCO:V/OCT")
+    r.cable(f"{v}/EG 1:OUT A", f"{v}/VCA 1:ENV")
+    r.cable(f"{v}/VCA 1:OUT", f"{v}/OUTPUT:WET")
+    r.cable(f"{b}/OUTPUTS:CV A", f"{v}/INT:IN")
+    r.cable(f"{b}/OUTPUTS:GATE A", f"{v}/EG 1:TRIG")
+    r.cable(f"{b}/OUTPUTS:GATE A", f"{v}/EG 2:TRIG")
+    r.cable(f"{b}/OUTPUTS:CV C", f"{v}/VCF:CUTOFF")
+    r.cable(f"{sg}/CLOCK:RST OUT", f"{b}/INPUTS:RESET")
+    r.cable(f"{v}/VCF:OUT", f"{o}/IN:IN L")
+    r.cable(f"{o}/OUT:OUT L", f"{v}/VCA 1:IN")
+    r.cable(f"{sg}/BD1:ENV", f"{v}/MIX:IN 1")
+    r.cable(f"{v}/MIX:OUT", f"{v}/VCA 1:ENV")
+    to_main(r, f"{v}/HOST:OUT L", f"{v}/HOST:OUT R")
+    to_main(r, f"{sg}/MIX:L", f"{sg}/MIX:R")
     racks.append(r)
     return racks
 

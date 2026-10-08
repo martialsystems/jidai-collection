@@ -358,7 +358,7 @@ The rack reports its total latency to your DAW, and the DAW's delay compensation
 
 ### 6.1 Starter racks (RACKS ▾)
 
-Twelve complete racks, every connection made with cables on the jacks. All of them follow the DAW's tempo where timing matters.
+Thirteen complete racks, every connection made with cables on the jacks. All of them follow the DAW's tempo where timing matters. To build EDM Starter yourself, cable by cable, see the JIDAI Patch Cookbook.
 
 | Group | Rack | Devices | What it does |
 |---|---|---|---|
@@ -372,6 +372,7 @@ Twelve complete racks, every connection made with cables on the jacks. All of th
 | EDM | MIDI Fold Synth | RONIN, ORIGAMI | Play RONIN from your DAW through RACK I/O's MIDI jacks (note, gate, velocity), through ORIGAMI. |
 | EDM | Acid Drum Jam | SHOGUN, BUSHIDO, RONIN, ORIGAMI | Every device: SHOGUN plays a four-on-the-floor kit clocked from RACK I/O's transport jacks. A BUSHIDO acid line plays RONIN's ACID DRIVE sound through ORIGAMI. Drums and bass meet at MAIN OUT, lined up to the sample. |
 | EDM | Full EDM Jam | SHOGUN, BUSHIDO, RONIN, ORIGAMI | Every device, host-clocked: SHOGUN plays kick, clap, hats, open hat, a tom fill and a lead riff on its LEAD synth. SHOGUN's whole mix runs through ORIGAMI. BUSHIDO's 8-step bass on RONIN joins at MAIN OUT, lined up with the drums. |
+| EDM | EDM Starter | SHOGUN, BUSHIDO, RONIN, ORIGAMI | Every device, host-clocked and locked: SHOGUN plays kick, clap and hats, and its bar pulse (RST OUT) restarts BUSHIDO on every downbeat. BUSHIDO's acid line plays RONIN, ORIGAMI folds RONIN's filter before VCA 1, and the kick's envelope, turned upside down by RONIN's MIX, ducks the bass in VCA 1. The first recipe in the JIDAI Patch Cookbook. |
 | FX | Filter Fold FX | RONIN, ORIGAMI | An insert effect: your track through RONIN's resonant filter swept by its MG, then through ORIGAMI. |
 | FX | Tempo Gate FX | RONIN, ORIGAMI | A tempo-synced gate: CLK 1/16 fires RONIN's envelope on every sixteenth note, chopping your track through VCA 1. ORIGAMI folds the result. Runs while the DAW plays. |
 
@@ -451,7 +452,7 @@ The standalone app uses your default audio input and output. Choose devices and 
 | Cable processing | Sample by sample between all devices. Summing inputs. One-sample delay on the newest cable of a loop. |
 | Signal levels | Audio ±5 V. Gates 0/5 V (on above 1.0 V, off below 0.5 V). Pitch 1 V/oct with C3 = 0 V, plus linear Hz/V for RONIN. |
 | Latency | Per device: ORIGAMI 0 / 46 samples (1× / 2×), SHOGUN 0 / 23 / 26 samples (1× / 2× / 4×), others 0. Paths are aligned at MAIN OUT and the total is reported to the host. |
-| Starter racks | 12 (INIT, 2 ACID, 7 EDM, 2 FX) |
+| Starter racks | 13 (INIT, 2 ACID, 8 EDM, 2 FX) |
 | Factory banks | BUSHIDO 22 patterns, RONIN 22 programs, SHOGUN 22 kits |
 | Window | 1200 × 672 default, 960 × 540 minimum, scale 75–200 % |
 | Saved state | The whole rack (devices, settings, cables, views) in your DAW project. Racks from earlier versions convert on load. |
