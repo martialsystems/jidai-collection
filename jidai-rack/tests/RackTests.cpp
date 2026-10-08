@@ -329,6 +329,48 @@ void testBypass()
     check (b->engine().isRunning(), "BYPASS: the engine keeps running");
 }
 
+// ORIGAMI in the rack runs the same OrigamiCore as the plugin: 8 jacks with JCS ids, WAVE 0 passes a cable's
+// volts bit-exact, the fold acts once WAVE moves, MG -> VC 1 modulates at audio rate, and QUALITY sets latency.
+void testOrigamiDevice()
+{
+    Rack rack;
+    rack.prepare (48000.0, 512);
+    auto* r = static_cast<RoninDevice*> (rack.addDevice (DeviceKind::Ronin));
+    auto* o = static_cast<OrigamiDevice*> (rack.addDevice (DeviceKind::Origami));
+    check (o != nullptr && o->rackId() == "ORIGAMI#1" && o->jacks().size() == 8, "add ORIGAMI: ORIGAMI#1 with 8 jacks");
+    check (o->findJack ("IN:IN L") == 0 && o->findJack ("VC:VC 3") == 5 && o->findJack ("OUT:OUT R") == 7, "ORIGAMI jack ids (JCS R6)");
+    check (o->jacks()[0].desc.type == PortType::Audio && o->jacks()[3].desc.type == PortType::CV, "roles: IN audio, VC cv");
+    check (rack.connect ("RONIN#1/VCO:SAW", "ORIGAMI#1/IN:IN L") == Rack::Check::Ok, "patch VCO SAW -> ORIGAMI IN L");
+    bool exact = true;
+    for (int i = 0; i < 400; ++i)
+    {
+        run (rack, 1);
+        const float saw = rack.jackVolts ("RONIN#1/VCO:SAW");
+        exact = exact && rack.jackVolts ("ORIGAMI#1/OUT:OUT L") == saw && rack.jackVolts ("ORIGAMI#1/OUT:OUT R") == saw;
+    }
+    check (exact, "WAVE 0: OUT L/R equal the VCO volts bit for bit (IN R normalled to IN L)");
+    check (o->latencySamples() == 0, "ORIGAMI 1x latency 0");
+    o->setParam ("wave", 0.6);
+    o->setParam ("level_comp", 0.0);
+    run (rack, 4800);
+    float diff = 0.0f;
+    for (int i = 0; i < 400; ++i)
+    {
+        run (rack, 1);
+        diff = std::fmax (diff, std::fabs (rack.jackVolts ("ORIGAMI#1/OUT:OUT L") - rack.jackVolts ("RONIN#1/VCO:SAW")));
+    }
+    check (diff > 0.5f, "WAVE 0.6 folds the cable signal");
+    check (rack.connect ("RONIN#1/MG:TRI", "ORIGAMI#1/VC:VC 1") == Rack::Check::Ok, "patch MG TRI -> ORIGAMI VC 1");
+    o->setParam ("vc1_amt", 1.0);
+    run (rack, 2400);
+    check (std::isfinite (rack.jackVolts ("ORIGAMI#1/OUT:OUT L")), "VC 1 patched: finite");
+    o->setParam (origami::kQuality, 1.0);
+    check (o->latencySamples() == 46, "ORIGAMI 2x latency 46");
+    run (rack, 480);
+    check (std::isfinite (rack.jackVolts ("ORIGAMI#1/OUT:OUT L")), "2x in the rack: finite");
+    (void) r;
+}
+
 }
 
 int main()
@@ -341,6 +383,7 @@ int main()
     testOneSampleFeedback();
     testGateLaw();
     testBypass();
+    testOrigamiDevice();
     std::printf ("%d checks, %d failed\n", checks, failures);
     std::printf (failures == 0 ? "RACK TESTS PASS\n" : "RACK TESTS FAIL\n");
     return failures == 0 ? 0 : 1;

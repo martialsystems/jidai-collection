@@ -64,10 +64,10 @@ struct PitchRailFlag
 
 // ---- JCS R16 (OPTIONAL, PENDING USER DECISION) --------------------------------------------------------------
 // Foreign signal levels at the rack boundary. NOT IMPLEMENTED on purpose: the user has not decided whether a
-// Serge-level (+-2.5 V) device joins the rack, nor whether the scaling is fixed or switchable.
+// +-2.5 V-convention device joins the rack, nor whether the scaling is fixed or switchable.
 // The hook is here so a device can declare its level; r16BoundaryGain() is identity for every level until the
-// decision lands. When it does, the proposal is: SERGE_2V5 audio inputs x0.5, audio outputs x2; CV/gates unscaled.
-enum class AudioLevel { Jidai5V, Serge2V5 };
+// decision lands. When it does, the proposal is: LEVEL_2V5 audio inputs x0.5, audio outputs x2; CV/gates unscaled.
+enum class AudioLevel { Jidai5V, Level2V5 };   // the spec's name is avoided: no third-party names in code
 inline constexpr bool kR16Enabled = false;
 constexpr float r16BoundaryGain (AudioLevel, bool /*isAudioRole*/, bool /*isInput*/) noexcept { return 1.0f; }
 

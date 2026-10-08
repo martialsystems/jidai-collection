@@ -11,6 +11,7 @@
 // so the audio thread never sees it again.
 
 #include "BushidoDevice.h"
+#include "OrigamiDevice.h"
 #include "RoninDevice.h"
 
 #include <memory>

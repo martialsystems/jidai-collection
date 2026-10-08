@@ -149,7 +149,7 @@ void testVolts()
     check (! p.latched, "noteOn clears the latch");
 
     check (! kR16Enabled, "R16 is not enabled (pending user decision)");
-    check (r16BoundaryGain (AudioLevel::Serge2V5, true, true) == 1.0f && r16BoundaryGain (AudioLevel::Serge2V5, true, false) == 1.0f
+    check (r16BoundaryGain (AudioLevel::Level2V5, true, true) == 1.0f && r16BoundaryGain (AudioLevel::Level2V5, true, false) == 1.0f
                && r16BoundaryGain (AudioLevel::Jidai5V, true, true) == 1.0f, "R16 hook is identity for every level");
 }
 

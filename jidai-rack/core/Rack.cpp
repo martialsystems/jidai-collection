@@ -6,8 +6,17 @@
 
 namespace jidai {
 
-const char* deviceKindName (DeviceKind kind) { return kind == DeviceKind::Bushido ? "BUSHIDO" : "RONIN"; }
-const char* deviceKindPrefix (DeviceKind kind) { return kind == DeviceKind::Bushido ? "BUSHIDO" : "RONIN"; }
+const char* deviceKindName (DeviceKind kind)
+{
+    switch (kind)
+    {
+        case DeviceKind::Bushido: return "BUSHIDO";
+        case DeviceKind::Ronin: return "RONIN";
+        case DeviceKind::Origami: return "ORIGAMI";
+    }
+    return "";
+}
+const char* deviceKindPrefix (DeviceKind kind) { return deviceKindName (kind); }
 
 int Device::findJack (const std::string& id) const
 {
@@ -124,6 +133,8 @@ Device* Rack::addDevice (DeviceKind kind, int position, int number)
     std::unique_ptr<Device> made;
     if (kind == DeviceKind::Ronin)
         made = std::make_unique<RoninDevice>();
+    else if (kind == DeviceKind::Origami)
+        made = std::make_unique<OrigamiDevice>();
     else
         made = std::make_unique<BushidoDevice>();
     made->number = number > 0 ? number : nextNumber (kind);

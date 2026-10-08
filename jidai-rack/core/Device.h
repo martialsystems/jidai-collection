@@ -2,7 +2,7 @@
 
 #pragma once
 
-// A device is one instrument in the rack: a BUSHIDO or a RONIN. It owns its engine and puts its units in the
+// A device is one instrument in the rack: a BUSHIDO, a RONIN or an ORIGAMI. It owns its engine and puts its units in the
 // rack's one graph. Jacks are named "SECTION:LABEL" inside a device and "RACK#N/SECTION:LABEL" across the rack,
 // where RACK is the instrument's jack prefix (BUSHIDO or RONIN, the device name) and N numbers the instances.
 
@@ -13,10 +13,10 @@
 
 namespace jidai {
 
-enum class DeviceKind { Bushido, Ronin };
+enum class DeviceKind { Bushido, Ronin, Origami };
 
-const char* deviceKindName (DeviceKind kind);     // "BUSHIDO", "RONIN"
-const char* deviceKindPrefix (DeviceKind kind);   // "BUSHIDO", "RONIN"
+const char* deviceKindName (DeviceKind kind);     // "BUSHIDO", "RONIN", "ORIGAMI"
+const char* deviceKindPrefix (DeviceKind kind);   // "BUSHIDO", "RONIN", "ORIGAMI" (JCS R6 prefixes)
 
 struct JackDesc {
     std::string id;        // SECTION:LABEL
@@ -43,6 +43,8 @@ public:
     virtual void prepare (double sampleRate) = 0;
     // Audio thread, once per block before the first sample: picks up knob changes.
     virtual void beginBlock() {}
+    // Processing latency in samples on this device's audio outputs (JCS R11 L_d). Any thread.
+    virtual int latencySamples() const { return 0; }
 
 protected:
     std::vector<JackDesc> jacks_;
