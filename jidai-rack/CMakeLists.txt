@@ -17,13 +17,13 @@ FetchContent_Declare(bushido
   GIT_REPOSITORY https://github.com/martialsystems/bushido.git
   # Bushido branch cleanup/neutral-names: neutral names (engine/BushidoModule, assets/bushido_*) and INIT-only patterns.
   # This commit resolves only once that branch is pushed. If it lands by squash or rebase, re-pin to the merged commit.
-  GIT_TAG 272e7544dedb269c7e054cd148450ecd3001abab
+  GIT_TAG 1c8f835003f10d33abf0033c60ab11b14bfb1b2c
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_Declare(ronin
   GIT_REPOSITORY https://github.com/martialsystems/Ronin.git
   # Ronin branch cleanup/neutral-names: neutral names and the INIT-only factory bank.
   # This commit resolves only once that branch is pushed. If it lands by squash or rebase, re-pin to the merged commit.
-  GIT_TAG a52835d87945dc6c16fb88a1fa1505587c4a136a
+  GIT_TAG 5aebe460e4759796154ba33ac6ff94cfce2db822
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_MakeAvailable(JUCE bushido ronin)
 
