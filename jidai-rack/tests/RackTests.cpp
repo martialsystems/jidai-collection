@@ -1,7 +1,8 @@
 // Copyright (c) 2026 Martial Systems LLC. All rights reserved.
 //
-// Rack tests, no JUCE and no audio device: devices go in and out, cables cross devices, and the
-// newest cable of a feedback loop is exactly one sample late.
+// Rack tests, no JUCE and no audio device: devices go in and out, cables cross devices, every feedback cable is
+// exactly one sample late (JCS R9), RACK I/O is the host connection (R13), path latency (R11), and the audit
+// issues X2, X5 and X6 are reproduced against the v2 rules and shown fixed (tests/JcsRackTests.cpp).
 
 #include "core/Rack.h"
 
@@ -81,17 +82,21 @@ void testAddRonin()
 {
     Rack rack;
     rack.prepare (48000.0, 512);
+    rack.addDevice (DeviceKind::RackIO);
     Device* d = rack.addDevice (DeviceKind::Ronin);
     check (d != nullptr && d->kind() == DeviceKind::Ronin, "add Ronin: device made");
     check (d->rackId() == "RONIN#1", "add Ronin: rack id RONIN#1");
-    check (d->units().size() == 16, "add Ronin: sixteen RONIN modules in the graph");
+    check (d->units().size() == 18, "add Ronin: sixteen RONIN modules plus HOST IN and HOST OUT in the graph");
     auto* ronin = static_cast<RoninDevice*> (d);
     check (ronin->program() == kDefaultFactoryPreset, "add Ronin: starts on the INIT program");
     check (countInternal (rack, "RONIN#1/") == 8, "add Ronin: the INIT program's 8 cables, got " + std::to_string (countInternal (rack, "RONIN#1/")));
     check (rack.liveCableCount() == 8, "add Ronin: 8 cables live in the graph");
     check (ronin->effectOn(), "add Ronin: Effect on");
 
+    // v2 routing, now explicit cables (migration M5): RACK HOST IN -> RONIN#1 HOST IN, RONIN HOST OUT -> MAIN OUT.
     // Host audio reaches the first RONIN's EXT IN. With Effect off the rack output is that audio, dry.
+    rack.applyLegacyHostRouting();
+    check (rack.liveCableCount() == 12, "M5 routing: 4 host cables added");
     ronin->setEffectOn (false);
     std::vector<float> in (256, 0.25f), l (256), r (256);
     rack.process (in.data(), in.data(), l.data(), r.data(), 256);
@@ -106,6 +111,7 @@ void testAddRonin()
     // A second RONIN gets no host audio, and adds its own output to the sum.
     Device* second = rack.addDevice (DeviceKind::Ronin);
     static_cast<RoninDevice*> (second)->setEffectOn (false);
+    rack.applyLegacyHostRouting();
     rack.process (in.data(), in.data(), l.data(), r.data(), 256);
     check (near (rack.jackVolts ("RONIN#2/EXT IN:L"), 0.0f), "second RONIN: EXT IN stays silent");
     check (near (rack.jackVolts ("RONIN#1/EXT IN:L"), 1.25f, 1.0e-4f), "first RONIN: EXT IN L is host x 5 V");
@@ -229,13 +235,16 @@ void testOneSampleFeedback()
 {
     // EXT IN L -> BUSHIDO MIX IN 1, MIX OUT -> RONIN INV IN, then INV OUT -> MIX IN 2 closes the loop.
     // That newest cable is the one delayed: MIX IN 2 at sample n is INV OUT at sample n - 1.
+    // Host audio reaches EXT IN through RACK I/O (cable added first, so it is the oldest).
     Rack rack;
     rack.prepare (48000.0, 512);
+    rack.addDevice (DeviceKind::RackIO);
     auto* b = static_cast<BushidoDevice*> (rack.addDevice (DeviceKind::Bushido));
     auto* r = static_cast<RoninDevice*> (rack.addDevice (DeviceKind::Ronin));
     rack.replaceInternalCables (r, {});
     setParam (*b, "MIXER:LEVEL 1", 1.0f);
     setParam (*b, "MIXER:LEVEL 2", 0.5f);
+    rack.connect ("RACK#1/HOST:IN L", "RONIN#1/HOST:IN L");
     rack.connect ("RONIN#1/EXT IN:L", "BUSHIDO#1/MIXER:IN 1");
     rack.connect ("BUSHIDO#1/MIXER:OUT", "RONIN#1/INV:IN");
     rack.connect ("RONIN#1/INV:OUT", "BUSHIDO#1/MIXER:IN 2");
@@ -264,6 +273,7 @@ void testOneSampleFeedback()
 
     // Patch the same loop in another order: now MIX OUT -> INV IN is the newest, so that one is delayed.
     rack.setCables ({});
+    rack.connect ("RACK#1/HOST:IN L", "RONIN#1/HOST:IN L");
     rack.connect ("RONIN#1/EXT IN:L", "BUSHIDO#1/MIXER:IN 1");
     rack.connect ("RONIN#1/INV:OUT", "BUSHIDO#1/MIXER:IN 2");
     rack.connect ("BUSHIDO#1/MIXER:OUT", "RONIN#1/INV:IN");
@@ -287,8 +297,9 @@ void testOneSampleFeedback()
 
 void testGateLaw()
 {
-    // BUSHIDO GATE A (0/5 V) into RONIN EG 1 TRIG: S-15 makes a high gate 0 V (held) and a low gate +5 V.
-    // RONIN EXT IN GATE (S-trig volts) into BUSHIDO START: held arrives as 5 V.
+    // JCS R3s. BUSHIDO GATE A (0/5 V) into RONIN EG 1 TRIG, an S-trig input: a high gate arrives as 0 V (held) and a
+    // low gate as +5 V. RONIN EXT IN GATE is an S-trig source: it passes as written into any input, so into BUSHIDO
+    // STEP held is 0 V and released is +5 V (v2 made held 5 V; a v2 patch keeps that through legacyInvert, M3).
     Rack rack;
     rack.prepare (48000.0, 512);
     auto* b = static_cast<BushidoDevice*> (rack.addDevice (DeviceKind::Bushido));
@@ -307,10 +318,23 @@ void testGateLaw()
     rack.connect ("RONIN#1/EXT IN:GATE", "BUSHIDO#1/INPUTS:STEP");
     r->setHold (true);
     run (rack, 64);
-    check (near (rack.jackVolts ("BUSHIDO#1/INPUTS:STEP"), 5.0f), "RONIN HOLD gate reaches BUSHIDO STEP as 5 V");
+    check (near (rack.jackVolts ("BUSHIDO#1/INPUTS:STEP"), 0.0f), "R3s: RONIN HOLD (S-trig held) reaches BUSHIDO STEP raw, 0 V");
     r->setHold (false);
     run (rack, 64);
-    check (near (rack.jackVolts ("BUSHIDO#1/INPUTS:STEP"), 0.0f), "released RONIN gate reaches BUSHIDO as 0 V");
+    check (near (rack.jackVolts ("BUSHIDO#1/INPUTS:STEP"), 5.0f), "R3s: released S-trig reaches BUSHIDO raw, +5 V");
+
+    // The same cable loaded from a v2 rack keeps the old law on that cable only (M3).
+    auto cables = rack.cables();
+    for (auto& c : cables)
+        if (c.a == "RONIN#1/EXT IN:GATE")
+            c.legacyInvert = true;
+    rack.setCables (cables);
+    r->setHold (true);
+    run (rack, 64);
+    check (near (rack.jackVolts ("BUSHIDO#1/INPUTS:STEP"), 5.0f), "M3 legacyInvert: held reaches BUSHIDO as 5 V, as in v2");
+    r->setHold (false);
+    run (rack, 64);
+    check (near (rack.jackVolts ("BUSHIDO#1/INPUTS:STEP"), 0.0f), "M3 legacyInvert: released reaches BUSHIDO as 0 V, as in v2");
 
     check (rack.check ("BUSHIDO#1/OUTPUTS:CV A", "RONIN#1/VCF:OUT") == Rack::Check::TwoOutputs, "two outputs carry nothing");
 }
@@ -329,7 +353,7 @@ void testBypass()
     check (b->engine().isRunning(), "BYPASS: the engine keeps running");
 }
 
-// ORIGAMI in the rack runs the same OrigamiCore as the plugin: 8 jacks with JCS ids, WAVE 0 passes a cable's
+// ORIGAMI in the rack runs the same OrigamiCore as the plugin: 12 jacks with JCS ids, WAVE 0 passes a cable's
 // volts bit-exact, the fold acts once WAVE moves, MG -> VC 1 modulates at audio rate, and QUALITY sets latency.
 void testOrigamiDevice()
 {
@@ -337,7 +361,9 @@ void testOrigamiDevice()
     rack.prepare (48000.0, 512);
     auto* r = static_cast<RoninDevice*> (rack.addDevice (DeviceKind::Ronin));
     auto* o = static_cast<OrigamiDevice*> (rack.addDevice (DeviceKind::Origami));
-    check (o != nullptr && o->rackId() == "ORIGAMI#1" && o->jacks().size() == 8, "add ORIGAMI: ORIGAMI#1 with 8 jacks");
+    check (o != nullptr && o->rackId() == "ORIGAMI#1" && o->jacks().size() == 12, "add ORIGAMI: ORIGAMI#1 with 12 jacks (8 front, 4 HOST on the back)");
+    check (o->findJack ("HOST:IN L") == OrigamiDevice::HostInL && o->jacks()[OrigamiDevice::HostOutR].backOnly
+               && ! o->jacks()[OrigamiDevice::OutR].backOnly, "ORIGAMI HOST jacks are back-only");
     check (o->findJack ("IN:IN L") == 0 && o->findJack ("VC:VC 3") == 5 && o->findJack ("OUT:OUT R") == 7, "ORIGAMI jack ids (JCS R6)");
     check (o->jacks()[0].desc.type == PortType::Audio && o->jacks()[3].desc.type == PortType::CV, "roles: IN audio, VC cv");
     check (rack.connect ("RONIN#1/VCO:SAW", "ORIGAMI#1/IN:IN L") == Rack::Check::Ok, "patch VCO SAW -> ORIGAMI IN L");
@@ -373,6 +399,8 @@ void testOrigamiDevice()
 
 }
 
+void runJcsRackTests (int& checks, int& failures);
+
 int main()
 {
     testAddBushido();
@@ -384,6 +412,7 @@ int main()
     testGateLaw();
     testBypass();
     testOrigamiDevice();
+    runJcsRackTests (checks, failures);
     std::printf ("%d checks, %d failed\n", checks, failures);
     std::printf (failures == 0 ? "RACK TESTS PASS\n" : "RACK TESTS FAIL\n");
     return failures == 0 ? 0 : 1;

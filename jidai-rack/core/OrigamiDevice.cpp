@@ -15,6 +15,10 @@ constexpr JackInfo kJacks[OrigamiDevice::kJackCount] = {
     { "VC:VC 3", PortType::CV, PortDir::In },
     { "OUT:OUT L", PortType::Audio, PortDir::Out },
     { "OUT:OUT R", PortType::Audio, PortDir::Out },
+    { "HOST:IN L", PortType::Audio, PortDir::In },
+    { "HOST:IN R", PortType::Audio, PortDir::In },
+    { "HOST:OUT L", PortType::Audio, PortDir::Out },
+    { "HOST:OUT R", PortType::Audio, PortDir::Out },
 };
 }
 
@@ -31,8 +35,11 @@ public:
     void processSample() override
     {
         origami::OrigamiCore::Inputs in;
-        in.inL = value[InL];
-        in.inR = isConnected[InR] || ! isConnected[InL] ? value[InR] : value[InL];
+        // Normals: HOST IN R <- HOST IN L; IN L <- HOST IN L; IN R <- IN L if patched, else HOST IN R.
+        const float hostL = value[HostInL];
+        const float hostR = isConnected[HostInR] ? value[HostInR] : hostL;
+        in.inL = isConnected[InL] ? value[InL] : hostL;
+        in.inR = isConnected[InR] ? value[InR] : (isConnected[InL] ? value[InL] : hostR);
         in.vcaCv = value[VcaCv];
         in.vcaPatched = isConnected[VcaCv];
         for (int i = 0; i < 3; ++i)
@@ -42,8 +49,8 @@ public:
         }
         double l = 0.0, r = 0.0;
         core.process (in, l, r);
-        value[OutL] = (float) l;
-        value[OutR] = (float) r;
+        value[OutL] = value[HostOutL] = (float) l;
+        value[OutR] = value[HostOutR] = (float) r;
     }
 
     origami::OrigamiCore& core;
@@ -64,11 +71,18 @@ OrigamiDevice::OrigamiDevice()
         j.unit = unit_.get();
         j.port = i;
         j.desc = unit_->port (i);
+        j.backOnly = i >= kFrontJacks;
         jacks_.push_back (j);
     }
 }
 
 OrigamiDevice::~OrigamiDevice() = default;
+
+std::vector<JackGroup> OrigamiDevice::jackGroups() const
+{
+    return { { "INPUT", { InL, InR, VcaCv } }, { "VC (AUDIO RATE OK)", { Vc1, Vc2, Vc3 } },
+             { "OUTPUT", { OutL, OutR } }, { "HOST (NORMALS)", { HostInL, HostInR, HostOutL, HostOutR } } };
+}
 
 void OrigamiDevice::prepare (double sampleRate)
 {

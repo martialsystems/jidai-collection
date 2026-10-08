@@ -4,6 +4,7 @@
 
 #include "Modular/EffectSwitch.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace jidai {
@@ -11,13 +12,51 @@ namespace jidai {
 // A RONIN module as a unit of the rack graph. RONIN modules already keep one float and one flag per port.
 class RoninDevice::ModuleUnit : public Unit {
 public:
-    explicit ModuleUnit (Module& m) : module (m) {}
+    ModuleUnit (Module& m, int strigPort) : module (m), strig (strigPort) {}
     int numPorts() const override { return module.numPorts(); }
     PortDesc port (int index) const override { return module.port (index); }
     float* values() override { return module.portValue; }
     bool* connected() override { return module.inputConnected; }
     void processSample() override { module.processSample(); }
+    bool strigInput (int p) const override { return p == strig; }    // EG 1 / EG 2 TRIG (JCS R3s)
     Module& module;
+    int strig = -1;
+};
+
+// HOST:IN L/R -> EXT IN's host input (volts / 5 = host units). IN R is normalled to IN L.
+class RoninDevice::HostInUnit : public Unit {
+public:
+    explicit HostInUnit (ExtIn& e) : ext (e) {}
+    int numPorts() const override { return 2; }
+    PortDesc port (int i) const override { return { i == 0 ? kHostInL : kHostInR, PortType::Audio, PortDir::In }; }
+    float* values() override { return value; }
+    bool* connected() override { return isConnected; }
+    void processSample() override
+    {
+        const float l = value[0], r = isConnected[1] ? value[1] : value[0];
+        ext.setHostSample (l * 0.2f, r * 0.2f);
+    }
+    ExtIn& ext;
+    float value[2] {};
+    bool isConnected[2] {};
+};
+
+// OUTPUT's host buffer -> HOST:OUT L/R (host units x 5 = volts).
+class RoninDevice::HostOutUnit : public Unit {
+public:
+    explicit HostOutUnit (OutputModule& o) : out (o) {}
+    int numPorts() const override { return 2; }
+    PortDesc port (int i) const override { return { i == 0 ? kHostOutL : kHostOutR, PortType::Audio, PortDir::Out }; }
+    float* values() override { return value; }
+    bool* connected() override { return isConnected; }
+    void processSample() override
+    {
+        value[0] = out.hostLeft() * 5.0f;
+        value[1] = out.hostRight() * 5.0f;
+    }
+    OutputModule& out;
+    float value[2] {};
+    bool isConnected[2] {};
 };
 
 RoninDevice::RoninDevice()
@@ -28,9 +67,14 @@ RoninDevice::RoninDevice()
     for (Module* m : order)
     {
         programGraph.addModule (*m);
-        moduleUnits_.push_back (std::make_unique<ModuleUnit> (*m));
+        const int strig = m == &eg1 ? Eg1::kTrig : (m == &eg2 ? Eg2::kTrig : -1);
+        moduleUnits_.push_back (std::make_unique<ModuleUnit> (*m, strig));
         units_.push_back (moduleUnits_.back().get());
     }
+    hostIn_ = std::make_unique<HostInUnit> (extIn);
+    hostOut_ = std::make_unique<HostOutUnit> (output);
+    units_.insert (units_.begin(), hostIn_.get());      // first, so a free choice of order keeps it before EXT IN
+    units_.push_back (hostOut_.get());
 
     for (int i = 0; i < kPanelJackCount; ++i)
     {
@@ -39,7 +83,7 @@ RoninDevice::RoninDevice()
         j.id = std::string (rec.section) + ":" + rec.label;
         if (rec.module >= 1 && rec.module <= kModules && rec.dir >= 0)
         {
-            j.unit = units_[(size_t) (rec.module - 1)];
+            j.unit = moduleUnits_[(size_t) (rec.module - 1)].get();
             j.port = rec.port;
             j.desc = j.unit->port (rec.port);
         }
@@ -47,6 +91,18 @@ RoninDevice::RoninDevice()
         {
             j.desc.dir = rec.dir == 1 ? PortDir::Out : PortDir::In;
         }
+        jacks_.push_back (j);
+    }
+
+    // The back-only HOST jacks, after the panel jacks (panel jack indices stay RONIN's own).
+    for (int i = 0; i < 4; ++i)
+    {
+        JackDesc j;
+        j.unit = i < 2 ? (Unit*) hostIn_.get() : (Unit*) hostOut_.get();
+        j.port = i % 2;
+        j.desc = j.unit->port (j.port);
+        j.id = j.desc.name;
+        j.backOnly = true;
         jacks_.push_back (j);
     }
 
@@ -62,6 +118,13 @@ RoninDevice::RoninDevice()
 }
 
 RoninDevice::~RoninDevice() = default;
+
+std::vector<OrderEdge> RoninDevice::orderEdges() const
+{
+    return { { hostIn_.get(), moduleUnits_[0].get() },        // HOST IN before EXT IN
+             { moduleUnits_[1].get(), hostOut_.get() } };     // OUTPUT before HOST OUT
+}
+
 
 Module* RoninDevice::moduleAt (int index)
 {

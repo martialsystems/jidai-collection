@@ -45,6 +45,14 @@ public:
 
     void prepare (double sampleRate) override;
     void beginBlock() override;
+    std::vector<OrderEdge> orderEdges() const override;
+
+    // Back-only HOST jacks (JIDAI_RACK_Redesign 3.4: the implicit host routing made explicit):
+    // HOST:IN L/R (audio in) feed EXT IN's host input; HOST:OUT L/R (audio out) carry what OUTPUT sends to the host.
+    static constexpr const char* kHostInL = "HOST:IN L";
+    static constexpr const char* kHostInR = "HOST:IN R";
+    static constexpr const char* kHostOutL = "HOST:OUT L";
+    static constexpr const char* kHostOutR = "HOST:OUT R";
 
     // Panel knobs, indexed like kPanelKnobs in RONIN's PanelGeometry.inc. 0..1, any thread.
     float knob (int panelIndex) const;
@@ -64,6 +72,7 @@ public:
     float meterVolts() const;
 
     // Host audio for EXT IN, in host units (±1 = ±5 V), and the buffer RONIN's OUTPUT sends to the host.
+    // In the rack these are driven by the HOST jacks; tests may call them directly.
     void setHostSample (float left, float right) { extIn.setHostSample (left, right); }
     float hostLeft() const { return output.hostLeft(); }
     float hostRight() const { return output.hostRight(); }
@@ -72,6 +81,10 @@ public:
 
 private:
     class ModuleUnit;
+    class HostInUnit;
+    class HostOutUnit;
+    std::unique_ptr<HostInUnit> hostIn_;
+    std::unique_ptr<HostOutUnit> hostOut_;
     void setFace (FaceKnob face, float value);
     Module* moduleAt (int index);
 

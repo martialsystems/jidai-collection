@@ -17,7 +17,7 @@ FetchContent_Declare(bushido
   GIT_REPOSITORY https://github.com/martialsystems/bushido.git
   # Bushido branch cleanup/neutral-names: neutral names (engine/BushidoModule, assets/bushido_*) and INIT-only patterns.
   # This commit resolves only once that branch is pushed. If it lands by squash or rebase, re-pin to the merged commit.
-  GIT_TAG 1c8f835003f10d33abf0033c60ab11b14bfb1b2c
+  GIT_TAG fce55b3abc9174944f5c8fab027a892dca8d4dad
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_Declare(ronin
   GIT_REPOSITORY https://github.com/martialsystems/Ronin.git
@@ -44,6 +44,7 @@ add_library(jidai_core STATIC
   core/RoninDevice.cpp
   core/BushidoDevice.cpp
   core/OrigamiDevice.cpp
+  core/RackIODevice.cpp
   ${BUSHIDO_DIR}/engine/BushidoModule.cpp
   ${RONIN_DIR}/Source/Modular/Module.cpp
   ${RONIN_DIR}/Source/Modular/PatchGraph.cpp
@@ -69,7 +70,7 @@ target_link_libraries(jidai_core PUBLIC jidai::common origami::dsp)
 set_target_properties(jidai_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 enable_testing()
-add_executable(JidaiRackTests tests/RackTests.cpp)
+add_executable(JidaiRackTests tests/RackTests.cpp tests/JcsRackTests.cpp)
 target_link_libraries(JidaiRackTests PRIVATE jidai_core)
 target_compile_options(JidaiRackTests PRIVATE -Wall -Wextra)
 add_test(NAME rack COMMAND JidaiRackTests)

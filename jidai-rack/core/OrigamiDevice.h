@@ -11,7 +11,8 @@
 //   VCA:VCA CV                  CV in      0..5 V sets the pre-fold VCA when VCA SOURCE = CV
 //   VC:VC 1, VC:VC 2, VC:VC 3   CV in      audio rate OK (unsmoothed); a patched jack wins over the internal source
 //   OUT:OUT L, OUT:OUT R        AUDIO out
-// The HOST:IN L/R and HOST:OUT L/R normals belong to the RACK I/O routing (JIDAI_RACK_Redesign.md 3.4).
+//   HOST:IN L, HOST:IN R        AUDIO in, back only: normalled into IN L/R while those are unpatched
+//   HOST:OUT L, HOST:OUT R      AUDIO out, back only: the same signal as OUT L/R (JIDAI_RACK_Redesign.md 3.4)
 
 #include "Device.h"
 
@@ -25,7 +26,8 @@ namespace jidai {
 
 class OrigamiDevice : public Device {
 public:
-    enum Jack { InL, InR, VcaCv, Vc1, Vc2, Vc3, OutL, OutR, kJackCount };
+    enum Jack { InL, InR, VcaCv, Vc1, Vc2, Vc3, OutL, OutR, HostInL, HostInR, HostOutL, HostOutR, kJackCount };
+    static constexpr int kFrontJacks = 8;
 
     OrigamiDevice();
     ~OrigamiDevice() override;
@@ -34,6 +36,7 @@ public:
     void prepare (double sampleRate) override;
     void beginBlock() override;
     int latencySamples() const override;
+    std::vector<JackGroup> jackGroups() const override;
 
     // Parameters in natural units (OrigamiParams.h), any thread; applied at the next block.
     double param (int p) const;
