@@ -39,17 +39,19 @@ FetchContent_Declare(ronin
 FetchContent_Declare(shogun
   GIT_REPOSITORY https://github.com/martialsystems/shogun.git
   # Shogun branch redesign/shogun: spec v2.2 engine (engine/shogun.h, per-sample processSample for the rack, 151 jacks
-  # with JCS roles, 0/23/26 latency at 1x/2x/4x), jidai-common 1.1.1 vendored, 0 warnings under `make strict`.
-  # 3c7acfd: factory bank (INIT + 21 kits with patterns, engine/factory.h) and the shared patch format engine/patch.h,
+  # with JCS roles, 0/23/26 latency at 1x/2x/4x), 0 warnings under `make strict`.
+  # SHAs below are after the Martial Systems LLC author rewrite of that branch.
+  # 591ecac: factory bank (INIT + 21 kits with patterns, engine/factory.h) and the shared patch format engine/patch.h,
   # which the rack uses to read and write SHOGUN device state (the same JSON as the SHOGUN plugin) and to load kits.
-  # fedcdbf: no dead panel keys (KIT/PATTERN arrows and search, A/B, undo/redo, SRC; FILL, scenes, mute groups, lanes
-  # removed). d04147b: jidai-common 1.1.2 vendored, manual; CLOCK:FILL IN and MOD:LANE A removed from engine/ports.h
+  # fbc2563: no dead panel keys (KIT/PATTERN arrows and search, A/B, undo/redo, SRC; FILL, scenes, mute groups, lanes
+  # removed). 5c999a5: jidai-common 1.1.2 vendored, manual; CLOCK:FILL IN and MOD:LANE A removed from engine/ports.h
   # (151 ports = its ROUTE bay = the rack's jacks); saved cables on them are dropped and reported (shogun::kRemovedPorts).
+  # 5d80135 (frozen head): LEAD/BASS CV AMT scales the pitch CV into the voice (1.0 = exact 1 V/oct), MOD matrix scroll.
   # The rack compiles only engine/shogun.cpp, against
   # its own jidai-common (single include path; SHOGUN's vendored copy is not used) and reads plugin/Source/PanelLayout.inc
   # for the MAIN face. SHOGUN's alias shim (shogun::resolvePort) stays SHOGUN-local.
   # Pushed to origin on that branch. If it lands by squash or rebase, re-pin to the merged commit.
-  GIT_TAG d04147bce96b6c98d1efbd9d66ab3bf6e59931f4
+  GIT_TAG 5d801359e2baf01c8c50e0c42077ec4eb171b5f0
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_MakeAvailable(JUCE bushido ronin shogun)
 set(SHOGUN_DIR ${shogun_SOURCE_DIR})
