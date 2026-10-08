@@ -306,7 +306,13 @@ void testStarterRacks()
                 if (*ds == nullptr) { canonical = false; break; }
                 const auto want = paramsOf (**ds), got = paramsOf (*d);
                 for (auto& [id, v] : want)
-                    canonical = canonical && got.count (id) && std::abs (juce::String (got.at (id)).getDoubleValue() - juce::String (v).getDoubleValue()) < 1.0e-6;
+                {
+                    const bool same = got.count (id) && std::abs (juce::String (got.at (id)).getDoubleValue() - juce::String (v).getDoubleValue()) < 1.0e-6;
+                    if (! same)
+                        std::printf ("  %s %s: list %s, saved %s\n", tag.toRawUTF8(), id.c_str(), v.c_str(),
+                                     got.count (id) ? got.at (id).c_str() : "(missing)");
+                    canonical = canonical && same;
+                }
                 ++ds;
             }
         }

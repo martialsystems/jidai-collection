@@ -146,6 +146,8 @@ class Rack:
         for pid, v in (params or {}).items():
             assert pid in SHOGUN_PARAMS, pid
             assert 0.0 <= v <= 1.0, (pid, v)
+            if abs(float(v) - SHOGUN_PARAMS[pid][1]) < 1e-9:
+                continue   # sparse, as SHOGUN's patchToJson writes it: a default value is not stored
             p[pid] = round(float(v), 6)
         trs = []
         for vid, (length, steps) in (tracks or {}).items():
