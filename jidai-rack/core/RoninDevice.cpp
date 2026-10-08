@@ -123,10 +123,8 @@ jidai::jcs::Role RoninDevice::jackRole (int jack) const
 {
     if (jack < 0 || jack >= (int) jacks_.size() || jacks_[(size_t) jack].unit == nullptr)
         return Device::jackRole (jack);
-    // One deliberate difference: a gate output that already carries S-trig volts (EXT IN GATE: 0 V held) is S-TRIG,
-    // as the rack treats every such output, so a cable from it into EG TRIG shows no conversion badge (none happens).
-    const PortDesc& d = jacks_[(size_t) jack].desc;
-    return d.strigVolts ? jidai::jcs::Role::STrig : portRole (d);
+    // RONIN's declared role, no exceptions (EXT IN GATE, which carries S-trig volts, is declared S-TRIG by RONIN).
+    return portRole (jacks_[(size_t) jack].desc);
 }
 
 std::vector<const Unit*> RoninDevice::latencyUnits() const

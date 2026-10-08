@@ -52,7 +52,7 @@ public:
     std::vector<OrderEdge> orderEdges() const override;
     // RONIN's own declared role for each jack (Modular/Port.h portRole: the role RONIN's patch bay colours by), so a
     // cable in the rack has the colour and glyph it has in RONIN (DIV and S&H CLOCK are GATE/CLK, the MG outputs CV).
-    // Except EXT IN GATE, which carries S-trig volts and stays S-TRIG.
+    // EXT IN GATE, which carries S-trig volts, is S-TRIG on both sides.
     jidai::jcs::Role jackRole (int jack) const override;
 
     // Latency on RONIN's audio outputs (JCS R11 L_d). RONIN's HQ 2x mode (RONIN_Redesign 3.2, default OFF) runs

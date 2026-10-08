@@ -26,11 +26,13 @@ FetchContent_Declare(ronin
   # Ronin branch redesign/ronin (draft PR #6): JCS v1.1 engine, EG real-time law, TRIANGLE VCO, state format 2, HQ 2x,
   # jidai-common 1.1.1 (24ee621) vendored, VCO 8' = the exact jcs::pitch::kC3Hz. 38bfc11: factory bank (22 programs),
   # strict-warnings build, docs; on top of ecde6dd. 6226b90: PRESET list in balanced columns (plugin UI only; the rack
-  # does not compile that file).
+  # does not compile that file). 1a53da6 (frozen): jidai-common 1.1.2 vendored, EXT IN GATE declared S-TRIG (so the
+  # rack's roles are RONIN's declared roles with no exception), PatchGraph::cableBadge (the rack's badge rule); tab text
+  # in plain words; engine unchanged.
   # RONIN vendors jidai-common (third_party/jidai-common); the rack compiles RONIN's sources against the rack's own,
   # newer jidai-common (one copy of each header in the binary), which keeps the API RONIN uses.
   # Pushed to origin on that branch. If it lands by squash or rebase, re-pin to the merged commit.
-  GIT_TAG 6226b90fb9bfc3e065e68525f668664fb5cb2864
+  GIT_TAG 1a53da63d80e3c03d1c52c44c412c24ca289ad41
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_Declare(shogun
   GIT_REPOSITORY https://github.com/martialsystems/shogun.git

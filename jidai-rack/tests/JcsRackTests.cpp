@@ -7,6 +7,7 @@
 #include "core/Rack.h"
 
 #include "jidai/jcs/Detect.h"
+#include "Modular/PatchGraph.h"
 
 #include <algorithm>
 #include <cmath>
@@ -623,8 +624,8 @@ void testRestNoLatch()
 }
 
 // A RONIN jack in the rack has the role RONIN itself declares for the port (Modular/Port.h portRole, what RONIN's
-// patch bay colours by), so a cable keeps its colour and glyph between RONIN and the rack. The one exception is an
-// output that already carries S-trig volts (EXT IN GATE), which is S-TRIG in the rack.
+// patch bay colours by), so a cable keeps its colour and glyph between RONIN and the rack. No exceptions: RONIN
+// declares EXT IN GATE (S-trig volts) as S-TRIG. A cable's badge is RONIN's own badge rule (PatchGraph::cableBadge).
 void testRoninRoles()
 {
     using jidai::jcs::Role;
@@ -638,9 +639,7 @@ void testRoninRoles()
         if (jack.unit == nullptr)
             continue;
         ++withUnit;
-        // RONIN declares EXT IN GATE as a plain gate, but it outputs S-trig volts: the rack keeps it S-TRIG (below).
-        const PortDesc pd = jack.unit->port (jack.port);
-        const Role declared = pd.strigVolts ? Role::STrig : portRole (pd);
+        const Role declared = portRole (jack.unit->port (jack.port));
         if (d->jackRole (j) == declared && rack.jackRole ("RONIN#1/" + jack.id) == declared)
             ++same;
         else
@@ -671,6 +670,32 @@ void testRoninRoles()
     rack.connect ("RONIN#1/DIV:/4", "RONIN#1/EG 1:TRIG");
     check (rack.cables().back().a == "RONIN#1/DIV:/4" && rack.cableInfo().back().badge == jidai::jcs::Badge::None,
            "RONIN DIV /4 -> EG 1 TRIG: GATE/CLK colour, no conversion badge (none happens)");
+    rack.connect ("RONIN#1/EXT IN:GATE", "RONIN#1/EG 2:TRIG");
+    {
+        const Device* dev = d;
+        const auto descOf = [&] (const std::string& id) {
+            const auto& j = dev->jacks()[(size_t) dev->findJack (id.substr (id.find ('/') + 1))];
+            return j.unit->port (j.port);
+        };
+        const PortDesc extGate = descOf ("RONIN#1/EXT IN:GATE");
+        check (extGate.strigVolts && portRole (extGate) == Role::STrig && rack.jackRole ("RONIN#1/EXT IN:GATE") == Role::STrig,
+               "EXT IN GATE: S-TRIG in RONIN's own table and in the rack");
+        int cables = 0, sameBadge = 0;
+        std::string badBadge;
+        for (size_t i = 0; i < rack.cables().size(); ++i)
+        {
+            const auto& c = rack.cables()[i];
+            if (c.a.rfind ("RONIN#1/", 0) != 0 || c.b.rfind ("RONIN#1/", 0) != 0)
+                continue;
+            ++cables;
+            if (rack.cableInfo()[i].badge == PatchGraph::cableBadge (descOf (c.a), descOf (c.b)))
+                ++sameBadge;
+            else
+                badBadge += " " + c.a + "->" + c.b;
+        }
+        check (cables >= 4 && sameBadge == cables, "RONIN-to-RONIN cable badges = RONIN's PatchGraph::cableBadge ("
+                                                    + std::to_string (sameBadge) + "/" + std::to_string (cables) + ")" + badBadge);
+    }
 }
 
 void runJcsRackTests (int& checks, int& failures)
