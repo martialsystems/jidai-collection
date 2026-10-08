@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Martial Systems LLC. All rights reserved.
 //
 // Preset banks through JidaiProcessor. Bank A is each instrument's factory set: INIT first, then the factory bank
-// (BUSHIDO e3148e3: 22 patterns, RONIN 38bfc11: 22 programs). User saves to bank A go behind the factory entries.
+// (BUSHIDO 46a705a: 22 patterns, RONIN 38bfc11: 22 programs). User saves to bank A go behind the factory entries.
 // A new rack holds RACK I/O only (decision 14), so the bank tests first insert the old default pair, one BUSHIDO
 // above one RONIN, without auto-route (makeClassic), and the cable counts below are the same as before.
 // Bank B starts with the rack patches. The compiled list is empty for now, so the rack patch tests
