@@ -16,16 +16,17 @@ FetchContent_Declare(JUCE
 FetchContent_Declare(bushido
   GIT_REPOSITORY https://github.com/martialsystems/bushido.git
   # Bushido branch redesign/bushido (PR #4): JCS v1.1 engine, rack/PitchLaw.h over the vendored jidai-common, no retired-prefix aliases.
-  # This commit resolves only once that branch is pushed. If it lands by squash or rebase, re-pin to the merged commit.
+  # Pushed to origin on that branch. If it lands by squash or rebase, re-pin to the merged commit.
   GIT_TAG 5ce7e2f7635e351cb7b3b5f888ab52ce773d9507
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_Declare(ronin
   GIT_REPOSITORY https://github.com/martialsystems/Ronin.git
-  # Ronin branch redesign/ronin (draft PR #6): JCS v1.1 engine, EG real-time law, TRIANGLE VCO, state format 2, HQ 2x.
+  # Ronin branch redesign/ronin (draft PR #6): JCS v1.1 engine, EG real-time law, TRIANGLE VCO, state format 2, HQ 2x,
+  # jidai-common 1.1.1 (24ee621) vendored, VCO 8' = the exact jcs::pitch::kC3Hz (matches BUSHIDO 5ce7e2f web/rack.html).
   # RONIN vendors jidai-common (third_party/jidai-common); the rack compiles RONIN's sources against the rack's own,
   # newer jidai-common (one copy of each header in the binary), which keeps the API RONIN uses.
-  # This commit resolves only once that branch is pushed. If it lands by squash or rebase, re-pin to the merged commit.
-  GIT_TAG d3b7a6cf6e15ea032526ec8040ff352e0e7bc444
+  # Pushed to origin on that branch. If it lands by squash or rebase, re-pin to the merged commit.
+  GIT_TAG ecde6dd0b70b579f9a5077e1b6e2ff901fbfd9f8
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_MakeAvailable(JUCE bushido ronin)
 

@@ -104,6 +104,10 @@ void testAddRonin()
             }
         check (strig == 2 && egTrigs, "add Ronin: S-trig inputs are EG 1 TRIG and EG 2 TRIG only, got " + std::to_string (strig));
         check (ronin->triShape() == 0, "add Ronin: INIT starts the VCO on the true TRIANGLE");
+        // RONIN ecde6dd: 8' is the shared exact C3 (jidai-common kC3Hz), as BUSHIDO 5ce7e2f's web/rack.html mirrors it.
+        check (Vco::footageHzFor (2) == static_cast<float> (jidai::jcs::pitch::kC3Hz)
+                   && Vco::footageHzFor (0) == static_cast<float> (jidai::jcs::pitch::kC3Hz / 4.0),
+               "add Ronin: VCO 8' = float(kC3Hz) = 130.8127826502993 Hz, 32' two octaves below");
     }
 
     // v2 routing, now explicit cables (migration M5): RACK HOST IN -> RONIN#1 HOST IN, RONIN HOST OUT -> MAIN OUT.
