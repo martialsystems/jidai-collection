@@ -32,6 +32,8 @@
 #include "UI/PatchBayLogic.h"
 
 #include <array>
+#include <string>
+#include <vector>
 #include <atomic>
 #include <utility>
 
@@ -49,10 +51,13 @@ public:
     void beginBlock() override;
     std::vector<OrderEdge> orderEdges() const override;
 
-    // Latency on RONIN's audio outputs (JCS R11 L_d), taken from RONIN itself. The pinned RONIN runs at 1x and
-    // reports 0. RONIN's HQ mode uses the shared halfband (jidai::dsp::Halfband93, the 2x -> 1x downsampler only),
-    // which costs kHqLatency = 23 samples: when RONIN reports it, pass it to setReportedLatency() (message thread,
-    // then Rack::updateLatency()) and the rack's per-path rule compensates it like any other device latency.
+    // Latency on RONIN's audio outputs (JCS R11 L_d). RONIN's HQ 2x mode (RONIN_Redesign 3.2, default OFF) runs
+    // RONIN's WHOLE graph at 2fs and decimates each host output with the shared halfband (jidai::dsp::Halfband93,
+    // 2x -> 1x only): kHqLatency = 23 samples, the value RONIN's getLatencySamples() reports. In the rack RONIN's
+    // modules are units of the rack graph, cabled sample by sample to other devices at the base rate, so the rack
+    // runs RONIN at 1x (HQ OFF, the shipped default) and reports 0. The hook stays: a RONIN that renders at 2fs
+    // passes kHqLatency to setReportedLatency() (message thread, then Rack::updateLatency()) and the per-path rule
+    // compensates it on MAIN OUT like any other device latency (tested).
     static constexpr int kHqLatency = jidai::dsp::Halfband93::kLatencyPerDirection;
     int latencySamples() const override { return reportedLatency_.load(); }
     void setReportedLatency (int samples) { reportedLatency_.store (samples < 0 ? 0 : samples); }
@@ -69,6 +74,26 @@ public:
     float knob (int panelIndex) const;
     void setKnob (int panelIndex, float value);
     bool effectOn() const { return effectOn_.load(); }
+    // VCO TRI SHAPE (RONIN M-R2): 0 TRIANGLE (new patches, INIT), 1 PARABOLA (legacy; format-1 patches load on it).
+    int triShape() const { return triShape_.load(); }
+    void setTriShape (int shape) { triShape_.store (shape == 1 ? 1 : 0); }
+
+    // RONIN state format (JCS R7) the rack writes for this device. Format 1 is the pre-redesign RONIN: knobs on the
+    // old EG law, parabola triangle, legacy drive pull.
+    static constexpr int kStateFormat = 2;
+    // RONIN's own format-1 migration (RONIN_Redesign 6) for a RONIN loaded from a format-1 rack state, after its
+    // knobs are set: M-R1 EG knobs to the real-time law, M-R2 PARABOLA, M-R5 VCF CUTOFF compensation when VCF IN
+    // has exactly one cable and it is this RONIN's VCO SAW or PULSE. vcfInCables: every cable into this RONIN's
+    // VCF:IN as (source, VCF:IN), the source as a bare jack id when it is this RONIN's own jack, else the full id.
+    // M-R3 (legacyInvert) is the rack's M3 and is applied to the cables by the rack.
+    struct Format1Report
+    {
+        int egKnobs = 0;
+        bool attackWasStalled = false;
+        bool cutoffCompensated = false, cutoffUnknown = false;
+        double cutoffBefore = 0.0, cutoffAfter = 0.0;
+    };
+    Format1Report migrateFormat1 (const std::vector<std::pair<std::string, std::string>>& vcfInCables);
     void setEffectOn (bool on) { effectOn_.store (on); }
     void setHold (bool held) { extIn.setButtonHeld (held); }
     bool holdHeld() const { return extIn.buttonHeld(); }
@@ -122,6 +147,7 @@ private:
     std::array<std::atomic<float>, kPanelKnobCount> knobs_ {};
     std::array<float, kPanelKnobCount> applied_ {};
     std::atomic<bool> effectOn_ { true };
+    std::atomic<int> triShape_ { 0 };
     std::atomic<int> reportedLatency_ { 0 };
     std::atomic<bool> forceApply_ { true };
     std::atomic<int> program_ { kDefaultFactoryPreset };

@@ -7,6 +7,7 @@
 
 #include "plugin/JidaiProcessor.h"
 
+#include "Modular/PatchState.h"
 #include "UI/PatchBayLogic.h"
 
 #include <cfloat>
@@ -290,6 +291,55 @@ void testMidiAndDefaults()
     check (b2->param ("CLOCK:SOURCE") == 0.0f, "a BUSHIDO inserted while the host is stopped keeps INT");
 }
 
+// RONIN state format 2 (RONIN_Redesign 6): a RONIN saved before RONIN's redesign (format 1) is migrated once
+// (M-R1 EG knobs, M-R2 PARABOLA, M-R5 VCF CUTOFF for one direct VCO SAW cable); format 2 round-trips untouched.
+void testRoninFormat2()
+{
+    juce::XmlElement xml ("JIDAIRACK");
+    xml.setAttribute ("version", 3);
+    xml.createNewChildElement ("DEVICE")->setAttribute ("kind", "RACK");
+    auto* d = xml.createNewChildElement ("DEVICE");
+    d->setAttribute ("kind", "RONIN");
+    d->setAttribute ("number", 1);
+    d->setAttribute ("format", 1);
+    auto knob = [&] (const char* id, double v) { auto* k = d->createNewChildElement ("KNOB"); k->setAttribute ("id", id); k->setAttribute ("value", v); };
+    knob ("EG 1:ATTACK", 0.5);
+    knob ("EG 1:DECAY", 0.5);
+    knob ("EG 2:RELEASE", 1.0);
+    knob ("VCF:CUTOFF", 0.4);
+    auto* c = xml.createNewChildElement ("CABLE");
+    c->setAttribute ("a", "RONIN#1/VCO:SAW");
+    c->setAttribute ("b", "RONIN#1/VCF:IN");
+    JidaiProcessor p;
+    p.testRestore (xml);
+    auto* r = dynamic_cast<RoninDevice*> (p.rack().findDevice ("RONIN#1"));
+    check (r != nullptr, "RONIN format 1: device restored");
+    if (r == nullptr)
+        return;
+    auto k = [&] (const char* s, const char* l) { return (double) r->knob (panelKnobIndex (s, l)); };
+    check (std::fabs (k ("EG 1", "ATTACK") - 0.5846) < 1e-4 && std::fabs (k ("EG 1", "DECAY") - 0.5574) < 1e-4
+               && std::fabs (k ("EG 2", "RELEASE") - 0.9760) < 1e-4,
+           "RONIN format 1: M-R1 EG knobs keep their segment times (0.5 -> 0.5846 attack, 0.5574 decay, 1.0 -> 0.9760 release)");
+    check (r->triShape() == 1, "RONIN format 1: M-R2 VCO TRI SHAPE PARABOLA");
+    const double comp = patchstate::compensateCutoff (0.4, 2.5);
+    check (std::fabs (k ("VCF", "CUTOFF") - comp) < 1e-6 && std::fabs (comp - 0.4) > 1e-4,
+           "RONIN format 1: M-R5 VCF CUTOFF compensated for the direct VCO SAW (0.4 -> " + std::to_string (comp) + ")");
+    check (p.migrationNotice.contains ("RONIN") && p.migrationNotice.contains ("PARABOLA"), "RONIN format 1: reported: " + p.migrationNotice.toStdString());
+    const auto saved = stateXml (p);
+    check (saved.contains ("format=\"2\"") && saved.contains ("triShape=\"parabola\""), "RONIN saves as format 2 with its TRI SHAPE");
+
+    JidaiProcessor q;
+    q.testRestore (*juce::parseXML (saved));
+    auto* r2 = dynamic_cast<RoninDevice*> (q.rack().findDevice ("RONIN#1"));
+    check (r2 != nullptr && std::fabs ((double) r2->knob (panelKnobIndex ("EG 1", "ATTACK")) - k ("EG 1", "ATTACK")) < 1e-6
+               && r2->triShape() == 1 && q.migrationNotice.isEmpty(),
+           "RONIN format 2 round-trips without a second migration");
+
+    JidaiProcessor fresh;
+    fresh.addDevice (DeviceKind::Ronin);
+    check (stateXml (fresh).contains ("triShape=\"triangle\""), "a new RONIN starts on the true TRIANGLE");
+}
+
 void testNewerRefused()
 {
     JidaiProcessor p;
@@ -314,4 +364,5 @@ void runRackStateTests (int& checks, int& failures)
     testVersion2Audio();
     testMidiAndDefaults();
     testNewerRefused();
+    testRoninFormat2();
 }

@@ -163,6 +163,8 @@ JidaiProcessor::RoninStored JidaiProcessor::roninFromVar (const juce::var& pv)
     u.base = (int) pv["base"];
     u.power = pv.hasProperty ("power") ? (bool) pv["power"] : true;
     readPairs (pv["knobs"], u.knobs);
+    u.format = pv.hasProperty ("format") ? (int) pv["format"] : 1;
+    u.triShape = pv["triShape"].toString() == "parabola" ? 1 : 0;
     if (auto* cl = pv["cables"].getArray())
         for (auto& c : *cl)
         {
@@ -178,6 +180,9 @@ juce::var JidaiProcessor::roninToVar (const RoninStored& u)
     o->setProperty ("name", u.name);
     o->setProperty ("base", u.base);
     o->setProperty ("power", u.power);
+    o->setProperty ("format", u.format);
+    if (u.format >= 2)
+        o->setProperty ("triShape", u.triShape == 1 ? "parabola" : "triangle");
     auto* knobs = new juce::DynamicObject();
     for (auto& [id, v] : u.knobs)
         knobs->setProperty (id, v);
@@ -535,6 +540,10 @@ void JidaiProcessor::loadRoninPreset (RoninDevice* ronin, int bank, int index)
             own.push_back ({ a, b });      // role colour
     }
     rack_.replaceInternalCables (ronin, own);
+    if (u.format >= 2)
+        ronin->setTriShape (u.triShape);
+    else
+        migrateRoninFormat1 (ronin);     // a preset saved before RONIN's redesign: same sound under the new laws
     loaded_[ronin] = { bank, index };
 }
 
@@ -546,6 +555,8 @@ int JidaiProcessor::saveRoninPreset (RoninDevice* ronin, int bank, const juce::S
     u.name = name.trim().isEmpty() ? juce::String ("PRESET") : name.trim();
     u.base = ronin->program();
     u.power = ronin->effectOn();
+    u.format = RoninDevice::kStateFormat;
+    u.triShape = ronin->triShape();
     for (int i = 0; i < kPanelKnobCount; ++i)
         u.knobs.push_back ({ juce::String::fromUTF8 (kPanelKnobs[i].section) + ":" + juce::String::fromUTF8 (kPanelKnobs[i].label), ronin->knob (i) });
     const std::string prefix = ronin->rackId() + "/";
@@ -690,9 +701,10 @@ void JidaiProcessor::getStateInformation (juce::MemoryBlock& dest)
         }
         if (auto* r = dynamic_cast<RoninDevice*> (d))
         {
-            e->setAttribute ("format", 1);
+            e->setAttribute ("format", RoninDevice::kStateFormat);     // 2: EG real-time law, TRI SHAPE stored
             e->setAttribute ("program", r->program());
             e->setAttribute ("effect", r->effectOn() ? 1 : 0);
+            e->setAttribute ("triShape", r->triShape() == 1 ? "parabola" : "triangle");
             const auto screen = loadedPattern (r);
             if (screen.first >= 0)
             {
@@ -747,6 +759,25 @@ void JidaiProcessor::getStateInformation (juce::MemoryBlock& dest)
     copyXmlToBinary (xml, dest);
 }
 
+juce::String JidaiProcessor::migrateRoninFormat1 (RoninDevice* r)
+{
+    const std::string me = r->rackId() + "/";
+    std::vector<std::pair<std::string, std::string>> vcfIn;
+    for (auto& c : rack_.cables())
+        for (const auto& [from, to] : { std::pair (c.a, c.b), std::pair (c.b, c.a) })
+            if (to == me + "VCF:IN")
+                vcfIn.push_back ({ from.rfind (me, 0) == 0 ? from.substr (me.size()) : from, "VCF:IN" });
+    const auto rep = r->migrateFormat1 (vcfIn);
+    juce::String note = juce::String::fromUTF8 (r->displayName().c_str()) + ": EG knobs on the real-time law, VCO TRI SHAPE PARABOLA";
+    if (rep.cutoffCompensated)
+        note << ", VCF CUTOFF " << juce::String (rep.cutoffBefore, 3) << " -> " << juce::String (rep.cutoffAfter, 3);
+    else if (rep.cutoffUnknown)
+        note << ", VCF CUTOFF left as saved (input level unknown)";
+    if (rep.attackWasStalled)
+        note << ", a stalled EG attack now completes";
+    return note + ".";
+}
+
 void JidaiProcessor::setStateInformation (const void* data, int size)
 {
     auto xml = getXmlFromBinary (data, size);
@@ -781,6 +812,7 @@ void JidaiProcessor::restoreFromXml (const juce::XmlElement& xml)
 
     if (version >= 3 && xml.getChildByName ("DEVICE") == nullptr)
         rack_.addDevice (DeviceKind::RackIO);
+    std::vector<RoninDevice*> roninFormat1;     // RONINs saved before RONIN's redesign: migrated once cables are set
     for (auto* e : xml.getChildWithTagNameIterator ("DEVICE"))
     {
         DeviceKind kind = DeviceKind::Bushido;
@@ -808,6 +840,11 @@ void JidaiProcessor::restoreFromXml (const juce::XmlElement& xml)
             }
             for (auto* ke : e->getChildWithTagNameIterator ("KNOB"))
                 setRoninKnob (r, ke->getStringAttribute ("id"), (float) ke->getDoubleAttribute ("value"));
+            const int format = version >= 3 ? e->getIntAttribute ("format", 1) : 1;
+            if (format >= 2)
+                r->setTriShape (e->getStringAttribute ("triShape", "triangle") == "parabola" ? 1 : 0);
+            else
+                roninFormat1.push_back (r);
             if (e->hasAttribute ("screenBank"))
                 loaded_[r] = { e->getIntAttribute ("screenBank"), e->getIntAttribute ("screenIndex") };
             else
@@ -867,6 +904,11 @@ void JidaiProcessor::restoreFromXml (const juce::XmlElement& xml)
         cables.push_back (c);
     }
     rack_.setCables (cables);
+
+    // RONIN format 1 -> 2 (RONIN_Redesign 6): M-R1 EG knobs, M-R2 PARABOLA, M-R5 VCF CUTOFF; M-R3 is M3 above.
+    juce::String roninNotes;
+    for (auto* r : roninFormat1)
+        roninNotes << " " << migrateRoninFormat1 (r);
     if (version < 3)
     {
         rack_.applyLegacyHostRouting();     // M5: RACK I/O, HOST IN -> first RONIN, every RONIN -> MAIN OUT
@@ -876,6 +918,8 @@ void JidaiProcessor::restoreFromXml (const juce::XmlElement& xml)
     }
     else if (rack_.rackIO() == nullptr)
         rack_.addDevice (DeviceKind::RackIO);
+    if (roninNotes.isNotEmpty())
+        migrationNotice = (migrationNotice.isEmpty() ? juce::String ("RONIN updated:") : migrationNotice + " RONIN:") + roninNotes;
     refreshLatency();
 }
 

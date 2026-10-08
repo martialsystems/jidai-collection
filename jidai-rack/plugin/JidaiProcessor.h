@@ -109,7 +109,11 @@ private:
         std::vector<std::pair<juce::String, float>> knobs;
         std::vector<std::array<juce::String, 2>> cables;
         std::vector<int> colors;
+        int format = 1;         // RONIN state format: 1 = before RONIN's redesign (migrated on load), 2 = current
+        int triShape = 0;       // format 2: 0 TRIANGLE, 1 PARABOLA
     };
+    // RONIN format 1 -> 2 for one RONIN whose knobs and cables are already in the rack; returns the notice text.
+    juce::String migrateRoninFormat1 (jidai::RoninDevice* ronin);
 
     void writeUserPatterns() const;
     void writeUserRonin() const;

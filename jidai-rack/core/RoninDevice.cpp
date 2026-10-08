@@ -3,6 +3,7 @@
 #include "RoninDevice.h"
 
 #include "Modular/EffectSwitch.h"
+#include "Modular/PatchState.h"
 
 #include <algorithm>
 #include <cmath>
@@ -12,15 +13,15 @@ namespace jidai {
 // A RONIN module as a unit of the rack graph. RONIN modules already keep one float and one flag per port.
 class RoninDevice::ModuleUnit : public Unit {
 public:
-    ModuleUnit (Module& m, int strigPort) : module (m), strig (strigPort) {}
+    explicit ModuleUnit (Module& m) : module (m) {}
     int numPorts() const override { return module.numPorts(); }
     PortDesc port (int index) const override { return module.port (index); }
     float* values() override { return module.portValue; }
     bool* connected() override { return module.inputConnected; }
     void processSample() override { module.processSample(); }
-    bool strigInput (int p) const override { return p == strig; }    // EG 1 / EG 2 TRIG (JCS R3s)
+    // JCS R3s: RONIN marks its S-trig inputs itself (PortDesc::strigInput: EG 1 TRIG and EG 2 TRIG only).
+    bool strigInput (int p) const override { return p >= 0 && p < module.numPorts() && module.port (p).strigInput; }
     Module& module;
-    int strig = -1;
 };
 
 // HOST:IN L/R -> EXT IN's host input (volts / 5 = host units). IN R is normalled to IN L.
@@ -67,8 +68,7 @@ RoninDevice::RoninDevice()
     for (Module* m : order)
     {
         programGraph.addModule (*m);
-        const int strig = m == &eg1 ? Eg1::kTrig : (m == &eg2 ? Eg2::kTrig : -1);
-        moduleUnits_.push_back (std::make_unique<ModuleUnit> (*m, strig));
+        moduleUnits_.push_back (std::make_unique<ModuleUnit> (*m));
         units_.push_back (moduleUnits_.back().get());
     }
     hostIn_ = std::make_unique<HostInUnit> (extIn);
@@ -219,6 +219,53 @@ void RoninDevice::beginBlock()
                 break;
         }
     }
+    vco.setTriShape (triShape_.load() == 1 ? Vco::TriShape::Parabola : Vco::TriShape::Triangle);
+}
+
+RoninDevice::Format1Report RoninDevice::migrateFormat1 (const std::vector<std::pair<std::string, std::string>>& vcfInCables)
+{
+    Format1Report report;
+    // M-R1: the EG time knobs keep their segment durations under the new 1 ms .. 60 s real-time law.
+    auto migrate = [this, &report] (const char* section, const char* label, bool attack)
+    {
+        const int k = panelKnobIndex (section, label);
+        if (k < 0)
+            return;
+        const double old = knob (k);
+        if (attack && patchstate::attackStalledInV1 (old))
+            report.attackWasStalled = true;
+        setKnob (k, (float) (attack ? patchstate::migrateEgAttack (old) : patchstate::migrateEgDecayRelease (old)));
+        ++report.egKnobs;
+    };
+    migrate ("EG 1", "ATTACK", true);
+    migrate ("EG 1", "DECAY", false);
+    migrate ("EG 1", "RELEASE", false);
+    migrate ("EG 2", "ATTACK", true);
+    migrate ("EG 2", "RELEASE", false);
+    // M-R2: a saved patch keeps the parabola triangle it was made with.
+    setTriShape (1);
+    // M-R5: drive-pull cutoff compensation, only for one direct VCO SAW or PULSE cable into VCF IN.
+    if (vcfInCables.size() == 1)
+    {
+        const auto& src = vcfInCables.front().first;
+        const double level = src == "VCO:SAW" ? 2.5 : (src == "VCO:PULSE" ? 5.0 : 0.0);
+        if (level > 0.0)
+        {
+            const int k = panelKnobIndex ("VCF", "CUTOFF");
+            if (k >= 0)
+            {
+                report.cutoffBefore = knob (k);
+                report.cutoffAfter = patchstate::compensateCutoff (report.cutoffBefore, level);
+                setKnob (k, (float) report.cutoffAfter);
+                report.cutoffCompensated = true;
+            }
+        }
+        else
+            report.cutoffUnknown = true;
+    }
+    else if (vcfInCables.size() > 1)
+        report.cutoffUnknown = true;
+    return report;
 }
 
 bool RoninDevice::loadProgram (int index, std::vector<std::pair<int, int>>& cables)
@@ -229,6 +276,7 @@ bool RoninDevice::loadProgram (int index, std::vector<std::pair<int, int>>& cabl
 
     // RONIN's applyProgramParameters: one default table, with each program's overrides.
     effectOn_.store (factoryPresetEffect (index));
+    triShape_.store (0);     // a factory program starts on the true TRIANGLE (M-R2)
     const FactoryProgramKnobs k = factoryProgramKnobs (index);
     setFace (FaceKnob::VcfCutoff, k.vcfCutoff);
     setFace (FaceKnob::VcfPeak, k.vcfPeak);

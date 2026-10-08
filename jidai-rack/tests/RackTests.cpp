@@ -92,6 +92,19 @@ void testAddRonin()
     check (countInternal (rack, "RONIN#1/") == 8, "add Ronin: the INIT program's 8 cables, got " + std::to_string (countInternal (rack, "RONIN#1/")));
     check (rack.liveCableCount() == 8, "add Ronin: 8 cables live in the graph");
     check (ronin->effectOn(), "add Ronin: Effect on");
+    {
+        // JCS R3s: RONIN marks its own S-trig inputs (PortDesc::strigInput), exactly EG 1 TRIG and EG 2 TRIG.
+        int strig = 0;
+        bool egTrigs = true;
+        for (auto& j : d->jacks())
+            if (j.unit != nullptr && j.desc.dir == PortDir::In && j.unit->strigInput (j.port))
+            {
+                ++strig;
+                egTrigs = egTrigs && (j.id == "EG 1:TRIG" || j.id == "EG 2:TRIG");
+            }
+        check (strig == 2 && egTrigs, "add Ronin: S-trig inputs are EG 1 TRIG and EG 2 TRIG only, got " + std::to_string (strig));
+        check (ronin->triShape() == 0, "add Ronin: INIT starts the VCO on the true TRIANGLE");
+    }
 
     // v2 routing, now explicit cables (migration M5): RACK HOST IN -> RONIN#1 HOST IN, RONIN HOST OUT -> MAIN OUT.
     // Host audio reaches the first RONIN's EXT IN. With Effect off the rack output is that audio, dry.
@@ -104,8 +117,12 @@ void testAddRonin()
 
     // Output Level scales the buffer leaving the rack: knob 0.7 is unity, 1.0 is twice as loud.
     const int level = panelKnobIndex ("OUTPUT", "LEVEL");
+    // RONIN smooths knobs per sample (RONIN_Redesign 3.5: 10 ms one-pole), so the new level settles over ~100 ms.
     ronin->setKnob (level, 1.0f);
     rack.process (in.data(), in.data(), l.data(), r.data(), 256);
+    check (l[1] < l[200] && l[200] < 0.5f, "Output Level ramps (per-sample smoothing), no step");
+    for (int b = 0; b < 24; ++b)
+        rack.process (in.data(), in.data(), l.data(), r.data(), 256);
     check (near (l[200], 0.5f, 1.0e-4f), "Output Level 1.0 doubles the rack output, got " + std::to_string (l[200]));
 
     // A second RONIN gets no host audio, and adds its own output to the sum.

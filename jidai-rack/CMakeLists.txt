@@ -17,13 +17,15 @@ FetchContent_Declare(bushido
   GIT_REPOSITORY https://github.com/martialsystems/bushido.git
   # Bushido branch redesign/bushido (PR #4): JCS v1.1 engine, rack/PitchLaw.h over the vendored jidai-common, no retired-prefix aliases.
   # This commit resolves only once that branch is pushed. If it lands by squash or rebase, re-pin to the merged commit.
-  GIT_TAG 7eea43f1cddc0ac79ad5ca796d8c2403ac06c735
+  GIT_TAG 5ce7e2f7635e351cb7b3b5f888ab52ce773d9507
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_Declare(ronin
   GIT_REPOSITORY https://github.com/martialsystems/Ronin.git
-  # Ronin branch cleanup/neutral-names: neutral names and the INIT-only factory bank.
+  # Ronin branch redesign/ronin (draft PR #6): JCS v1.1 engine, EG real-time law, TRIANGLE VCO, state format 2, HQ 2x.
+  # RONIN vendors jidai-common (third_party/jidai-common); the rack compiles RONIN's sources against the rack's own,
+  # newer jidai-common (one copy of each header in the binary), which keeps the API RONIN uses.
   # This commit resolves only once that branch is pushed. If it lands by squash or rebase, re-pin to the merged commit.
-  GIT_TAG 5aebe460e4759796154ba33ac6ff94cfce2db822
+  GIT_TAG d3b7a6cf6e15ea032526ec8040ff352e0e7bc444
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_MakeAvailable(JUCE bushido ronin)
 
@@ -48,6 +50,7 @@ add_library(jidai_core STATIC
   ${BUSHIDO_DIR}/engine/BushidoModule.cpp
   ${RONIN_DIR}/Source/Modular/Module.cpp
   ${RONIN_DIR}/Source/Modular/PatchGraph.cpp
+  ${RONIN_DIR}/Source/Modular/PatchState.cpp
   ${RONIN_DIR}/Source/Modular/ExtIn.cpp
   ${RONIN_DIR}/Source/Modular/OutputModule.cpp
   ${RONIN_DIR}/Source/Modular/Noise.cpp
