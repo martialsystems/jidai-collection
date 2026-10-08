@@ -34,6 +34,21 @@ std::string programName (int program);
 // CLOCK:SOURCE, which belongs to the rack's wiring (a new SHOGUN follows the host). Factory kits carry no bay cables.
 bool loadProgram (ShogunDevice& d, int program);
 
+// A/B compare and undo / redo with the SHOGUN plugin's laws (PluginProcessor selectAB / copyAB / undo / redo), on the
+// device's History. An edit is bracketed by beginUndoStep (the state before) and settleUndoStep, which records it only
+// if the state really changed (a click that changes nothing keeps redo). 64 levels. selectAB stores the live state in
+// the active slot and recalls the other (a slot never used starts as a copy); copyAB copies one slot onto the other
+// (loaded when the target is active). Both are undoable. Message thread only.
+ShogunDevice::Snapshot captureState (const ShogunDevice& d);
+void restoreState (ShogunDevice& d, const ShogunDevice::Snapshot& s);
+void beginUndoStep (ShogunDevice& d);
+bool settleUndoStep (ShogunDevice& d);
+bool undo (ShogunDevice& d);
+bool redo (ShogunDevice& d);
+void selectAB (ShogunDevice& d, int slot);
+void copyAB (ShogunDevice& d, int from, int to);
+bool abFilled (const ShogunDevice& d, int slot);
+
 std::unique_ptr<juce::XmlElement> toXml (const ShogunDevice& d);
 bool fromXml (ShogunDevice& d, const juce::XmlElement& x, std::vector<std::pair<std::string, std::string>>* cables = nullptr);
 

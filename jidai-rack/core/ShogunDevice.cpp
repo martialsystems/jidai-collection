@@ -3,6 +3,8 @@
 #include "ShogunDevice.h"
 
 #include <cmath>
+#include <cstdint>
+#include <cstring>
 
 namespace jidai {
 
@@ -20,16 +22,69 @@ PortType rackType (shogun::PortType t)
 PortDir rackDir (shogun::PortDir d) { return d == shogun::PortDir::Out ? PortDir::Out : PortDir::In; }
 
 int osFromParam (double u) { return 1 << shogun::stepIndex (u, 3); }   // 1X / 2X / 4X (the SHOGUN plugin's law)
+
+// SHOGUN's generated panel table (plugin/Source/PanelLayout.inc at the pinned commit): only its "jack:<id>" binds are
+// read here, the ports SHOGUN's ROUTE bay offers.
+struct LayoutOp {
+    int kind, tab, flags;
+    float x, y, w, h, r, z, v;
+    std::uint32_t fill, stroke;
+    float sw, opacity;
+    const char* text;
+    const char* text2;
+    const char* bind;
+    int steps, ticks;
+};
+[[maybe_unused]] constexpr float kNoRing = 0.0f;   // referenced by the generated table
+const LayoutOp kOps[] = {
+#include "PanelLayout.inc"
+};
+
+const std::array<bool, shogun::kPorts>& offeredPorts()
+{
+    static const std::array<bool, shogun::kPorts> t = [] {
+        std::array<bool, shogun::kPorts> a {};
+        for (const auto& o : kOps)
+            if (std::strncmp (o.bind, "jack:", 5) == 0)
+            {
+                const int p = shogun::findPort (o.bind + 5);
+                if (p >= 0)
+                    a[(size_t) p] = true;
+            }
+        return a;
+    }();
+    return t;
+}
+}
+
+bool ShogunDevice::offered (int port) { return port >= 0 && port < shogun::kPorts && offeredPorts()[(size_t) port]; }
+
+int ShogunDevice::offeredJackCount()
+{
+    int n = 0;
+    for (bool b : offeredPorts())
+        n += b ? 1 : 0;
+    return n;
+}
+
+int ShogunDevice::enginePort (int jack) const
+{
+    return jack >= 0 && jack < (int) portOfJack_.size() ? portOfJack_[(size_t) jack] : -1;
+}
+
+int ShogunDevice::jackOfPort (int port) const
+{
+    return port >= 0 && port < shogun::kPorts ? jackOfPort_[(size_t) port] : -1;
 }
 
 class ShogunDevice::EngineUnit : public Unit {
 public:
     explicit EngineUnit (shogun::Engine& e) : engine (e)
     {
-        for (int i = 0; i < kJackCount; ++i)
+        for (int i = 0; i < kPortCount; ++i)
             value[i] = shogun::kPortTable[i].dir == shogun::PortDir::In ? shogun::kPortTable[i].rest : 0.0f;
     }
-    int numPorts() const override { return kJackCount; }
+    int numPorts() const override { return kPortCount; }
     PortDesc port (int i) const override
     {
         const auto& p = shogun::kPortTable[i];
@@ -42,8 +97,8 @@ public:
 
     shogun::Engine& engine;
     const RetUnit* ret = nullptr;    // the RET input stage, read at the start of every sample
-    float value[kJackCount] {};
-    bool isConnected[kJackCount] {};
+    float value[kPortCount] {};
+    bool isConnected[kPortCount] {};
 };
 
 // The 16 RET inputs (one per voice), run before the engine. The engine unit reads their values and patch state at the
@@ -94,7 +149,7 @@ ShogunDevice::ShogunDevice()
     edits_.pattern = engine_.pattern();
     for (int r = 0; r < shogun::mod::kRows; ++r)
         edits_.rows[(size_t) r] = engine_.modulation().rows[r];
-    for (int i = 0; i < kJackCount; ++i)
+    for (int i = 0; i < kPortCount; ++i)
     {
         edits_.cvAmt[(size_t) i] = engine_.cvAmt (i);
         edits_.inLaw[(size_t) i] = (std::uint8_t) engine_.inputLaw (i);
@@ -104,13 +159,18 @@ ShogunDevice::ShogunDevice()
     unit_->ret = ret_.get();
     units_.push_back (ret_.get());
     units_.push_back (unit_.get());
-    int retIndex[kJackCount];
-    for (int i = 0; i < kJackCount; ++i)
+    int retIndex[kPortCount];
+    for (int i = 0; i < kPortCount; ++i)
         retIndex[i] = -1;
     for (int v = 0; v < shogun::kVoices; ++v)
         retIndex[ret_->enginePort (v)] = v;
-    for (int i = 0; i < kJackCount; ++i)
+    for (int i = 0; i < kPortCount; ++i)
     {
+        jackOfPort_[(size_t) i] = -1;
+        if (! offered (i))
+            continue;     // in the engine's table, not on SHOGUN's bay: the engine neither reads nor drives it
+        jackOfPort_[(size_t) i] = (int) jacks_.size();
+        portOfJack_.push_back (i);
         JackDesc j;
         j.id = shogun::kPortTable[i].id;
         j.unit = retIndex[i] >= 0 ? static_cast<Unit*> (ret_.get()) : static_cast<Unit*> (unit_.get());
@@ -132,7 +192,7 @@ std::vector<OrderEdge> ShogunDevice::orderEdges() const { return { { ret_.get(),
 std::vector<JackGroup> ShogunDevice::jackGroups() const
 {
     // One group per voice (its 8 jacks, plus WAVE / FOLD VC on the WAVE voices), then the synth voices, CLOCK, MOD
-    // and MIX: the same rows as SHOGUN's own patch bay (§13.2).
+    // and MIX: the same rows as SHOGUN's own patch bay (§13.2). Built from port numbers, kept as jack indices.
     std::vector<JackGroup> g;
     for (int v = 0; v < shogun::kDrumVoices; ++v)
     {
@@ -166,12 +226,21 @@ std::vector<JackGroup> ShogunDevice::jackGroups() const
     g.push_back ({ "MOD", { shogun::PORT_LFO1, shogun::PORT_LFO2, shogun::PORT_LFO3, shogun::PORT_LFO4, shogun::PORT_RND,
                             shogun::PORT_LANE_A } });
     g.push_back ({ "MIX", { shogun::PORT_MIX_L, shogun::PORT_MIX_R } });
+    for (auto& grp : g)
+    {
+        std::vector<int> jacks;
+        for (int port : grp.jacks)
+            if (jackOfPort (port) >= 0)
+                jacks.push_back (jackOfPort (port));
+        grp.jacks = jacks;
+    }
     return g;
 }
 
 jidai::jcs::Role ShogunDevice::jackRole (int jack) const
 {
-    return jack >= 0 && jack < kJackCount ? shogun::kPortTable[jack].role : Device::jackRole (jack);
+    const int port = enginePort (jack);
+    return port >= 0 ? shogun::kPortTable[port].role : Device::jackRole (jack);
 }
 
 int ShogunDevice::wantedOs() const
@@ -195,7 +264,7 @@ void ShogunDevice::prepare (double sampleRate)
         engine_.setPattern (edits_.pattern);
         for (int r = 0; r < shogun::mod::kRows; ++r)
             engine_.modulation().rows[r] = edits_.rows[(size_t) r];
-        for (int i = 0; i < kJackCount; ++i)
+        for (int i = 0; i < kPortCount; ++i)
         {
             engine_.setCvAmt (i, edits_.cvAmt[(size_t) i]);
             engine_.setInputLaw (i, edits_.inLaw[(size_t) i]);
@@ -229,7 +298,7 @@ void ShogunDevice::beginBlock()
             engine_.setPattern (edits_.pattern);
             for (int r = 0; r < shogun::mod::kRows; ++r)
                 engine_.modulation().rows[r] = edits_.rows[(size_t) r];
-            for (int i = 0; i < kJackCount; ++i)
+            for (int i = 0; i < kPortCount; ++i)
             {
                 engine_.setCvAmt (i, edits_.cvAmt[(size_t) i]);
                 engine_.setInputLaw (i, edits_.inLaw[(size_t) i]);
@@ -316,7 +385,8 @@ void ShogunDevice::loadInit()
 
 float ShogunDevice::jackVolts (int jack) const
 {
-    return jack >= 0 && jack < kJackCount ? unit_->value[jack] : 0.0f;
+    const int port = enginePort (jack);
+    return port >= 0 ? unit_->value[port] : 0.0f;
 }
 
 } // namespace jidai

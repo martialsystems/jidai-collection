@@ -10,6 +10,7 @@
 #include "plugin/StarterRacks.h"
 #include "plugin/RearPanel.h"
 #include "plugin/ShogunFace.h"
+#include "plugin/ShogunState.h"
 #include "origami/plugin/OrigamiPanel.h"
 #include "origami/plugin/OrigamiPresets.h"
 #include "core/OrigamiDevice.h"
@@ -45,18 +46,19 @@ juce::MouseEvent mouse (juce::Component& c, juce::Point<float> p, juce::Point<fl
                              &c, &c, juce::Time::getCurrentTime(), down, juce::Time::getCurrentTime(), 1, dragged);
 }
 
-void click (juce::Component& c, juce::Point<float> p)
+void click (juce::Component& c, juce::Point<float> p, bool right = false)
 {
-    c.mouseDown (mouse (c, p, p, false));
-    c.mouseUp (mouse (c, p, p, false));
+    const juce::ModifierKeys mods (right ? juce::ModifierKeys::rightButtonModifier : juce::ModifierKeys::leftButtonModifier);
+    c.mouseDown (mouse (c, p, p, false, mods));
+    c.mouseUp (mouse (c, p, p, false, mods));
     pump();
 }
 
 // Click whatever child of `root` is under p (root coordinates), as the real mouse would.
-void clickAt (juce::Component& root, juce::Point<int> p)
+void clickAt (juce::Component& root, juce::Point<int> p, bool right = false)
 {
     if (auto* c = root.getComponentAt (p))
-        click (*c, c->getLocalPoint (&root, p).toFloat());
+        click (*c, c->getLocalPoint (&root, p).toFloat(), right);
 }
 
 void drag (juce::Component& c, juce::Point<float> from, juce::Point<float> to, bool release = true)
@@ -461,7 +463,7 @@ int main (int argc, char** argv)
     }
 
     // SHOGUN: from its browser card (auto-routed MIX -> MAIN OUT), the MAIN face open (5.8 U), CLOSED (1 U), and its
-    // 153 jacks on a 4 U rear bay, every jack placed, none overlapping.
+    // 151 jacks (the ports SHOGUN's own ROUTE bay offers) on a 4 U rear bay, every jack placed, none overlapping.
     {
         proc.setCurrentProgram (0);
         pump();
@@ -482,8 +484,8 @@ int main (int argc, char** argv)
                     "SHOGUN MAIN face from SHOGUN's own op table: " + juce::String (face != nullptr ? face->paramKnobCount() : 0) + " parameter controls");
             if (face != nullptr)
             {
-                // Nothing on the face is inert: the plugin-only keys (scene, mute group, roll, pattern bank, undo/redo)
-                // and the other page tabs are not drawn; the ROLL slot is the clock source key; the arrows step the list.
+                // Nothing on the face is inert: every key SHOGUN's MAIN page draws is bound (SRC, the KIT/PATTERN
+                // arrows and search, A/B, undo/redo); the other page tabs are not drawn.
                 expect (face->inertControlCount() == 0, "SHOGUN face: no inert knobs, keys or toggles ("
                                                             + juce::String (face->inertControlCount()) + ")");
                 const int src = shogun::findParam ("CLOCK:SOURCE");
@@ -506,6 +508,64 @@ int main (int argc, char** argv)
                 pump (5);
                 expect (next == 1 && sg->program() == 0, "KIT arrows step the factory list (next "
                                                               + juce::String (next) + ", back " + juce::String (sg->program()) + ")");
+                // PATTERN arrows step the same list.
+                clickAt (*face, face->programArrowBounds (3).getCentre());
+                pump (5);
+                const int pNext = sg->program();
+                clickAt (*face, face->programArrowBounds (2).getCentre());
+                pump (5);
+                expect (pNext == 1 && sg->program() == 0, "PATTERN arrows step the factory list");
+
+                // Undo / redo over knob moves, step edits and program loads (the SHOGUN plugin's laws), kept with the
+                // device. The two program loads above are on the stack.
+                const int decay = shogun::findParam ("BD1:DECAY");
+                auto& hist = sg->history();
+                const int depth0 = (int) hist.undo.size();
+                jidai::shogunstate::beginUndoStep (*sg);
+                sg->setParam (decay, 0.9);
+                jidai::shogunstate::settleUndoStep (*sg);
+                const double setTo = sg->param (decay);
+                clickAt (*face, face->keyBounds ("undo").getCentre());
+                pump (5);
+                const double undone = sg->param (decay);
+                clickAt (*face, face->keyBounds ("redo").getCentre());
+                pump (5);
+                expect (depth0 >= 2 && std::abs (setTo - (double) (float) 0.9) < 1e-12 && std::abs (undone - setTo) > 0.01
+                            && std::abs (sg->param (decay) - setTo) < 1e-12,
+                        "undo / redo: BD1 DECAY " + juce::String (setTo, 3) + " -> undo " + juce::String (undone, 3) + " -> redo "
+                            + juce::String (sg->param (decay), 3) + " (" + juce::String (depth0) + " program loads on the stack)");
+                // A no-op click keeps redo.
+                clickAt (*face, face->keyBounds ("undo").getCentre());
+                pump (5);
+                const auto redoBefore = hist.redo.size();
+                jidai::shogunstate::beginUndoStep (*sg);
+                jidai::shogunstate::settleUndoStep (*sg);
+                expect (hist.redo.size() == redoBefore && redoBefore > 0, "an edit that changes nothing keeps redo");
+                clickAt (*face, face->keyBounds ("redo").getCentre());
+                pump (5);
+
+                // A/B: B starts as a copy of A; edits on B; A recalls exactly; right-click A copies B onto A.
+                const double aVal = sg->param (decay);
+                clickAt (*face, face->keyBounds ("ab:1").getCentre());
+                pump (5);
+                const bool bCopy = std::abs (sg->param (decay) - aVal) < 1e-12 && hist.abSlot == 1;
+                sg->setParam (decay, 0.2);
+                const double bVal = sg->param (decay);
+                clickAt (*face, face->keyBounds ("ab:0").getCentre());
+                pump (5);
+                const bool aBack = std::abs (sg->param (decay) - aVal) < 1e-12 && hist.abSlot == 0;
+                clickAt (*face, face->keyBounds ("ab:1").getCentre());
+                pump (5);
+                const bool bBack = std::abs (sg->param (decay) - bVal) < 1e-12;
+                clickAt (*face, face->keyBounds ("ab:0").getCentre());
+                pump (5);
+                clickAt (*face, face->keyBounds ("ab:0").getCentre(), true);     // right-click A: copy B onto A
+                pump (5);
+                expect (bCopy && aBack && bBack && std::abs (sg->param (decay) - bVal) < 1e-12,
+                        "A/B: B starts as a copy, A and B recall exactly, right-click A copies B onto A");
+                clickAt (*face, face->keyBounds ("undo").getCentre());
+                pump (5);
+                expect (std::abs (sg->param (decay) - aVal) < 1e-12, "the A/B copy is undoable");
                 face->setSelectedVoice (shogun::SD);
             }
             editor->setSize (1964, 1100);
@@ -532,13 +592,13 @@ int main (int argc, char** argv)
                         overlaps += c.getDistanceFrom (rear->jackCentre (k)) < 2.0f * rear->jackRadius() ? 1 : 0;
                 }
             }
-            expect (rear != nullptr && rear->jackCount() == 153 && inside == 153 && overlaps == 0,
-                    "SHOGUN rear bay: 153 jacks placed on the plate (" + juce::String (inside) + "), " + juce::String (overlaps) + " overlapping");
+            expect (rear != nullptr && rear->jackCount() == 151 && inside == 151 && overlaps == 0,
+                    "SHOGUN rear bay: 151 jacks placed on the plate (" + juce::String (inside) + "), " + juce::String (overlaps) + " overlapping");
             expect (rack.slotBounds (1).getHeight() == juce::roundToInt (4.0f * RackView::kUnit * rack.scale()), "SHOGUN back is 4 U");
             int spots = 0;
-            for (int j = 0; j < 153; ++j)
+            for (int j = 0; j < shogun::kPorts; ++j)
                 spots += rack.spotFor ("SHOGUN#1/" + std::string (shogun::kPortTable[j].id)) != nullptr ? 1 : 0;
-            expect (spots == 153, "every SHOGUN jack is a cable spot on the back (" + juce::String (spots) + ")");
+            expect (spots == 151, "every SHOGUN jack is a cable spot on the back, and only those (" + juce::String (spots) + ")");
             snapshot (rack, out.getChildFile ("shogun_back.png"));
             rack.setShowBack (false);
             pump();

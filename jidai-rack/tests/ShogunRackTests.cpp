@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Martial Systems LLC. All rights reserved.
 
-// SHOGUN as a rack device: its 153 jacks (ids, types, JCS R14 roles), the latency it reports at GLOBAL:OS 1x/2x/4x
+// SHOGUN as a rack device: its 151 jacks (the ports SHOGUN's ROUTE bay offers; ids, types, JCS R14 roles), the latency it reports at GLOBAL:OS 1x/2x/4x
 // (0/23/26) and the rack's R11 compensation around it, the re-prepare on an OS change, host-clocked playback, and the
 // jack-driven voices (TRIG, RET, MIX).
 
@@ -59,27 +59,45 @@ void testJacks()
     Rack rack;
     auto* s = addShogun (rack, 2);
     check (s != nullptr && s->rackId() == "SHOGUN#1" && s->kind() == DeviceKind::Shogun, "add SHOGUN: SHOGUN#1");
-    check (s->jacks().size() == 153 && (int) s->jacks().size() == shogun::kPorts, "SHOGUN: 153 jacks (engine/ports.h)");
-    int idOk = 0, typeOk = 0, roleOk = 0, front = 0;
-    for (int j = 0; j < shogun::kPorts; ++j)
+    // The rack offers exactly the ports SHOGUN's own ROUTE bay offers: engine/ports.h without CLOCK:FILL IN and
+    // MOD:LANE A (in the table, but the engine neither reads FILL IN nor drives LANE A).
+    const int n = (int) s->jacks().size();
+    check (n == 151 && n == ShogunDevice::offeredJackCount() && shogun::kPorts == 153,
+           "SHOGUN: 151 jacks = the 153 ports of engine/ports.h that SHOGUN's ROUTE bay offers (" + std::to_string (n) + ")");
+    check (s->findJack ("CLOCK:FILL IN") < 0 && s->findJack ("MOD:LANE A") < 0 && ! ShogunDevice::offered (shogun::PORT_FILL_IN)
+               && ! ShogunDevice::offered (shogun::PORT_LANE_A),
+           "CLOCK:FILL IN and MOD:LANE A are not offered (SHOGUN's bay has no jack for them)");
+    int idOk = 0, typeOk = 0, roleOk = 0, front = 0, mapped = 0;
+    std::string badRoles;
+    for (int j = 0; j < n; ++j)
     {
-        const auto& p = shogun::kPortTable[j];
+        const int port = s->enginePort (j);
+        if (port < 0)
+            continue;
+        ++mapped;
+        const auto& p = shogun::kPortTable[port];
         const auto& jack = s->jacks()[(size_t) j];
-        idOk += jack.id == p.id && s->findJack (p.id) == j ? 1 : 0;
+        idOk += jack.id == p.id && s->findJack (p.id) == j && s->jackOfPort (port) == j ? 1 : 0;
         const PortType want = p.type == shogun::PortType::Audio ? PortType::Audio : (p.type == shogun::PortType::Gate ? PortType::Gate : PortType::CV);
         typeOk += jack.desc.type == want && (jack.desc.dir == PortDir::Out) == (p.dir == shogun::PortDir::Out) ? 1 : 0;
-        roleOk += s->jackRole (j) == p.role && rack.jackRole ("SHOGUN#1/" + std::string (p.id)) == p.role ? 1 : 0;
+        // Role match: the rack's role (cable colour and glyph) is the role SHOGUN declares for the port.
+        const bool roleSame = s->jackRole (j) == p.role && rack.jackRole ("SHOGUN#1/" + std::string (p.id)) == p.role;
+        roleOk += roleSame ? 1 : 0;
+        if (! roleSame)
+            badRoles += " " + std::string (p.id);
         front += jack.backOnly ? 0 : 1;
     }
-    check (idOk == 153, "SHOGUN jack ids = SHOGUN's table, all resolve (" + std::to_string (idOk) + "/153)");
-    check (typeOk == 153, "SHOGUN jack types and directions = SHOGUN's table (" + std::to_string (typeOk) + "/153)");
-    check (roleOk == 153, "SHOGUN jack roles (JCS R14) = SHOGUN's table (" + std::to_string (roleOk) + "/153)");
-    check (front == 153, "every SHOGUN jack is on its rear bay");
+    check (mapped == 151 && idOk == 151, "SHOGUN jack ids = SHOGUN's table, all resolve (" + std::to_string (idOk) + "/151)");
+    check (typeOk == 151, "SHOGUN jack types and directions = SHOGUN's table (" + std::to_string (typeOk) + "/151)");
+    check (roleOk == 151, "SHOGUN rack roles = SHOGUN's declared roles (" + std::to_string (roleOk) + "/151)" + badRoles);
+    check (front == 151, "every SHOGUN jack is on its rear bay");
     Device* found = nullptr;
     int jack = -1;
-    check (rack.resolve ("SHOGUN#1/BD1:TRIG", found, jack) && found == s && jack == shogun::drumPort (shogun::BD1, shogun::DJ_TRIG),
+    check (rack.resolve ("SHOGUN#1/BD1:TRIG", found, jack) && found == s && s->enginePort (jack) == shogun::drumPort (shogun::BD1, shogun::DJ_TRIG),
            "SHOGUN#1/BD1:TRIG resolves (JCS R6)");
-    check (rack.resolve ("SHOGUN#1/MIX:R", found, jack) && jack == shogun::PORT_MIX_R, "SHOGUN#1/MIX:R resolves");
+    check (rack.resolve ("SHOGUN#1/MIX:R", found, jack) && s->enginePort (jack) == shogun::PORT_MIX_R, "SHOGUN#1/MIX:R resolves");
+    check (! rack.resolve ("SHOGUN#1/CLOCK:FILL IN", found, jack) && rack.connect ("SHOGUN#1/MOD:LANE A", "RACK#1/MAIN:OUT L") != Rack::Check::Ok,
+           "SHOGUN#1/CLOCK:FILL IN does not resolve and MOD:LANE A cannot be patched");
     check (s->units().size() == 2 && s->units()[0]->plainVoltGates() && s->units()[1]->plainVoltGates(),
            "SHOGUN: RET input stage + engine, 0/5 V gates (no logic-level promotion)");
     int groups = 0, grouped = 0;
@@ -88,7 +106,7 @@ void testJacks()
         ++groups;
         grouped += (int) g.jacks.size();
     }
-    check (groups == 19 && grouped == 153, "SHOGUN rear bay: 19 groups (14 drums, LEAD, BASS, CLOCK, MOD, MIX) hold all 153 jacks");
+    check (groups == 19 && grouped == 151, "SHOGUN rear bay: 19 groups (14 drums, LEAD, BASS, CLOCK, MOD, MIX) hold all 151 jacks");
     bool autoMix = false;
     int autoCount = 0;
     for (const auto& c : rack.cables())

@@ -244,16 +244,18 @@ enum B {
     B_NONE, B_PARAM, B_DISP, B_SEL, B_STEP, B_PLAYLED, B_STEPNUM, B_SK, B_TAB, B_TABTEXT, B_RUN, B_RST, B_RUNLED,
     B_POS, B_KIT, B_PATTERN, B_CPU, B_CPULED, B_CLIPLED, B_METER, B_TITLE, B_TRACKINFO, B_TRACKSCALE, B_TRK, B_PAGE,
     B_COPY, B_PASTE, B_CLEAR, B_RANDOM, B_OFF, B_STATIC,
-    B_SOURCE, B_PROG_PREV, B_PROG_NEXT, B_PROG_LIST   // rack-only: CLOCK:SOURCE key, factory-list arrows by the KIT/PATTERN displays
+    B_SOURCE, B_PROG_PREV, B_PROG_NEXT, B_PROG_LIST, B_AB, B_UNDO, B_REDO
 };
 
-// SHOGUN plugin keys with no engine behind them (scene / mute-group / roll performance keys, pattern bank A/B, undo
-// and redo): the rack face does not draw them, so nothing on its panel is inert. The ROLL slot carries the clock
-// source key instead.
-bool hiddenKey (const juce::String& text)
+// Controls whose click or drag changes the device state: bracketed as one undo step (the SHOGUN plugin's editsState).
+bool editsState (int kind)
 {
-    return text == "MUTE GRP" || text == "SCENE A" || text == "A" || text == "B"
-        || text == u8 ("\xE2\x86\xB6") || text == u8 ("\xE2\x86\xB7");
+    switch (kind)
+    {
+        case B_PARAM: case B_DISP: case B_STEP: case B_SK: case B_SOURCE: case B_PASTE: case B_CLEAR: case B_RANDOM:
+            return true;
+        default: return false;
+    }
 }
 
 } // namespace
@@ -279,6 +281,8 @@ void ShogunFace::buildBindings()
         { "cpu", B_CPU }, { "cpuled", B_CPULED }, { "clipled", B_CLIPLED }, { "meter", B_METER }, { "title", B_TITLE },
         { "trackinfo", B_TRACKINFO }, { "trackscale", B_TRACKSCALE }, { "trk", B_TRK }, { "page", B_PAGE },
         { "copy", B_COPY }, { "paste", B_PASTE }, { "clear", B_CLEAR }, { "random", B_RANDOM }, { "off", B_OFF },
+        { "prog", B_PROG_NEXT }, { "browse", B_PROG_LIST }, { "src", B_SOURCE }, { "ab", B_AB }, { "undo", B_UNDO },
+        { "redo", B_REDO },
     };
     for (int i = 0; i < kOpCount; ++i)
     {
@@ -286,21 +290,6 @@ void ShogunFace::buildBindings()
         if (o.tab != 0)
             continue;
         const juce::String bind = u8 (o.bind);
-        const juce::String text = u8 (o.text);
-        if (o.kind == KEY && hiddenKey (text) && bind.isEmpty())
-            continue;
-        if (o.kind == KEY && text == "ROLL" && bind.isEmpty())
-        {
-            bounds_.push_back ({ i, B_SOURCE, findParam ("CLOCK:SOURCE"), -1 });
-            continue;
-        }
-        // Top bar, beside the KIT and PATTERN displays: previous / next factory entry and the list itself.
-        if (o.kind == KEY && o.y < 20.0f && (text == u8 ("\xE2\x97\x80") || text == u8 ("\xE2\x96\xB6") || text == u8 ("\xE2\x8C\x95")))
-        {
-            const int k = text == u8 ("\xE2\x97\x80") ? B_PROG_PREV : (text == u8 ("\xE2\x96\xB6") ? B_PROG_NEXT : B_PROG_LIST);
-            bounds_.push_back ({ i, k, -1, -1 });
-            continue;
-        }
         // Only the MAIN page is in the rack: the other page tabs are not drawn (the pages are in the SHOGUN plugin),
         // nor are the "off" placeholder knobs.
         if (bind == "off" || ((bind.startsWith ("tab:") || bind.startsWith ("tabtext:")) && bind.fromFirstOccurrenceOf (":", false, false).getIntValue() != 0))
@@ -330,6 +319,8 @@ void ShogunFace::buildBindings()
                 break;
             }
             case B_TITLE: b.a = rest == "sel" ? 0 : 1; break;
+            case B_SOURCE: b.a = findParam ("CLOCK:SOURCE"); break;
+            case B_PROG_NEXT: b.kind = rest.getIntValue() < 0 ? B_PROG_PREV : B_PROG_NEXT; break;   // prog:-1 / prog:1
             default: b.a = rest.getIntValue(); break;
         }
         if (b.kind == B_PARAM && b.a < 0)
@@ -526,6 +517,12 @@ void ShogunFace::paintOp (juce::Graphics& g, int opIndex, const Bound* b)
             t = "SRC " + paramDisplay (b->a, (float) device_.param (b->a));
             fill = 0;
             break;
+        case B_AB:
+            fill = device_.history().abSlot == b->a ? AMB.getARGB() : 0;
+            dim = ! jidai::shogunstate::abFilled (device_, b->a);
+            break;
+        case B_UNDO: dim = device_.history().undo.empty(); break;
+        case B_REDO: dim = device_.history().redo.empty(); break;
         case B_OFF: dim = true; break;
         default: break;
     }
@@ -598,6 +595,14 @@ juce::Rectangle<int> ShogunFace::sourceKeyBounds() const
     return {};
 }
 
+juce::Rectangle<int> ShogunFace::keyBounds (const juce::String& bind) const
+{
+    for (const auto& b : bounds_)
+        if (u8 (kOps[b.op].bind) == bind)
+            return opRect (kOps[b.op], toPanel());
+    return {};
+}
+
 juce::Rectangle<int> ShogunFace::programArrowBounds (int index) const
 {
     int seen = 0;
@@ -633,7 +638,10 @@ void ShogunFace::showProgramMenu()
 
 bool ShogunFace::loadProgram (int program)
 {
-    if (! jidai::shogunstate::loadProgram (device_, program))
+    jidai::shogunstate::beginUndoStep (device_);     // a program load is one undo step, as in the SHOGUN plugin
+    const bool ok = jidai::shogunstate::loadProgram (device_, program);
+    jidai::shogunstate::settleUndoStep (device_);
+    if (! ok)
         return false;
     ui_ = device_.edits();
     repaint();
@@ -663,7 +671,7 @@ int ShogunFace::findBound (juce::Point<float> p) const
         {
             case B_PARAM: case B_SEL: case B_STEP: case B_SK: case B_RUN: case B_RST: case B_TRK: case B_PAGE:
             case B_COPY: case B_PASTE: case B_CLEAR: case B_RANDOM: case B_DISP: case B_KIT: case B_PATTERN:
-            case B_SOURCE: case B_PROG_PREV: case B_PROG_NEXT: case B_PROG_LIST:
+            case B_SOURCE: case B_PROG_PREV: case B_PROG_NEXT: case B_PROG_LIST: case B_AB: case B_UNDO: case B_REDO:
                 return (int) std::distance (bounds_.begin(), it.base()) - 1;
             default: break;
         }
@@ -681,6 +689,8 @@ void ShogunFace::mouseDown (const juce::MouseEvent& e)
     const Bound& b = bounds_[(size_t) dragBound_];
     const LayoutOp& o = kOps[b.op];
     Pattern& pat = ui_.pattern;
+    if (editsState (b.kind))
+        jidai::shogunstate::beginUndoStep (device_);     // settled at mouse-up
     switch (b.kind)
     {
         case B_PARAM:
@@ -738,6 +748,18 @@ void ShogunFace::mouseDown (const juce::MouseEvent& e)
             device_.setParam (b.a, stepU (i, 3));
             break;
         }
+        case B_AB:
+            if (e.mods.isRightButtonDown() || e.mods.isShiftDown())
+                jidai::shogunstate::copyAB (device_, 1 - b.a, b.a);      // right-click B = copy A onto B
+            else
+                jidai::shogunstate::selectAB (device_, b.a);
+            ui_ = device_.edits();
+            break;
+        case B_UNDO:
+        case B_REDO:
+            if (b.kind == B_UNDO ? jidai::shogunstate::undo (device_) : jidai::shogunstate::redo (device_))
+                ui_ = device_.edits();
+            break;
         case B_RUN: device_.requestRun (! device_.running()); break;
         case B_RST: device_.requestRestart(); break;
         case B_TRK: selVoice_ = (selVoice_ + (b.a < 0 ? kVoices - 1 : 1)) % kVoices; break;
@@ -809,7 +831,12 @@ void ShogunFace::mouseDrag (const juce::MouseEvent& e)
     repaint();
 }
 
-void ShogunFace::mouseUp (const juce::MouseEvent&) { dragBound_ = -1; }
+void ShogunFace::mouseUp (const juce::MouseEvent&)
+{
+    dragBound_ = -1;
+    jidai::shogunstate::settleUndoStep (device_);
+    repaint();
+}
 
 void ShogunFace::mouseDoubleClick (const juce::MouseEvent& e)
 {
@@ -818,7 +845,11 @@ void ShogunFace::mouseDoubleClick (const juce::MouseEvent& e)
         return;
     const Bound& b = bounds_[(size_t) bi];
     if (b.kind == B_PARAM && b.a >= 0 && kOps[b.op].kind == KNOB)
+    {
+        jidai::shogunstate::beginUndoStep (device_);
         device_.setParam (b.a, kParams[b.a].def);     // double-click = default (noon kit value)
+        jidai::shogunstate::settleUndoStep (device_);
+    }
 }
 
 void ShogunFace::mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& w)
@@ -828,5 +859,9 @@ void ShogunFace::mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWhe
         return;
     const Bound& b = bounds_[(size_t) bi];
     if (b.kind == B_PARAM && b.a >= 0 && kOps[b.op].kind == KNOB)
+    {
+        jidai::shogunstate::beginUndoStep (device_);
         device_.setParam (b.a, device_.param (b.a) + w.deltaY * 0.05f);
+        jidai::shogunstate::settleUndoStep (device_);
+    }
 }

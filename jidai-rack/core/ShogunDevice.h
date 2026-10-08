@@ -6,10 +6,13 @@
 // one unit of the rack graph, run one sample at a time through Engine::processSample, its per-sample contract for
 // the rack (SHOGUN spec v2.2 §13.4).
 //
-// Jacks: all 153 of SHOGUN's jack table (engine/ports.h), ids SHOGUN#N/SECTION:LABEL (JCS R6), types and R14 roles
-// from the table: per drum voice TRIG VEL PITCH DECAY TONE RET OUT ENV, per synth GATE VEL NOTE V/OCT CUTOFF RET OUT
-// NOTE OUT, then MOD (LD/BS GATE, LFO 1-4, RND, LANE A), CLOCK (CLK/RST/RUN/FILL IN, CLK/RST/RUN/ACC OUT), MIX L/R
-// and the WAVE / FOLD VC inputs of the five WAVE voices. Gates are plain 0/5 V (SHOGUN kPlainVoltGates).
+// Jacks: the 151 ports of SHOGUN's jack table (engine/ports.h) that SHOGUN's own ROUTE bay offers (the "jack:" ops of
+// plugin/Source/PanelLayout.inc; CLOCK:FILL IN and MOD:LANE A are in the table but the engine neither reads nor drives
+// them, so neither SHOGUN nor the rack offers them). Ids SHOGUN#N/SECTION:LABEL (JCS R6), types and R14 roles from the
+// table: per drum voice TRIG VEL PITCH DECAY TONE RET OUT ENV, per synth GATE VEL NOTE V/OCT CUTOFF RET OUT NOTE OUT,
+// then MOD (LD/BS GATE, LFO 1-4, RND), CLOCK (CLK/RST/RUN IN, CLK/RST/RUN/ACC OUT), MIX L/R and the WAVE / FOLD VC
+// inputs of the five WAVE voices. Gates are plain 0/5 V (SHOGUN kPlainVoltGates). Jack indices are not port indices:
+// use enginePort() / jackOfPort().
 //
 // Latency (JCS R11): the engine's oversampled domain (GLOBAL:OS 1x/2x/4x) delays every AUDIO output by 0/23/26
 // samples; CV and gate outputs are at zero latency. The device reports the latency of its audio outputs and the rack
@@ -27,6 +30,9 @@
 
 #include <array>
 #include <atomic>
+#include <deque>
+#include <string>
+#include <vector>
 #include <memory>
 #include <mutex>
 
@@ -34,7 +40,9 @@ namespace jidai {
 
 class ShogunDevice : public Device {
 public:
-    static constexpr int kJackCount = shogun::kPorts;    // 153
+    static constexpr int kPortCount = shogun::kPorts;    // 153 engine ports
+    static int offeredJackCount();                       // 151: the ports SHOGUN's ROUTE bay offers
+    static bool offered (int port);
 
     ShogunDevice();
     ~ShogunDevice() override;
@@ -51,6 +59,8 @@ public:
     std::vector<OrderEdge> orderEdges() const override;
     std::vector<JackGroup> jackGroups() const override;
     jidai::jcs::Role jackRole (int jack) const override;
+    int enginePort (int jack) const;     // the SHOGUN port behind a jack (-1 if none)
+    int jackOfPort (int port) const;     // the jack of a SHOGUN port (-1 if not offered)
 
     // Parameters, u in [0,1] by SHOGUN id (engine/params_table.h). Any thread; applied at the next block (smoothed).
     double param (int id) const;
@@ -92,8 +102,32 @@ public:
     float jackVolts (int jack) const;
     shogun::Engine& engine() { return engine_; }        // tests, offline
 
+    // A/B compare and undo / redo, as the SHOGUN plugin has them: full-state snapshots (the patch document and the
+    // factory program number). Kept with the device so they outlive the face; message thread only. The logic is in
+    // plugin/ShogunState (it reads and writes the patch document).
+    struct Snapshot
+    {
+        std::string json;
+        int program = 0;
+        bool empty() const { return json.empty(); }
+        bool sameAs (const Snapshot& o) const { return program == o.program && json == o.json; }
+    };
+    struct History
+    {
+        static constexpr int kUndoLevels = 64;
+        int abSlot = 0;
+        std::array<Snapshot, 2> ab {};
+        std::deque<Snapshot> undo, redo;
+        Snapshot pending;      // the state before an open edit (beginUndoStep), empty when none is open
+    };
+    History& history() { return history_; }
+    const History& history() const { return history_; }
+
 private:
     int program_ = 0;
+    History history_;
+    std::vector<int> portOfJack_;
+    std::array<int, shogun::kPorts> jackOfPort_ {};
     class EngineUnit;
     class RetUnit;
     shogun::Engine engine_;

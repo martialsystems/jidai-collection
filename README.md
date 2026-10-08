@@ -15,7 +15,7 @@ A full modular voice in one plugin that you can also patch as an effect: VCO, a 
 [github.com/martialsystems/Ronin](https://github.com/martialsystems/Ronin)
 
 ### SHOGUN: drum computer
-Fourteen drum voices and two synth voices, a step sequencer for every voice, and a 153-jack patch bay that cables to the rest of the collection. Lock it to your DAW's song position or clock it from a jack.
+Fourteen drum voices and two synth voices, a step sequencer for every voice, and a 151-jack patch bay that cables to the rest of the collection. Lock it to your DAW's song position or clock it from a jack.
 [github.com/martialsystems/shogun](https://github.com/martialsystems/shogun)
 
 ### ORIGAMI: triple wave folder

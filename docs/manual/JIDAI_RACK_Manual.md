@@ -32,7 +32,7 @@ JIDAI RACK is a rack cabinet in a plugin window. It holds the devices of the Jid
 | **RONIN** | A semi-modular synthesizer voice: VCO, resonant filter, two VCAs, two envelopes, MG (LFO), noise, ring modulator, sample and hold, and more. |
 | **RONIN FX** | A RONIN that comes patched to take your track's audio at its EXT IN, ready to use as an effect. |
 | **ORIGAMI** | A stereo triple wave folder. |
-| **SHOGUN** | A drum machine with 14 drum voices and 2 synth voices (LEAD and BASS), a step sequencer and 153 jacks. |
+| **SHOGUN** | A drum machine with 14 drum voices and 2 synth voices (LEAD and BASS), a step sequencer and 151 jacks. |
 
 Every device is built into the one plugin, so cables carry signals sample by sample between all of them. Audio, pitch, gates and modulation all use the same voltages on every device, so any output can go to any input. You can add as many of each device as you like, except RACK I/O.
 
@@ -169,6 +169,10 @@ The rack shows SHOGUN's MAIN page only. SHOGUN's other pages (VOICE, GRID, MOD, 
 | **PATTERN** display | The current pattern's name. |
 | **◀ / ▶** (beside KIT or PATTERN) | Loads the previous or next entry in the factory list. The list wraps around. |
 | **⌕** (beside KIT or PATTERN) | Opens the factory list. |
+| **A / B** | Two snapshots of the whole SHOGUN state: settings, kit and pattern. Click the other key to switch; the first time you switch to B, it starts as a copy of A. Right-click or shift-click a key to copy the other snapshot onto it. The lit key is the one you are editing; a dim key holds no snapshot yet. |
+| **↶ / ↷** | Undo and redo, up to 64 steps. A knob turn, a key or step edit, a kit load and an A/B switch or copy are one step each. A key is dim when there is nothing to undo or redo. |
+
+A/B snapshots and the undo history last while the project is open. They are not saved with it.
 
 **CLOCK**
 
@@ -182,12 +186,15 @@ The rack shows SHOGUN's MAIN page only. SHOGUN's other pages (VOICE, GRID, MOD, 
 | **SCALE** | Step length: 1/32, 1/16, 1/8T or 1/8. |
 | **BAR** | Steps per bar (1–32). |
 | STEP/BAR display | The bar and step being played, with ▶ or ■. |
-| **FILL** | Turns fill mode on and off. |
+
+**SYNC**
+
+| Control | What it does |
+|---|---|
+| **CLK IN** | What a pulse at the CLK IN jack counts as when SRC is EXT, shown on the key: **STEP** (one pulse per step), or 1, 2, 4, 24 or 48 pulses per quarter note. Click for the next choice, right-click for the previous one. |
 | **SRC** | The clock source, shown on the key: **HOST** follows your DAW's transport, **INT** runs on SHOGUN's own TEMPO (start and stop it with ▶), **EXT** steps on pulses at the CLK IN jack. Click for the next source, right-click for the previous one. |
 
 A SHOGUN you add to the rack starts on SRC HOST: it plays while your DAW plays, in time with the song position. Switch to EXT to clock it from its CLK IN jack (see the Acid Drum Jam example).
-
-**PERFORM** has FILL and SRC (above). The scene, mute-group and roll keys of the SHOGUN plugin, its pattern A/B keys and its undo and redo keys are not part of the rack panel.
 
 **MASTER**
 
@@ -228,9 +235,9 @@ A step-lock knob that doesn't apply to the selected track (BEND on the other voi
 | **CLEAR** | Clears the selected track. |
 | **RANDOM** | Turns steps on at random on the selected track. |
 
-The note under the step keys mentions holding a step and turning a knob to record a parameter lock, and the full grid on the GRID page. Both are SHOGUN plugin features. In the rack, parameter locks from kits and patches play back as saved.
+The note under the step keys points to the full 16-track grid on the GRID page, which is in the SHOGUN plugin. In the rack, parameter locks from kits and patches play back as saved.
 
-When closed, SHOGUN is a 1 U strip. On the back, its 153 jacks fill a 4 U plate.
+When closed, SHOGUN is a 1 U strip. On the back, its 151 jacks fill a 4 U plate.
 
 ### 3.10 Keys
 
@@ -439,7 +446,7 @@ The standalone app uses your default audio input and output. Choose devices and 
 | Format | VST3 effect with MIDI input, plus a standalone app |
 | Host I/O | Stereo in (HOST IN), stereo out (MAIN OUT; OUT R follows OUT L when only OUT L is patched), MIDI notes on all channels |
 | Devices | RACK I/O, BUSHIDO, RONIN, RONIN FX, ORIGAMI, SHOGUN. Any number of each except RACK I/O (one). |
-| Jacks per device | RACK I/O 11 · BUSHIDO 25 · RONIN 61 · ORIGAMI 14 · SHOGUN 153 |
+| Jacks per device | RACK I/O 11 · BUSHIDO 25 · RONIN 61 · ORIGAMI 14 · SHOGUN 151 |
 | Heights (open / closed / back) | RACK I/O 1 U · BUSHIDO 3 / 1 / 3 U · RONIN 4 / 1 / 4 U · ORIGAMI 3 / 1 / 1 U · SHOGUN 5.8 / 1 / 4 U |
 | Cable processing | Sample by sample between all devices. Summing inputs. One-sample delay on the newest cable of a loop. |
 | Signal levels | Audio ±5 V. Gates 0/5 V (on above 1.0 V, off below 0.5 V). Pitch 1 V/oct with C3 = 0 V, plus linear Hz/V for RONIN. |
@@ -654,7 +661,7 @@ Every jack of every device, by rear-panel section. "back" marks back-only jacks.
 | HOST (NORMALS) | IN L (audio, back), IN R (audio, back) | OUT L (audio, back), OUT R (audio, back) |
 | SIDECHAIN | SC L (audio, back), SC R (audio, back) | – |
 
-#### SHOGUN: 153 jacks
+#### SHOGUN: 151 jacks
 
 | Group | Inputs | Outputs |
 |---|---|---|
@@ -674,7 +681,7 @@ Every jack of every device, by rear-panel section. "back" marks back-only jacks.
 | HTC | TRIG (gate), VEL (CV), PITCH (V/oct), DECAY (CV), TONE (CV), RET (audio), FOLD VC (CV) | OUT (audio), ENV (CV) |
 | LEAD | GATE (gate), VEL (CV), NOTE (V/oct), V/OCT (V/oct), CUTOFF (CV), RET (audio) | OUT (audio), NOTE OUT (V/oct), LD GATE (gate) |
 | BASS | GATE (gate), VEL (CV), NOTE (V/oct), V/OCT (V/oct), CUTOFF (CV), RET (audio) | OUT (audio), NOTE OUT (V/oct), BS GATE (gate) |
-| CLOCK | CLK IN (gate), RST IN (gate), RUN IN (gate), FILL IN (gate) | CLK OUT (gate), RST OUT (gate), RUN OUT (gate), ACC OUT (CV) |
-| MOD | – | LFO 1 (CV), LFO 2 (CV), LFO 3 (CV), LFO 4 (CV), RND (CV), LANE A (CV) |
+| CLOCK | CLK IN (gate), RST IN (gate), RUN IN (gate) | CLK OUT (gate), RST OUT (gate), RUN OUT (gate), ACC OUT (CV) |
+| MOD | – | LFO 1 (CV), LFO 2 (CV), LFO 3 (CV), LFO 4 (CV), RND (CV) |
 | MIX | – | L (audio), R (audio) |
 

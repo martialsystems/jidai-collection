@@ -10,8 +10,11 @@
 //
 // MAIN-tab controls: voice select keys (click selects and auditions), 16 step keys of the selected track (click
 // toggles, shift-click = accent, right-click selects the step), the selected step's knobs, page 1-16 / 17-32,
-// track < >, COPY / PASTE / CLEAR / RANDOM, RUN / RST, the p:<param> knobs, keys and LCDs (drag, double-click =
-// default, wheel), the MAIN meters and the bar:step position.
+// track < >, COPY / PASTE / CLEAR / RANDOM, RUN / RST, SRC (clock source), the p:<param> knobs, keys and LCDs (drag,
+// double-click = default, wheel), the MAIN meters and the bar:step position. Top bar: KIT and PATTERN previous / next
+// and search (the factory list), A/B compare (click recalls, right-click copies the other slot onto it) and undo /
+// redo (64 levels over knob moves, step edits, A/B and program loads), with the SHOGUN plugin's laws. Every key the
+// face draws is bound (inertControlCount() == 0).
 
 #include "core/ShogunDevice.h"
 
@@ -48,6 +51,7 @@ public:
     int inertControlCount() const;
     juce::Rectangle<int> sourceKeyBounds() const;
     juce::Rectangle<int> programArrowBounds (int index) const;
+    juce::Rectangle<int> keyBounds (const juce::String& bind) const;    // a bound op by its SHOGUN bind ("ab:1", "undo")
 
 private:
     struct Bound { int op, kind, a, b; };
