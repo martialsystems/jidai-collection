@@ -16,6 +16,10 @@
 #include "core/OrigamiDevice.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <atomic>
+#include <chrono>
+#include <functional>
+#include <thread>
 #if JUCE_LINUX
  #include <execinfo.h>
  #include <csignal>
@@ -95,6 +99,66 @@ const RackCableLayer::Drawn* drawnFor (RackView& rack, int index)
         if (d.index == index)
             return &d;
     return nullptr;
+}
+
+// A host transport playing at 120 BPM from sample 0; the caller sets the block's first sample before each block.
+struct PlayingHead : juce::AudioPlayHead
+{
+    std::atomic<long long> sample { 0 };
+    juce::Optional<PositionInfo> getPosition() const override
+    {
+        PositionInfo p;
+        const long long s = sample.load();
+        p.setIsPlaying (true);
+        p.setBpm (120.0);
+        p.setTimeInSamples (s);
+        p.setPpqPosition ((double) s / 48000.0 * 2.0);
+        return p;
+    }
+};
+
+// Plays `total` samples of program `program` through a fresh processor prepared for 256-sample blocks, cut into
+// blocks by `nextSize`, with the same MIDI notes and host noise whatever the cut. Returns the left+right output.
+std::vector<float> render (int program, int total, const std::function<int()>& nextSize)
+{
+    JidaiProcessor p;
+    PlayingHead head;
+    p.setPlayHead (&head);
+    p.prepareToPlay (48000.0, 256);
+    p.setCurrentProgram (program);
+    juce::AudioBuffer<float> buffer (2, 512);
+    std::vector<float> out;
+    juce::Random noise (7);
+    std::vector<float> in ((size_t) total * 2);
+    for (auto& x : in)
+        x = noise.nextFloat() * 0.2f - 0.1f;
+    for (int at = 0; at < total;)
+    {
+        const int n = juce::jmin (nextSize(), total - at, 512);
+        buffer.setSize (2, n, false, false, true);
+        for (int i = 0; i < n; ++i)
+        {
+            buffer.setSample (0, i, in[(size_t) (at + i) * 2]);
+            buffer.setSample (1, i, in[(size_t) (at + i) * 2 + 1]);
+        }
+        juce::MidiBuffer midi;
+        for (int i = 0; i < n; ++i)            // a note every 3000 samples, off 1500 later
+        {
+            const int s = at + i;
+            if (s % 3000 == 100)  midi.addEvent (juce::MidiMessage::noteOn (1, 48 + (s / 3000) % 24, (juce::uint8) 100), i);
+            if (s % 3000 == 1600) midi.addEvent (juce::MidiMessage::noteOff (1, 48 + (s / 3000) % 24), i);
+        }
+        head.sample = at;
+        p.processBlock (buffer, midi);
+        for (int i = 0; i < n; ++i)
+        {
+            out.push_back (buffer.getSample (0, i));
+            out.push_back (buffer.getSample (1, i));
+        }
+        at += n;
+    }
+    p.setPlayHead (nullptr);
+    return out;
 }
 
 void key (JidaiEditor& e, int code, juce::ModifierKeys mods = {}, juce::juce_wchar ch = 0)
@@ -603,6 +667,233 @@ int main (int argc, char** argv)
             rack.setShowBack (false);
             pump();
         }
+    }
+
+    // Block sizes: a rack plays the same whatever blocks the host cuts the audio into, larger than prepareToPlay's
+    // (processBlock hands the rack at most that much at once) or 1 sample.
+    {
+        int same = 0, sounding = 0, close = 0;
+        double worst = 0.0;
+        const int racks = proc.getNumPrograms();
+        for (int prog = 0; prog < racks; ++prog)
+        {
+            const int total = 48000;
+            const auto ref = render (prog, total, [] { return 256; });
+            const auto big = render (prog, total, [] { return 512; });
+            juce::Random r ((juce::int64) prog);
+            const auto mixed = render (prog, total, [&r] { const int k = r.nextInt (6); return k == 0 ? 1 : k == 1 ? 512 : 1 + r.nextInt (512); });
+            // A 512 block is two 256 blocks to the rack: identical. Blocks of any size are not bit-identical (devices
+            // read the host transport and some controls once per block), but must stay finite and close.
+            same += ref == big ? 1 : 0;
+            double sum = 0.0, maxDiff = 0.0, peak = 0.0;
+            bool finiteOut = true;
+            for (size_t i = 0; i < ref.size(); ++i)
+            {
+                sum += (double) ref[i] * (double) ref[i];
+                maxDiff = std::max (maxDiff, (double) std::abs (ref[i] - mixed[i]));
+                peak = std::max (peak, (double) std::abs (ref[i]));
+                finiteOut = finiteOut && std::isfinite (mixed[i]) && std::isfinite (big[i]);
+            }
+            sounding += sum > 1e-6 ? 1 : 0;
+            close += finiteOut && maxDiff <= 0.05 * std::max (peak, 1e-3) ? 1 : 0;
+            worst = std::max (worst, peak > 0.0 ? maxDiff / peak : maxDiff);
+            if (ref != big)
+            {
+                size_t at = 0;
+                while (at < ref.size() && ref[at] == big[at])
+                    ++at;
+                std::printf ("  rack %d: 512-sample blocks change the output from sample %d\n", prog + 1, (int) (at / 2));
+            }
+        }
+        expect (same == racks && sounding > 0, "every starter rack plays sample-identical in blocks of 256 and of 512, twice the prepared size ("
+                                                  + juce::String (same) + " of " + juce::String (racks) + ", " + juce::String (sounding) + " sounding)");
+        expect (close == racks, "in blocks of 1 to 512 samples every starter rack stays finite and within 5% of peak of the 256-block render (worst "
+                                   + juce::String (worst * 100.0, 2) + "%)");
+    }
+
+    // A host changing programs and loading states from other threads while the editor is open and the audio runs (a
+    // VST3 host's program parameter; pluginval's editor automation). The rack changes on the message thread only, the
+    // view never paints a device the rack dropped, the dropped devices are freed, and a state saved meanwhile is always
+    // a whole rack: the one live or the one requested.
+    {
+        rack.setShowBack (false);
+        editor->setSize (1200, 672);
+        pump();
+        const int programs = proc.getNumPrograms();
+        std::vector<juce::MemoryBlock> states;           // states[i] = program i, saved on the message thread
+        for (int i = 0; i < programs; ++i)
+        {
+            proc.setCurrentProgram (i);
+            states.emplace_back();
+            proc.getStateInformation (states.back());
+        }
+        bool repeatable = true;
+        for (int i = 0; i < programs; ++i)
+        {
+            proc.setStateInformation (states[(size_t) i].getData(), (int) states[(size_t) i].getSize());
+            juce::MemoryBlock again;
+            proc.getStateInformation (again);
+            repeatable = repeatable && again == states[(size_t) i];
+        }
+        expect (programs >= 2 && repeatable, "each starter rack saves the same state after it is loaded back (" + juce::String (programs) + " racks)");
+        const auto stateIndex = [&states] (const juce::MemoryBlock& m)
+        {
+            for (size_t i = 0; i < states.size(); ++i)
+                if (states[i] == m)
+                    return (int) i;
+            return -1;
+        };
+
+        const int rounds = juce::SystemStats::getEnvironmentVariable ("JIDAI_STRESS_ROUNDS", "").getIntValue() > 0
+                               ? juce::SystemStats::getEnvironmentVariable ("JIDAI_STRESS_ROUNDS", "").getIntValue() : 3000;
+        std::atomic<bool> hostDone { false }, stopAudio { false };
+        std::atomic<int> badSaves { 0 }, wrongProgram { 0 }, blocks { 0 }, expected { -1 }, maxBlock { 0 }, oneSample { 0 };
+        std::atomic<bool> finite { true };
+        std::vector<std::pair<juce::MemoryBlock, int>> stagedSaves;     // saved while a program change was staged
+        std::atomic<int> exactSaves { 0 };
+        std::thread audio ([&]
+        {
+            // As some hosts do: any block size from 1 sample to twice prepareToPlay's 256, MIDI in most blocks.
+            const int channels = juce::jmax (2, proc.getTotalNumInputChannels(), proc.getTotalNumOutputChannels());
+            juce::AudioBuffer<float> buffer (channels, 512);
+            juce::MidiBuffer midi;
+            midi.ensureSize (4096);
+            juce::Random r (48000);
+            while (! stopAudio.load())
+            {
+                const int pick = r.nextInt (8);
+                const int n = pick == 0 ? 1 : pick == 1 ? 512 : pick == 2 ? 257 + r.nextInt (256) : 1 + r.nextInt (512);
+                buffer.setSize (channels, n, false, false, true);
+                for (int ch = 0; ch < channels; ++ch)
+                    for (int i = 0; i < n; ++i)
+                        buffer.setSample (ch, i, r.nextFloat() * 0.2f - 0.1f);
+                midi.clear();
+                for (int k = r.nextInt (4); k > 0; --k)
+                    midi.addEvent (juce::MidiMessage::noteOn (1, 36 + r.nextInt (48), (juce::uint8) (1 + r.nextInt (127))), r.nextInt (n));
+                if (r.nextBool())
+                    midi.addEvent (juce::MidiMessage::allNotesOff (1), n - 1);
+                proc.processBlock (buffer, midi);
+                ++blocks;
+                maxBlock = juce::jmax (maxBlock.load(), n);
+                oneSample += n == 1 ? 1 : 0;
+                for (int i = 0; i < n; ++i)
+                    finite = finite && std::isfinite (buffer.getSample (0, i)) && std::isfinite (buffer.getSample (1, i));
+                std::this_thread::yield();
+            }
+        });
+        std::thread host ([&]
+        {
+            juce::Random r (2026);
+            for (int i = 0; i < rounds; ++i)
+            {
+                const int k = r.nextInt (programs);
+                const int what = r.nextInt (10);
+                if (what < 4)
+                {
+                    proc.setCurrentProgram (k);
+                    expected = k;
+                    wrongProgram += proc.getCurrentProgram() == k ? 0 : 1;   // reported at once, applied later
+                }
+                else if (what < 7)
+                {
+                    proc.setStateInformation (states[(size_t) k].getData(), (int) states[(size_t) k].getSize());
+                    expected = k;
+                }
+                else
+                {
+                    juce::MemoryBlock saved;
+                    proc.getStateInformation (saved);
+                    const int e = expected.load();
+                    // Only this thread makes requests, so the save is the requested rack (or, before any request, a
+                    // starter rack). While a program change is staged it is that starter rack's own text (checked
+                    // below by loading it).
+                    const int got = stateIndex (saved);
+                    if (e < 0 ? got >= 0 : got == e)
+                        ++exactSaves;
+                    else if (got < 0 && e >= 0)
+                        stagedSaves.emplace_back (saved, e);
+                    else
+                    {
+                        if (badSaves.load() < 4)
+                        {
+                            out.getChildFile ("bad-save-" + juce::String (badSaves.load()) + "-got" + juce::String (got) + "-want" + juce::String (e) + ".xml")
+                                .replaceWithText (juce::AudioProcessor::getXmlFromBinary (saved.getData(), (int) saved.getSize())->toString());
+                        }
+                        ++badSaves;
+                    }
+                }
+                if (r.nextInt (3) == 0)       // sometimes in bursts, sometimes in step with the message thread's paints
+                    std::this_thread::sleep_for (std::chrono::microseconds (r.nextInt (3000)));
+            }
+            hostDone = true;
+        });
+
+        int mismatches = 0, unfreed = 0, paints = 0, rebuildsSeen = 0;
+        const auto viewMatchesRack = [&]
+        {
+            if (rack.slotCount() != proc.rack().deviceCount())
+                return false;
+            for (int i = 0; i < rack.slotCount(); ++i)
+                if (rack.slotDevice (i) != proc.rack().device (i))
+                    return false;
+            return true;
+        };
+        const auto* firstSeen = proc.rack().deviceCount() > 0 ? proc.rack().device (0) : nullptr;
+        for (int n = 0; ! hostDone.load() || proc.hasPendingState(); ++n)
+        {
+            pump (1);
+            mismatches += viewMatchesRack() ? 0 : 1;
+            unfreed += proc.rack().retiredCount() == 0 ? 0 : 1;
+            if (proc.rack().deviceCount() > 0 && proc.rack().device (0) != firstSeen)
+            {
+                firstSeen = proc.rack().device (0);
+                ++rebuildsSeen;
+            }
+            if (n % 2 == 0)
+            {
+                editor->repaint();
+                (void) editor->createComponentSnapshot (editor->getLocalBounds(), true, 0.5f);     // paints every Mount and face
+                ++paints;
+            }
+        }
+        host.join();
+        pump (20);
+        stopAudio = true;
+        audio.join();
+
+        juce::MemoryBlock final;
+        proc.getStateInformation (final);
+        const int last = expected.load();
+        std::printf ("background host: %d requests, %d message-loop paints, %d rack swaps seen, %d audio blocks (largest %d, %d of 1 sample)\n",
+                     rounds, paints, rebuildsSeen, blocks.load(), maxBlock.load(), oneSample.load());
+        int stagedWrong = 0;
+        for (auto& [saved, e] : stagedSaves)
+        {
+            proc.setStateInformation (saved.getData(), (int) saved.getSize());
+            juce::MemoryBlock loaded;
+            proc.getStateInformation (loaded);
+            if (loaded != states[(size_t) e] && stagedWrong < 4)
+            {
+                out.getChildFile ("staged-save-" + juce::String (stagedWrong) + "-want" + juce::String (e) + ".xml")
+                    .replaceWithText (juce::AudioProcessor::getXmlFromBinary (saved.getData(), (int) saved.getSize())->toString());
+                out.getChildFile ("staged-load-" + juce::String (stagedWrong) + ".xml")
+                    .replaceWithText (juce::AudioProcessor::getXmlFromBinary (loaded.getData(), (int) loaded.getSize())->toString());
+            }
+            stagedWrong += loaded == states[(size_t) e] ? 0 : 1;
+        }
+        proc.setStateInformation (final.getData(), (int) final.getSize());
+        pump();
+        std::printf ("host-thread saves: %d exact, %d during a staged program change\n", exactSaves.load(), (int) stagedSaves.size());
+        expect (badSaves.load() == 0 && stagedWrong == 0 && exactSaves.load() > 0,
+                "a state saved on the host thread is always the requested rack (" + juce::String (badSaves.load() + stagedWrong) + " wrong)");
+        expect (wrongProgram.load() == 0, "getCurrentProgram reports a program change at once");
+        expect (mismatches == 0, "the rack view always shows the rack's own devices (" + juce::String (mismatches) + " mismatches)");
+        expect (unfreed == 0 && proc.rack().retiredCount() == 0, "dropped devices are freed once the view rebuilt");
+        expect (! proc.hasPendingState() && last >= 0 && final == states[(size_t) last], "after the host stops, the rack is the last one it asked for");
+        expect (blocks.load() > 0 && maxBlock.load() == 512 && oneSample.load() > 0 && finite.load(),
+                "the audio thread ran throughout, blocks of 1 to 512 samples (prepared for 256), output finite");
+        snapshot (*editor, out.getChildFile ("window_after_host_thread.png"));
+        expect (viewMatchesRack(), "the window shows the final rack");
     }
 
     editor.reset();
