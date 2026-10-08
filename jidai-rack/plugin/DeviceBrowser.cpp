@@ -8,16 +8,18 @@ namespace {
 
 const juce::Colour kInk { 0xffe8e2cf };
 const juce::Colour kDim { 0x99dcd6c2 };
-constexpr float kTop = 98.0f, kHeaderH = 26.0f, kRowH = 52.0f, kRowGap = 6.0f, kPad = 12.0f;
+constexpr float kTop = 96.0f, kHeaderH = 24.0f, kRowH = 48.0f, kRowGap = 5.0f, kPad = 8.0f;
 
 }
 
 const std::vector<DeviceBrowser::Entry>& DeviceBrowser::catalogue()
 {
     static const std::vector<Entry> entries = {
-        { "SEQUENCER", DeviceKind::Bushido, "3 x 12 step sequencer" },
-        { "VOICE", DeviceKind::Ronin, "modular synth voice" },
-        { "EFFECT", DeviceKind::Ronin, "processes audio at EXT IN" },
+        { "SEQUENCER", DeviceKind::Bushido, "BUSHIDO", "12-step sequencer \xc2\xb7 CV/gate", false },
+        { "VOICE", DeviceKind::Ronin, "RONIN", "semi-modular voice", false },
+        { "EFFECT", DeviceKind::Ronin, "RONIN FX", "RONIN at EXT IN", true },
+        { "EFFECT", DeviceKind::Origami, "ORIGAMI", "triple wave shaper FX", false },
+        { "UTILITY", DeviceKind::RackIO, "RACK I/O", "host audio \xc2\xb7 MIDI \xc2\xb7 clock", false },
     };
     return entries;
 }
@@ -70,6 +72,11 @@ int DeviceBrowser::countOnRack (DeviceKind kind) const
     return n;
 }
 
+bool DeviceBrowser::available (const Entry& e) const
+{
+    return e.kind != DeviceKind::RackIO || countOnRack (DeviceKind::RackIO) == 0;
+}
+
 void DeviceBrowser::layoutRows()
 {
     rows.clear();
@@ -80,7 +87,7 @@ void DeviceBrowser::layoutRows()
     const char* group = nullptr;
     for (auto& e : catalogue())
     {
-        if (needle.isNotEmpty() && ! juce::String (deviceKindName (e.kind)).containsIgnoreCase (needle))
+        if (needle.isNotEmpty() && ! juce::String::fromUTF8 (e.name).containsIgnoreCase (needle))
             continue;
         if (group == nullptr || juce::String (group) != e.group)
         {
@@ -168,10 +175,10 @@ void DeviceBrowser::paint (juce::Graphics& g)
     paintToggle (g, toggleBounds().toFloat(), false, toggleHover);
     g.setColour (kInk);
     g.setFont (juce::FontOptions (17.0f, juce::Font::bold));
-    g.drawText ("JIDAI RACK", 14, 14, getWidth() - 28, 22, juce::Justification::centredLeft);
+    g.drawText ("DEVICES", 14, 14, getWidth() - 28, 22, juce::Justification::centredLeft);
     g.setColour (kDim);
     g.setFont (juce::FontOptions (11.5f));
-    g.drawText ("Device browser", 14, 36, getWidth() - 28, 16, juce::Justification::centredLeft);
+    g.drawText ("drag into the rack", 14, 36, getWidth() - 28, 16, juce::Justification::centredLeft);
 
     for (auto& h : headers)
     {
@@ -197,9 +204,9 @@ void DeviceBrowser::paint (juce::Graphics& g)
         for (int k = 0; k < 3; ++k)
             g.fillRect (r.getX() + 9.0f, r.getY() + 19.0f + 6.0f * (float) k, 10.0f, 2.5f);
 
-        const auto text = r.withTrimmedLeft (28.0f).withTrimmedRight (8.0f);
+        const auto text = r.withTrimmedLeft (28.0f).withTrimmedRight (6.0f);
         const int count = countOnRack (e.kind);
-        const juce::String countText = juce::String (count) + " in rack";
+        const juce::String countText = e.kind == DeviceKind::RackIO ? juce::String (count) + "/1" : juce::String (count);
         const juce::FontOptions countFont (10.5f);
         const float pillW = juce::GlyphArrangement::getStringWidth (juce::Font (countFont), countText) + 12.0f;
         const auto pill = juce::Rectangle<float> (text.getRight() - pillW, r.getY() + 8.0f, pillW, 17.0f);
@@ -209,12 +216,12 @@ void DeviceBrowser::paint (juce::Graphics& g)
         g.setFont (countFont);
         g.drawText (countText, pill, juce::Justification::centred);
 
-        g.setColour (kInk);
-        g.setFont (juce::FontOptions (14.5f, juce::Font::bold));
-        g.drawText (deviceKindName (e.kind), text.withHeight (32.0f).withRight (pill.getX() - 4.0f), juce::Justification::centredLeft);
+        g.setColour (available (e) ? kInk : kInk.withAlpha (0.4f));
+        g.setFont (juce::FontOptions (13.5f, juce::Font::bold));
+        g.drawText (juce::String::fromUTF8 (e.name), text.withHeight (30.0f).withRight (pill.getX() - 4.0f), juce::Justification::centredLeft);
         g.setColour (kDim);
-        g.setFont (juce::FontOptions (11.5f));
-        g.drawText (e.line, text.withTrimmedTop (30.0f).withHeight (16.0f), juce::Justification::centredLeft);
+        g.setFont (juce::FontOptions (10.5f));
+        g.drawFittedText (juce::String::fromUTF8 (e.line), text.withTrimmedTop (27.0f).withHeight (15.0f).toNearestInt(), juce::Justification::centredLeft, 1, 0.8f);
     }
 
     float y = listBottom + 6.0f;
@@ -227,8 +234,8 @@ void DeviceBrowser::paint (juce::Graphics& g)
     }
     g.setColour (dropHover ? juce::Colour (0xffe0675e) : juce::Colour (0x77dcd6c2));
     g.drawFittedText (dropHover ? juce::String ("Drop here to remove it.")
-                                : juce::String ("Drag a row onto the rack to add it there, or click it to add one at the bottom.\n\n"
-                                                "Grab a device by its ear to move it. Drag it back here, or out of the window, to remove it."),
+                                : juce::String ("Drag into the rack \xc2\xb7 Shift = no auto-route. Click a card to add one at the bottom.\n\n"
+                                                "Grab a device by its ear or strip to move it; drag it back here to remove it."),
                       juce::Rectangle<int> (14, (int) y, getWidth() - 28, 140), juce::Justification::topLeft, 10);
 
     if (dropHover)
@@ -294,15 +301,17 @@ void DeviceBrowser::mouseDrag (const juce::MouseEvent& e)
     dragged = true;
     auto image = createComponentSnapshot (rowRects[(size_t) pressed].toNearestInt(), true, 1.0f);
     image.multiplyAllAlphas (0.85f);
-    container->startDragging (juce::String ("add:") + deviceKindName (rows[(size_t) pressed]->kind), this,
+    if (! available (*rows[(size_t) pressed]))
+        return;
+    container->startDragging (juce::String ("add:") + juce::String::fromUTF8 (rows[(size_t) pressed]->name), this,
                               juce::ScaledImage (image), false, nullptr, &e.source);
 }
 
 void DeviceBrowser::mouseUp (const juce::MouseEvent& e)
 {
     // A click (no drag) on a row adds one at the bottom: the way in when a drop misses.
-    if (pressed >= 0 && ! dragged && rowAt (e.position) == pressed && onAdd)
-        onAdd (rows[(size_t) pressed]->kind);
+    if (pressed >= 0 && ! dragged && rowAt (e.position) == pressed && onAdd && available (*rows[(size_t) pressed]))
+        onAdd (*rows[(size_t) pressed], e.mods.isShiftDown());
     pressed = -1;
     dragged = false;
     repaint();

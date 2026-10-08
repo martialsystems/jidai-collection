@@ -16,7 +16,7 @@ No framework, no allocation in the per-sample helpers, no global state.
 | Header | Namespace | What |
 |---|---|---|
 | `jidai/jcs/Detect.h` | `jidai::jcs` | `kGateLow/kGateHigh` (0/5 V, R2), `gateVolts()`, `triggerPulseSamples(sr)` (≥ 1 ms), `Schmitt` (R3: high when V > 1.0, low when V < 0.5; `process()` → `Edge::Rising/Falling/None`), `StrigDetector` (R3s: held when V < 1.0, released when V > 1.5), `strigVoltsFor(sourceHigh)` (R3s cable conversion), `kStrigRest` (+5 V) |
-| `jidai/jcs/Volts.h` | `jidai::jcs` | `kNominal` 5 V, `hostToVolts(x)=5x`, `voltsToHost(v)=0.2v` (R1), `clampRail(v, over)` (±5 V hard rail, R4.4), `OverRangeLed` (R15: \|V\| > 5.5 V for > 10 ms), `PitchRailFlag` (latched until `noteOn()`), **R16 hook only**: `AudioLevel`, `kR16Enabled=false`, `r16BoundaryGain()` ≡ 1 |
+| `jidai/jcs/Volts.h` | `jidai::jcs` | `kNominal` 5 V, `hostToVolts(x)=5x`, `voltsToHost(v)=0.2v` (R1), `clampRail(v, over)` (±5 V hard rail, R4.4), `OverRangeLed` (R15: \|V\| > 5.5 V for > 10 ms), `PitchRailFlag` (latched until `noteOn()`), **R16 hook only**: `AudioLevel{Jidai5V, ModularHalfLevel}`, `kR16Enabled=false`, `r16BoundaryGain()` ≡ 1 |
 | `jidai/jcs/Pitch.h` | `jidai::jcs::pitch` | R4: `Law{VOct=0, HzvLin=1}`, `kC3Hz=130.8128`, `kRefNote=48`, `note()`, `voltsForNote()`, `hz()`, `hzToVolts()`, `midiNote()` (from target volts, 0..127 or −1), `quantize()`, `noteName()`, `voiceHz(V, cents, a4, oct)` (receiver tuning; never the volt law), `roninHzvLinHz()` (0.05 V floor), `lin55ToVoct()` (exact migration from the retired 55 Hz law), `clampPitch()`. Same names and semantics as BUSHIDO's `rack/PitchLaw.h`, which can become `namespace rack::pitch { using namespace jidai::jcs::pitch; }` |
 | `jidai/jcs/Roles.h` | `jidai::jcs` | R14: `Role{STrig, Audio, VOct, GateClk, HzvLin, CV}`, `roleInfo()` → name, `#rrggbb`, UTF-8 glyph, luminance; `roleArgb()`; `roleFromName()`; `cableBadge(src, dst)` → `PitchLaw` (≠, R4.3), `AudioIntoClock`, `GateToStrig`; `badgeText()` |
 | `jidai/jcs/JackId.h` | `jidai::jcs` | R6: `parseJackId()` → `JackId{prefix, number, section, label, form}` for `PREFIX#N/SECTION:LABEL`, `PREFIX/SECTION:LABEL`, `SECTION:LABEL`; `formatJackId()`; `isKnownPrefix()` (BUSHIDO, RONIN, SHOGUN, ORIGAMI, RACK); `isValidLocalId()`; `AliasTable` (old → canonical, never reuses an id) |
@@ -28,7 +28,8 @@ No framework, no allocation in the per-sample helpers, no global state.
 ## Deliberate choices
 
 - **Jack labels may contain `/` and non-ASCII.** R6 says "no `/`", but canonical ids in the same standard (`VCO:HZ/V`, `INPUTS:START/STOP`, RONIN `EG 2:OUT −`) need it. The parser splits at the first `/` before the first `:`; sections never contain `/`.
-- **No legacy model-name prefix aliases.** The optional old-prefix aliases of R6 would put third-party model names in the code; there are no sessions to protect, so they are left out. Per-device `AliasTable`s cover future renames.
+- **No retired-prefix aliases (R6).** Only the neutral prefixes are known; a stored cable with any other prefix is kept as stored and shows as missing. Per-device `AliasTable`s cover future jack renames.
+- **Neutral names only.** No third-party brand or model names appear in code or identifiers (the R16 level is `ModularHalfLevel`).
 - **R16 is a hook, not a feature.** It stays identity until the user decides.
 
 - **2× on external audio costs 46 samples, not 23.** SHOGUN generates at 2× and only decimates (23). An effect such as ORIGAMI has to upsample *and* decimate, so its true latency is 46 base samples, and that is what it reports. (A 47-tap pair would reach 23 total, at only 63.6 dB stopband.)

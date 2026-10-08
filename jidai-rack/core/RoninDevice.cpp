@@ -119,6 +119,11 @@ RoninDevice::RoninDevice()
 
 RoninDevice::~RoninDevice() = default;
 
+std::vector<const Unit*> RoninDevice::latencyUnits() const
+{
+    return { moduleUnits_[1].get() };
+}
+
 std::vector<OrderEdge> RoninDevice::orderEdges() const
 {
     return { { hostIn_.get(), moduleUnits_[0].get() },        // HOST IN before EXT IN

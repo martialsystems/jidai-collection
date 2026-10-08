@@ -67,6 +67,9 @@ public:
     virtual void beginBlock() {}
     // Processing latency in samples on this device's audio outputs (JCS R11 L_d). Any thread.
     virtual int latencySamples() const { return 0; }
+    // The units whose outputs carry that latency. Empty (the default): every unit with an audio output, which suits
+    // single-unit devices. A multi-unit device names its output stage, so the latency counts once on a path.
+    virtual std::vector<const Unit*> latencyUnits() const { return {}; }
     // Host transport for this block (audio thread, before beginBlock).
     virtual void setTransport (const Transport&) {}
     // "Run A before B" inside the device. Never feedback; for path latency they count as internal audio paths.

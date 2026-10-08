@@ -381,6 +381,31 @@ void testX5()
     for (size_t i = 0; i < rack.cables().size(); ++i)
         if (rack.cables()[i].a == "RACK#1/HOST:IN L" && rack.cables()[i].b == "RONIN#1/MIX:IN 1") skew = rack.cableInfo()[i].skew;
     check (skew == 23, "R11.6: the early input to RONIN's mixer shows a 23-sample skew badge");
+
+    // RONIN HQ hook: the latency RONIN reports (23 with the shared halfband downsampler) enters the per-path rule.
+    {
+        Rack hq;
+        hq.prepare (48000.0, 512);
+        hq.addDevice (DeviceKind::RackIO);
+        auto* r1 = static_cast<RoninDevice*> (hq.addDevice (DeviceKind::Ronin));
+        auto* r2 = static_cast<RoninDevice*> (hq.addDevice (DeviceKind::Ronin));
+        hq.connect (std::string ("RONIN#1/") + RoninDevice::kHostOutL, "RACK#1/MAIN:OUT L");
+        hq.connect (std::string ("RONIN#2/") + RoninDevice::kHostOutL, "RACK#1/MAIN:OUT R");
+        hq.updateLatency();
+        check (hq.latency() == 0, "RONIN at 1x reports no latency");
+        r1->setReportedLatency (RoninDevice::kHqLatency);
+        hq.updateLatency();
+        int c1 = -1, c2 = -1;
+        for (size_t i = 0; i < hq.cables().size(); ++i)
+        {
+            if (hq.cables()[i].a.rfind ("RONIN#1/", 0) == 0) c1 = hq.cableInfo()[i].comp;
+            if (hq.cables()[i].a.rfind ("RONIN#2/", 0) == 0) c2 = hq.cableInfo()[i].comp;
+        }
+        std::printf ("INFO RONIN HQ hook: kHqLatency %d, rack latency %d, comp RONIN 1 %d, RONIN 2 %d\n", RoninDevice::kHqLatency, hq.latency(), c1, c2);
+        check (RoninDevice::kHqLatency == 23 && hq.latency() == 23, "RONIN HQ: 23 reported samples set the rack latency");
+        check (c1 == 0 && c2 == 23, "RONIN HQ: the other RONIN's MAIN OUT cable gets +23 comp");
+        (void) r2;
+    }
 }
 
 // ------------------------------------------------------------------------------------------------------------------

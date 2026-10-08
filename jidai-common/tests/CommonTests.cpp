@@ -149,7 +149,7 @@ void testVolts()
     check (! p.latched, "noteOn clears the latch");
 
     check (! kR16Enabled, "R16 is not enabled (pending user decision)");
-    check (r16BoundaryGain (AudioLevel::Level2V5, true, true) == 1.0f && r16BoundaryGain (AudioLevel::Level2V5, true, false) == 1.0f
+    check (r16BoundaryGain (AudioLevel::ModularHalfLevel, true, true) == 1.0f && r16BoundaryGain (AudioLevel::ModularHalfLevel, true, false) == 1.0f
                && r16BoundaryGain (AudioLevel::Jidai5V, true, true) == 1.0f, "R16 hook is identity for every level");
 }
 
@@ -272,7 +272,7 @@ void testJackIds()
     check (! parseJackId ("RONIN#1/VCO:SAW#2"), "'#' in a label rejected");
     check (! parseJackId ("RONIN#1/VCO:A:B"), "second ':' rejected");
     check (! parseJackId ("RONIN#1/ VCO:SAW"), "leading space rejected");
-    check (isKnownPrefix ("ORIGAMI") && isKnownPrefix ("RACK") && ! isKnownPrefix ("ROLAND"), "known neutral prefixes");
+    check (isKnownPrefix ("ORIGAMI") && isKnownPrefix ("RACK") && ! isKnownPrefix ("OTHERDEV"), "known neutral prefixes");
     check (formatJackId ("ORIGAMI", 1, "HOST", "IN L") == "ORIGAMI#1/HOST:IN L", "formatJackId");
     check (isValidLocalId ("INPUTS:START/STOP") && ! isValidLocalId ("IN/PUTS:START"), "slash allowed in label, not in section");
 

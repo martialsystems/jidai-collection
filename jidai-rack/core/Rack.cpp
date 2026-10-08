@@ -613,6 +613,13 @@ void Rack::rebuild()
         const int lat = deviceLatency_[(size_t) unitDevice[(size_t) u]];
         if (lat <= 0)
             continue;
+        const auto named = devices_[(size_t) unitDevice[(size_t) u]]->latencyUnits();
+        if (! named.empty())
+        {
+            if (std::find (named.begin(), named.end(), units[(size_t) u]) != named.end())
+                L[(size_t) u] = lat;
+            continue;
+        }
         for (int p = 0; p < units[(size_t) u]->numPorts(); ++p)
         {
             const PortDesc pd = units[(size_t) u]->port (p);

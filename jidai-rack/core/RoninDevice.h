@@ -8,6 +8,8 @@
 
 #include "Device.h"
 
+#include "jidai/dsp/Halfband.h"
+
 #include "Modular/Divider.h"
 #include "Modular/Eg1.h"
 #include "Modular/Eg2.h"
@@ -46,6 +48,15 @@ public:
     void prepare (double sampleRate) override;
     void beginBlock() override;
     std::vector<OrderEdge> orderEdges() const override;
+
+    // Latency on RONIN's audio outputs (JCS R11 L_d), taken from RONIN itself. The pinned RONIN runs at 1x and
+    // reports 0. RONIN's HQ mode uses the shared halfband (jidai::dsp::Halfband93, the 2x -> 1x downsampler only),
+    // which costs kHqLatency = 23 samples: when RONIN reports it, pass it to setReportedLatency() (message thread,
+    // then Rack::updateLatency()) and the rack's per-path rule compensates it like any other device latency.
+    static constexpr int kHqLatency = jidai::dsp::Halfband93::kLatencyPerDirection;
+    int latencySamples() const override { return reportedLatency_.load(); }
+    void setReportedLatency (int samples) { reportedLatency_.store (samples < 0 ? 0 : samples); }
+    std::vector<const Unit*> latencyUnits() const override;     // the OUTPUT stage (then HOST OUT through the order edge)
 
     // Back-only HOST jacks (JIDAI_RACK_Redesign 3.4: the implicit host routing made explicit):
     // HOST:IN L/R (audio in) feed EXT IN's host input; HOST:OUT L/R (audio out) carry what OUTPUT sends to the host.
@@ -111,6 +122,7 @@ private:
     std::array<std::atomic<float>, kPanelKnobCount> knobs_ {};
     std::array<float, kPanelKnobCount> applied_ {};
     std::atomic<bool> effectOn_ { true };
+    std::atomic<int> reportedLatency_ { 0 };
     std::atomic<bool> forceApply_ { true };
     std::atomic<int> program_ { kDefaultFactoryPreset };
     std::atomic<int> meterModule_ { -1 }, meterPort_ { -1 };

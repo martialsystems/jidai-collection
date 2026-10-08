@@ -15,9 +15,9 @@ FetchContent_Declare(JUCE
 # SOURCE_SUBDIR points at a folder with no CMakeLists.txt: fetch the sources, do not add their own projects.
 FetchContent_Declare(bushido
   GIT_REPOSITORY https://github.com/martialsystems/bushido.git
-  # Bushido branch cleanup/neutral-names: neutral names (engine/BushidoModule, assets/bushido_*) and INIT-only patterns.
+  # Bushido branch redesign/bushido (PR #4): JCS v1.1 engine, rack/PitchLaw.h over the vendored jidai-common, no retired-prefix aliases.
   # This commit resolves only once that branch is pushed. If it lands by squash or rebase, re-pin to the merged commit.
-  GIT_TAG fce55b3abc9174944f5c8fab027a892dca8d4dad
+  GIT_TAG 7eea43f1cddc0ac79ad5ca796d8c2403ac06c735
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_Declare(ronin
   GIT_REPOSITORY https://github.com/martialsystems/Ronin.git
@@ -90,6 +90,11 @@ set(JIDAI_UI_SOURCES
   plugin/DeviceBrowser.cpp
   plugin/RackView.cpp
   plugin/RoninPanel.cpp
+  plugin/RackCableLayer.cpp
+  plugin/RearPanel.cpp
+  plugin/CompactFace.cpp
+  ${ORIGAMI_UI_SOURCES}
+  ${BUSHIDO_DIR}/ui/BushidoTabs.cpp
   ${BUSHIDO_DIR}/rack/CableModel.cpp
   ${BUSHIDO_DIR}/ui/Layout.cpp
   ${BUSHIDO_DIR}/ui/RackPanel.cpp
