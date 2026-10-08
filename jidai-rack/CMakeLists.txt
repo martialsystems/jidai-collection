@@ -18,9 +18,10 @@ FetchContent_Declare(bushido
   GIT_REPOSITORY https://github.com/martialsystems/bushido.git
   # Bushido branch redesign/bushido (PR #4): JCS v1.1 engine, rack/PitchLaw.h over the vendored jidai-common, no retired-prefix aliases.
   # 46a705a: factory bank (22 patterns), README as a product page, rule citations dropped from tab text; on top of b9e33b5.
-  # (The branch was author-rewritten; 46a705a has the same tree as the commit pinned before.)
+  # e8b473b (frozen): jidai-common 1.1.2 vendored, pattern notes, MIDI tab wording, explicit float-to-double casts
+  # (output bit-identical).
   # Pushed to origin on that branch. If it lands by squash or rebase, re-pin to the merged commit.
-  GIT_TAG 46a705a4e232810f8a2bbd11e7bec08daf5ea55d
+  GIT_TAG e8b473bc7ad5806c843b5bae8e82e8b156348059
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_Declare(ronin
   GIT_REPOSITORY https://github.com/martialsystems/Ronin.git
