@@ -417,8 +417,9 @@ void testX6()
     std::mt19937 rng (1);
     std::normal_distribution<float> noise (0.0f, 0.05f);
     std::vector<float> sig (48000);
+    constexpr double pi = 3.14159265358979323846;   // M_PI is not standard C++ (MSVC needs _USE_MATH_DEFINES)
     for (int i = 0; i < 48000; ++i)
-        sig[(size_t) i] = std::clamp (2.5f * (float) std::sin (2.0 * M_PI * 2.0 * i / 48000.0) + 0.8f, -5.0f, 5.0f) + noise (rng);
+        sig[(size_t) i] = std::clamp (2.5f * (float) std::sin (2.0 * pi * 2.0 * i / 48000.0) + 0.8f, -5.0f, 5.0f) + noise (rng);
 
     for (int legacy = 0; legacy < 2; ++legacy)
     {
