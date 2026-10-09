@@ -12,12 +12,13 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
-class RearPanel : public juce::Component
+class RearPanel : public juce::Component, public juce::TooltipClient
 {
 public:
     RearPanel (jidai::Device& device, float designHeight, std::function<int()> pathLatency);
 
     void paint (juce::Graphics&) override;
+    juce::String getTooltip() override;      // the sticker's description line and the LAT plate note, enlarged
     float scale() const { return (float) getWidth() / 1600.0f; }
 
     // Jack centre in local pixels (every jack of the device is on the plate) and its socket radius.
@@ -38,6 +39,7 @@ private:
     std::vector<Box> boxes;
     std::vector<juce::Point<float>> centres;      // design units, by jack index
     juce::Rectangle<float> sticker, legend, latPlate;
+    juce::String stickerLine() const;
     float socketR = 11.0f, labelSize = 10.5f;
     bool compact = false;
 };

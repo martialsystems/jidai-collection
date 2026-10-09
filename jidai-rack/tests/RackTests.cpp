@@ -5,6 +5,7 @@
 // issues X2, X5 and X6 are reproduced against the v2 rules and shown fixed (tests/JcsRackTests.cpp).
 
 #include "core/Rack.h"
+#include "plugin/ListControl.h"
 
 #include <cmath>
 #include <cstdio>
@@ -535,6 +536,21 @@ void testImpulseAlignment()
     }
 }
 
+// The list-control rule for the rack's own controls (plugin/ListControl.h): click next, Shift-click previous, both
+// wrap; right-click menu ids map to the list.
+static void testListControl()
+{
+    using namespace jidai_ui;
+    check (stepListIndex (0, 5, false) == 1 && stepListIndex (4, 5, false) == 0 && stepListIndex (0, 5, true) == 4 && stepListIndex (3, 5, true) == 2,
+           "list step: click forward, Shift-click back, wrapping both ways");
+    check (stepListIndex (7, 5, false) == 0 && stepListIndex (-2, 5, true) == 4 && stepListIndex (0, 0, true) == 0, "list step: out-of-range input clamped");
+    check (nextScaleStep (100, false) == 125 && nextScaleStep (200, false) == 75 && nextScaleStep (100, true) == 75 && nextScaleStep (75, true) == 200,
+           "UI SCALE: click steps up, Shift-click steps down, both wrap");
+    check (nextScaleStep (110, false) == 125 && nextScaleStep (110, true) == 100, "UI SCALE between steps goes to the neighbouring step");
+    check (scaleFromMenuResult (0) == 0 && scaleFromMenuResult (1) == 75 && scaleFromMenuResult (5) == 200 && scaleFromMenuResult (6) == 0,
+           "UI SCALE menu: id 1..5 = 75..200 %, dismissed or out of range = no change");
+}
+
 void runJcsRackTests (int& checks, int& failures);
 void runShogunRackTests (int& checks, int& failures);
 
@@ -551,6 +567,7 @@ int main()
     testOrigamiDevice();
     testOrigamiSidechain();
     testImpulseAlignment();
+    testListControl();
     runJcsRackTests (checks, failures);
     runShogunRackTests (checks, failures);
     std::printf ("%d checks, %d failed\n", checks, failures);

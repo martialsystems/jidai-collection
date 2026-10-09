@@ -1234,10 +1234,19 @@ void RackView::paint (juce::Graphics& g)
     g.setGradientFill (juce::ColourGradient (juce::Colour (0x8c000000), 0, shadow.getY(), juce::Colour (0x00000000), 0, shadow.getBottom(), false));
     g.fillRect (shadow);
     g.setColour (juce::Colour (0x66dcd6c2));
-    g.setFont (font (juce::jmax (11.0f, 17.0f * s)));
-    g.drawText (u8 (slots.size() <= 1 ? "Drag a device in from the browser \xc2\xb7 empty rack space"
-                                      : "drop a device here \xc2\xb7 empty rack space"),
-                interior.withHeight (juce::jmin (interior.getHeight(), kUnit * s)), juce::Justification::centred);
+    g.setFont (font (juce::jmax (kHelpTextPx, 17.0f * s)));
+    g.drawText (emptyHint(), interior.withHeight (juce::jmin (interior.getHeight(), kUnit * s)), juce::Justification::centred);
+}
+
+juce::String RackView::emptyHint() const
+{
+    return u8 (slots.size() <= 1 ? "Drag a device in from the browser \xc2\xb7 empty rack space" : "drop a device here \xc2\xb7 empty rack space");
+}
+
+juce::String RackView::getTooltip()
+{
+    const float s = scale();
+    return getMouseXYRelative().toFloat().y > devicesHeight() * s ? emptyHint() : juce::String();
 }
 
 void RackView::paintOverChildren (juce::Graphics& g)

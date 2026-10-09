@@ -6,6 +6,8 @@
 //   JidaiRackProbe <out-dir>      (registered with ctest as rack_ui)
 
 #include "plugin/JidaiEditor.h"
+#include "plugin/RackLookAndFeel.h"
+#include "plugin/RackStyle.h"
 #include "plugin/RackCableLayer.h"
 #include "plugin/StarterRacks.h"
 #include "plugin/RearPanel.h"
@@ -13,6 +15,7 @@
 #include "plugin/ShogunState.h"
 #include "origami/plugin/OrigamiPanel.h"
 #include "origami/plugin/OrigamiPresets.h"
+#include "origami/plugin/OrigamiUiLogic.h"
 #include "core/OrigamiDevice.h"
 #include "core/FloatCompare.h"
 
@@ -326,6 +329,58 @@ int main (int argc, char** argv)
             for (int p = 0; p < origami::kParamCount; ++p) od->setParam (p, saved[p]);
             od->setProgram (savedProgram);
             pump (5);
+
+            // ORIGAMI's STAGES tab in the rack: each graph sets its STAGE amount, STAGE n has a knob there too, and
+            // the VC sources are list controls (click next, Shift-click previous, right-click the whole list).
+            clickAt (rack, rack.tabBounds (iO, 1).getCentre());
+            pump (5);
+            auto* st = dynamic_cast<OrigamiPanel*> (rack.faceComponent (iO));
+            expect (st != nullptr && st->page() == origami::Page::Stages, "the rack's STAGES tab shows ORIGAMI's STAGES page");
+            if (st != nullptr)
+            {
+                const float k = juce::jmin ((float) st->getWidth() / OrigamiPanel::kFaceW, (float) st->getHeight() / OrigamiPanel::kFaceH);
+                bool knobs = true;
+                for (int i = 0; i < 3; ++i)
+                    knobs = knobs && st->controlCentre (origami::ui::stageAmountParam (i)).x >= 0.0f && st->stageGraphCentre (i).x >= 0.0f;
+                expect (knobs, "in the rack, every STAGES box has its STAGE knob and an editable graph");
+                const double s1 = od->param (origami::kStage1);
+                const auto g1 = st->stageGraphCentre (0);
+                drag (*st, g1, g1 - juce::Point<float> (0.0f, 40.0f * k));
+                expect (std::abs (od->param (origami::kStage1) - juce::jmin (1.0, s1 + 0.4)) < 1e-3,
+                        "in the rack, dragging graph 1 up 40 design px raises STAGE 1 by 0.4 (got " + juce::String (od->param (origami::kStage1), 3) + ")");
+                st->mouseDoubleClick (mouse (*st, g1, g1, false));
+                expect (jidai::exactlyEqual (od->param (origami::kStage1), 0.0), "in the rack, double-click on graph 1 resets STAGE 1");
+                const auto src = st->controlCentre (origami::kVc1Src);
+                const double v0 = od->param (origami::kVc1Src);
+                click (*st, src);
+                const double v1 = od->param (origami::kVc1Src);
+                const juce::ModifierKeys shift (juce::ModifierKeys::leftButtonModifier | juce::ModifierKeys::shiftModifier);
+                st->mouseDown (mouse (*st, src, src, false, shift));
+                st->mouseUp (mouse (*st, src, src, false, shift));
+                pump (5);
+                expect (jidai::exactlyEqual (v1, std::fmod (v0 + 1.0, 4.0)) && jidai::exactlyEqual (od->param (origami::kVc1Src), v0), "in the rack, VC 1 SOURCE: click steps forward, Shift-click steps back");
+                int menus = 0;
+                std::function<void (int)> answer;
+                st->showMenu = [&menus, &answer] (const juce::PopupMenu&, const juce::PopupMenu::Options&, std::function<void (int)> done) { ++menus; answer = std::move (done); };
+                click (*st, src, true);
+                expect (jidai::exactlyEqual (od->param (origami::kVc1Src), v0) && menus == 1, "in the rack, right-click on VC 1 SOURCE opens the whole list and does not step");
+                if (answer != nullptr) answer (4);
+                expect (jidai::exactlyEqual (od->param (origami::kVc1Src), 3.0), "in the rack, picking SIDECHAIN from that list sets VC 1 SOURCE");
+                od->setParam (origami::kVc1Src, v0);
+                st->showMenu = nullptr;
+                pump (5);
+
+                // A picture of the tab with some fold on: WAVE half way, each stage trimmed differently.
+                od->setParam (origami::kWave, 0.5); od->setParam (origami::kStage1, 0.3); od->setParam (origami::kStage2, -0.2);
+                od->setParam (origami::kStage3, 0.15); od->setParam (origami::kSym2, 0.35); od->setParam (origami::kVc2Src, 2.0);
+                pump (5);
+                st->repaint();
+                snapshot (rack, out.getChildFile ("origami_stages_in_rack.png"), rack.slotBounds (iO));
+                for (int p = 0; p < origami::kParamCount; ++p) od->setParam (p, saved[p]);
+                od->setProgram (savedProgram);
+            }
+            clickAt (rack, rack.tabBounds (iO, 0).getCentre());
+            pump (5);
         }
     }
     snapshot (rack, out.getChildFile ("origami_open_in_rack.png"), rack.slotBounds (iO));
@@ -437,6 +492,65 @@ int main (int argc, char** argv)
         pump();
         expect (proc.cableModeFront == JidaiProcessor::CablesAll && proc.rack().findDevice ("ORIGAMI#1")->closed, "view state and CLOSED are saved with the rack");
         rack.setCableMode (JidaiProcessor::CablesHidePassThru);
+    }
+
+    // Header UI SCALE pill, a list control: click = next step, Shift-click = previous, right-click = the whole list.
+    {
+        const auto size = editor->getBounds();
+        const int start = proc.scalePercent;
+        auto& h = editor->header();
+        // The pill moves when the window resizes, so find it again before every click.
+        const auto pillAt = [&] { return h.getLocalPoint (editor.get(), editor->headerButtonBounds (JidaiEditor::BtnScale).getCentre()).toFloat(); };
+        click (h, pillAt());
+        pump (5);
+        const int stepped = proc.scalePercent;
+        const juce::ModifierKeys shift (juce::ModifierKeys::leftButtonModifier | juce::ModifierKeys::shiftModifier);
+        const auto at = pillAt();
+        h.mouseDown (mouse (h, at, at, false, shift));
+        h.mouseUp (mouse (h, at, at, false, shift));
+        pump (5);
+        expect (start == 100 && stepped == 125 && proc.scalePercent == 100, "UI SCALE: click 100 -> 125 %, Shift-click back to 100 % (got "
+                                                                               + juce::String (start) + ", " + juce::String (stepped) + ", " + juce::String (proc.scalePercent) + ")");
+        int menus = 0;
+        std::function<void (int)> answer;
+        editor->showMenu = [&menus, &answer] (const juce::PopupMenu&, const juce::PopupMenu::Options&, std::function<void (int)> done) { ++menus; answer = std::move (done); };
+        click (h, pillAt(), true);
+        pump (5);
+        expect (proc.scalePercent == 100 && menus == 1, "UI SCALE: right-click opens the list of scales and changes nothing");
+        juce::StringArray items;
+        int ticked = 0;
+        const auto menu = editor->scaleMenu();
+        for (juce::PopupMenu::MenuItemIterator it (menu); it.next();)
+        {
+            items.add (it.getItem().text);
+            if (it.getItem().isTicked) ticked = it.getItem().itemID;
+        }
+        expect (items == juce::StringArray ({ "75 %", "100 %", "125 %", "150 %", "200 %" }) && ticked == 2, "UI SCALE menu: 75 % .. 200 %, the current one (100 %) ticked");
+        if (answer != nullptr) answer (4);
+        pump (5);
+        expect (proc.scalePercent == 150, "UI SCALE menu: picking 150 % sets it");
+        if (answer != nullptr) answer (0);
+        pump (5);
+        expect (proc.scalePercent == 150, "UI SCALE menu: a dismissed menu changes nothing");
+        editor->setScalePercent (100);
+        editor->showMenu = nullptr;
+
+        // Menus and lists in a plain sans font; help text never below 12 px (about 9 pt) and shown enlarged on hover.
+        auto* laf = dynamic_cast<RackLookAndFeel*> (&editor->getLookAndFeel());
+        expect (laf != nullptr && laf->getPopupMenuFont().getTypefaceName() == juce::Font::getDefaultSansSerifFontName()
+                    && laf->getPopupMenuFont().getHeight() >= 14.0f && &rack.getLookAndFeel() == laf,
+                "the rack window and every face in it use the rack look: sans menus at >= 14 px");
+        expect (rackstyle::kHelpTextPx >= 12.0f && RackLookAndFeel::kTooltipTextHeight >= 1.5f * rackstyle::kHelpTextPx, "help text >= 12 px, tooltips show it at >= 1.5x");
+        auto& br = editor->browser();
+        if (! br.isClosed() && br.rowCount() > 0)
+        {
+            const auto rb = br.rowBounds (0).toFloat();
+            expect (br.helpTextAt ({ rb.getCentreX(), rb.getY() + 34.0f }).contains (juce::String::fromUTF8 (br.row (0).line)), "hovering a browser card's note shows it");
+            expect (br.helpTextAt ({ 40.0f, 44.0f }).isNotEmpty(), "hovering the browser's subtitle shows the help");
+        }
+        expect (rack.emptyHint().isNotEmpty(), "the empty rack space has a hint");
+        editor->setBounds (size);
+        pump (5);
     }
 
     // Remove a device with the strip's x; move one with a drop.

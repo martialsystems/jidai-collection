@@ -14,7 +14,8 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 class DeviceBrowser : public juce::Component,
-                      public juce::DragAndDropTarget
+                      public juce::DragAndDropTarget,
+                      public juce::TooltipClient
 {
 public:
     struct Entry {
@@ -53,6 +54,8 @@ public:
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override;
+    juce::String getTooltip() override;      // the help lines and card notes, enlarged
+    juce::String helpTextAt (juce::Point<float>) const;
 
     bool isInterestedInDragSource (const SourceDetails&) override;
     void itemDragEnter (const SourceDetails&) override;
@@ -70,6 +73,7 @@ private:
     std::vector<juce::Rectangle<float>> rowRects;
     std::vector<Header> headers;
     float listBottom = 0.0f;
+    juce::Rectangle<float> helpRect;
     int hover = -1, pressed = -1;
     bool dragged = false, dropHover = false, closed = false, toggleHover = false;
 
