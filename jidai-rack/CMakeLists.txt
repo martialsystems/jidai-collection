@@ -21,7 +21,8 @@ FetchContent_Declare(bushido
   # e8b473b (frozen): jidai-common 1.1.2 vendored, pattern notes, MIDI tab wording, explicit float-to-double casts
   # (output bit-identical).
   # Pushed to origin on that branch. If it lands by squash or rebase, re-pin to the merged commit.
-  GIT_TAG e8b473bc7ad5806c843b5bae8e82e8b156348059
+  # Now pinned to bushido main (repaint/bushido PR #6 and bug-intake PR #5 merged).
+  GIT_TAG d774652975441963afcae359a13ea17529daa35a
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_Declare(ronin
   GIT_REPOSITORY https://github.com/martialsystems/Ronin.git
@@ -36,7 +37,8 @@ FetchContent_Declare(ronin
   # RONIN vendors jidai-common (third_party/jidai-common); the rack compiles RONIN's sources against the rack's own,
   # newer jidai-common (one copy of each header in the binary), which keeps the API RONIN uses.
   # Pushed to origin on that branch. If it lands by squash or rebase, re-pin to the merged commit.
-  GIT_TAG e2f1086de2b9d5361f2b238e0b9192951d85b4fa
+  # Now pinned to Ronin main (midi/ronin PR #8 and bug-intake PR #7 merged).
+  GIT_TAG 13bc5116cafb01f13bf4bae0021d32d732c00903
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_Declare(shogun
   GIT_REPOSITORY https://github.com/martialsystems/shogun.git
@@ -55,7 +57,8 @@ FetchContent_Declare(shogun
   # its own jidai-common (single include path; SHOGUN's vendored copy is not used) and reads plugin/Source/PanelLayout.inc
   # for the MAIN face. SHOGUN's alias shim (shogun::resolvePort) stays SHOGUN-local.
   # Pushed to origin on that branch. If it lands by squash or rebase, re-pin to the merged commit.
-  GIT_TAG 720a0ae311003e6c28ccd76aa901045be3b175f8
+  # Now pinned to shogun main (perf-midi/shogun PR #7 and bug-intake PR #6 merged).
+  GIT_TAG 94bff3708d635d41307feb70f2cb9998257533bd
   SOURCE_SUBDIR jidai-rack-sources-only)
 FetchContent_MakeAvailable(JUCE bushido ronin shogun)
 set(SHOGUN_DIR ${shogun_SOURCE_DIR})
@@ -83,7 +86,8 @@ FetchContent_Declare(origami
   # -Wfloat-equal off). 8dee549 (origami PR #1, branch stages-edit-rightclick-lists): STAGE n knobs and draggable
   # graphs on STAGES, list controls (Shift-click back, right-click whole list), sans menus, help text >= 9 with hover.
   # If it lands elsewhere by squash or rebase, re-pin.
-  GIT_TAG 8dee5497f01fa178ee314ee3d7747d2a15fe06c2)
+  # Now pinned to origami main (PR #1 merged).
+  GIT_TAG d2e8015deab672d986c6a850afd1214c0d3b2a25)
 FetchContent_MakeAvailable(origami)
 if(NOT TARGET origami::dsp OR NOT ORIGAMI_UI_SOURCES OR NOT ORIGAMI_PRESET_SOURCES OR NOT TARGET origami::factory_data)
   message(FATAL_ERROR "ORIGAMI did not provide origami::dsp, ORIGAMI_UI_SOURCES, ORIGAMI_PRESET_SOURCES and origami::factory_data")
