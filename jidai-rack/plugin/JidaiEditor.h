@@ -11,6 +11,7 @@
 // Under the header, the cable bar (CableBar): the cable colour palette and the cable gestures in plain words.
 
 #include "JidaiProcessor.h"
+#include "RackLookAndFeel.h"
 #include "DeviceBrowser.h"
 #include "RackView.h"
 #include "CableBar.h"
@@ -47,6 +48,11 @@ public:
     juce::Rectangle<int> headerButtonBounds (int button) const;      // in the editor
     // RACKS: the starter racks, INIT first, then one submenu per category. Item id = program index + 1.
     juce::PopupMenu starterRackMenu() const;
+    // The UI scale pill is a list control: click = next step, Shift-click = previous, right-click = this menu
+    // (75 % .. 200 %, the current one ticked; item id = step index + 1).
+    juce::PopupMenu scaleMenu() const;
+    // How the scale menu is shown: empty = juce::PopupMenu::showMenuAsync. The probe sets it to capture and answer it.
+    std::function<void (const juce::PopupMenu&, const juce::PopupMenu::Options&, std::function<void (int)>)> showMenu;
 
 protected:
     void dragOperationStarted (const juce::DragAndDropTarget::SourceDetails&) override;
@@ -60,6 +66,7 @@ private:
     void removeLater (const juce::String& description);
 
     JidaiProcessor& proc;
+    RackLookAndFeel laf;                     // sans menus, enlarged tooltips; outlives every child
     std::unique_ptr<DeviceBrowser> list;
     std::unique_ptr<Header> head;
     std::unique_ptr<CableBar> bar;
@@ -67,6 +74,7 @@ private:
     RackView rack;
     bool dropLanded = false;
     int lastLatency = -1;
+    juce::TooltipWindow tips { this, 500 };  // hover 0.5 s
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JidaiEditor)
 };

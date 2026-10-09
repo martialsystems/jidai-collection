@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Martial Systems LLC. All rights reserved.
 
 #include "JidaiEditor.h"
+#include "ListControl.h"
 #include "RackCableLayer.h"
 #include "RackStyle.h"
 #include "StarterRacks.h"
@@ -8,13 +9,10 @@
 using namespace jidai;
 using namespace rackstyle;
 
-namespace {
-const int kScaleSteps[] = { 75, 100, 125, 150, 200 };
-}
 
 // ---------------- header ----------------
 
-class JidaiEditor::Header : public juce::Component
+class JidaiEditor::Header : public juce::Component, public juce::TooltipClient
 {
 public:
     explicit Header (JidaiEditor& e) : ed (e) {}
@@ -71,20 +69,20 @@ public:
         auto hint = [&] (const juce::String& t, float x, float w)
         {
             g.setColour (kDim);
-            g.setFont (font (10.5f * k));
+            g.setFont (font (kHelpTextPx * k));
             g.drawText (t, juce::Rectangle<float> (x * k, 0.0f, w * k, r.getHeight()), juce::Justification::centredLeft);
         };
         const bool back = ed.proc.showBack;
         pill (BtnFront, "FRONT", ! back);
         pill (BtnBack, "BACK", back);
-        hint ("Tab", 286.0f, 30.0f);
+        hint ("Tab", tabHint().getX(), tabHint().getWidth());
         g.setColour (kInk.withAlpha (0.8f));
         g.setFont (font (11.5f * k, true));
         g.drawText ("CABLES", juce::Rectangle<float> (318.0f * k, 0.0f, 54.0f * k, r.getHeight()), juce::Justification::centredLeft);
         const int mode = ed.rack.cableMode();
         for (int m = 0; m < 4; ++m)
             pill (BtnModeAll + m, RackView::cableModeName (m), mode == m);
-        hint ("K", 686.0f, 20.0f);
+        hint ("K", kHint().getX(), kHint().getWidth());
         pill (BtnFoldAll, ed.rack.allFolded() ? "OPEN ALL" : "FOLD ALL", false);
         pill (BtnRacks, juce::String::fromUTF8 ("RACKS \xe2\x96\xbe"), false);
         const int lat = ed.proc.rack().latency();
@@ -119,10 +117,27 @@ public:
         if (b != hover) { hover = b; repaint(); }
     }
     void mouseExit (const juce::MouseEvent&) override { hover = -1; repaint(); }
+
+    // Help in large type on hover: the key hints, and how the list-like pills work.
+    static juce::Rectangle<float> tabHint() { return { 286.0f, 0.0f, 30.0f, (float) kHeaderHeight }; }    // header units
+    static juce::Rectangle<float> kHint() { return { 686.0f, 0.0f, 20.0f, (float) kHeaderHeight }; }
+    juce::String getTooltip() override
+    {
+        const auto p = getMouseXYRelative().toFloat() / u();
+        if (tabHint().contains (p)) return "Tab flips the rack between FRONT and BACK";
+        if (kHint().contains (p)) return "K steps through the cable views";
+        switch (buttonAt (getMouseXYRelative().toFloat()))
+        {
+            case BtnScale: return juce::String::fromUTF8 ("Window size \xc2\xb7 click: next, Shift-click: previous, right-click: the whole list");
+            case BtnRacks: return "Starter racks";
+            default: return {};
+        }
+    }
     void mouseUp (const juce::MouseEvent& e) override
     {
         const int b = buttonAt (e.position);
-        juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<JidaiEditor> (&ed), b]
+        const bool menu = e.mods.isPopupMenu(), back = e.mods.isShiftDown();
+        juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<JidaiEditor> (&ed), b, menu, back]
         {
             if (sp == nullptr)
                 return;
@@ -145,13 +160,26 @@ public:
                         });
                     break;
                 case BtnScale:
-                {
-                    int next = kScaleSteps[0];
-                    for (int s : kScaleSteps)
-                        if (s > sp->proc.scalePercent) { next = s; break; }
-                    sp->setScalePercent (next);
+                    // A list control: click = next, Shift-click = previous, right-click = the whole list.
+                    if (menu)
+                    {
+                        const auto options = juce::PopupMenu::Options().withTargetComponent (sp->head.get())
+                                                 .withTargetScreenArea (sp->head->localAreaToGlobal (sp->head->button (BtnScale).toNearestInt()));
+                        std::function<void (int)> done = [sp] (int id)
+                        {
+                            if (sp == nullptr) return;
+                            if (const int pct = jidai_ui::scaleFromMenuResult (id); pct > 0)
+                                sp->setScalePercent (pct);
+                            sp->head->repaint();
+                        };
+                        if (sp->showMenu)
+                            sp->showMenu (sp->scaleMenu(), options, std::move (done));
+                        else
+                            sp->scaleMenu().showMenuAsync (options, std::move (done));
+                    }
+                    else
+                        sp->setScalePercent (jidai_ui::nextScaleStep (sp->proc.scalePercent, back));
                     break;
-                }
                 default: break;
             }
             sp->head->repaint();
@@ -167,6 +195,7 @@ public:
 JidaiEditor::JidaiEditor (JidaiProcessor& p)
     : AudioProcessorEditor (p), proc (p), rack (p)
 {
+    setLookAndFeel (&laf);
     list = std::make_unique<DeviceBrowser> (p);
     list->onAdd = [this] (const DeviceBrowser::Entry& e, bool skipRoute)
     {
@@ -210,6 +239,15 @@ JidaiEditor::~JidaiEditor()
 {
     removeMouseListener (this);
     proc.removeChangeListener (this);
+    setLookAndFeel (nullptr);
+}
+
+juce::PopupMenu JidaiEditor::scaleMenu() const
+{
+    juce::PopupMenu menu;
+    for (int i = 0; i < jidai_ui::kScaleStepCount; ++i)
+        menu.addItem (i + 1, juce::String (jidai_ui::kScaleSteps[i]) + " %", true, jidai_ui::kScaleSteps[i] == proc.scalePercent);
+    return menu;
 }
 
 juce::PopupMenu JidaiEditor::starterRackMenu() const

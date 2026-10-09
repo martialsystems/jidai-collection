@@ -80,8 +80,10 @@ FetchContent_Declare(origami
   # (clean under the rack's gcc -Wfloat-equal); 8beeeb0 factory preset box on the rack face (the rack compiles
   # ORIGAMI_PRESET_SOURCES and links origami::factory_data); bbde745 jidai-common 1.1.2 (WAVE 0 is a true bypass at
   # any SYM); e138d57 0 warnings under the rack strict set (explicit float->double in the plugin, test-file-only
-  # -Wfloat-equal off). If it lands elsewhere by squash or rebase, re-pin.
-  GIT_TAG e138d57ea4c8f184696683b0976030047a27a4dd)
+  # -Wfloat-equal off). 8dee549 (origami PR #1, branch stages-edit-rightclick-lists): STAGE n knobs and draggable
+  # graphs on STAGES, list controls (Shift-click back, right-click whole list), sans menus, help text >= 9 with hover.
+  # If it lands elsewhere by squash or rebase, re-pin.
+  GIT_TAG 8dee5497f01fa178ee314ee3d7747d2a15fe06c2)
 FetchContent_MakeAvailable(origami)
 if(NOT TARGET origami::dsp OR NOT ORIGAMI_UI_SOURCES OR NOT ORIGAMI_PRESET_SOURCES OR NOT TARGET origami::factory_data)
   message(FATAL_ERROR "ORIGAMI did not provide origami::dsp, ORIGAMI_UI_SOURCES, ORIGAMI_PRESET_SOURCES and origami::factory_data")

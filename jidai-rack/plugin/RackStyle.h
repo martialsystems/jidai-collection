@@ -40,6 +40,9 @@ inline const char* swatchName (int i)
 // The colour a cable is drawn in: its override swatch, or the role colour of its source jack.
 inline juce::Colour cableColour (int color, jidai::jcs::Role role) { return color >= 0 ? swatchColour (color) : roleColour (role); }
 
+// Help text (hints, captions, notes) is never drawn smaller than this at 100 % (about 9 pt); control labels keep their sizes.
+inline constexpr float kHelpTextPx = 12.0f;
+
 inline juce::Font font (float size, bool bold = false)
 {
     return juce::Font (juce::FontOptions (juce::jmax (6.0f, size), bold ? juce::Font::bold : juce::Font::plain));

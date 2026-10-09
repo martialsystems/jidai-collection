@@ -119,6 +119,22 @@ juce::Point<float> RearPanel::jackCentre (int jack) const
     return centres[(size_t) jack] * scale();
 }
 
+juce::String RearPanel::stickerLine() const
+{
+    juce::String line = u8 (kindLine (device.kind())) + u8 (" \xc2\xb7 REAR PATCH BAY \xc2\xb7 ") + juce::String ((int) device.jacks().size()) + " JACKS";
+    if (! device.name.empty())
+        line = u8 (device.displayName().c_str()) + u8 (" \xc2\xb7 ") + line;
+    return line;
+}
+
+juce::String RearPanel::getTooltip()
+{
+    const auto p = getMouseXYRelative().toFloat() / juce::jmax (0.001f, scale());
+    if (sticker.contains (p)) return stickerLine();
+    if (latPlate.contains (p)) return u8 ("Latency on this device's path, in samples \xc2\xb7 gates are 0/5 V");
+    return {};
+}
+
 void RearPanel::paint (juce::Graphics& g)
 {
     const float s = scale();
@@ -148,13 +164,9 @@ void RearPanel::paint (juce::Graphics& g)
         g.setFont (font ((compact ? 17.0f : 19.0f) * s, true));
         auto t = r.reduced (10.0f * s, 6.0f * s);
         g.drawText (juce::String (deviceKindName (device.kind())), t.removeFromTop (22.0f * s), juce::Justification::centredLeft);
-        g.setFont (font (10.0f * s));
+        g.setFont (font (kHelpTextPx * s));
         g.setColour (juce::Colour (0xff4a463c));
-        const int n = (int) device.jacks().size();
-        juce::String line = u8 (kindLine (device.kind())) + u8 (" \xc2\xb7 REAR PATCH BAY \xc2\xb7 ") + juce::String (n) + " JACKS";
-        if (! device.name.empty())
-            line = u8 (device.displayName().c_str()) + u8 (" \xc2\xb7 ") + line;
-        g.drawFittedText (line, t.toNearestInt(), juce::Justification::topLeft, compact ? 3 : 1, 0.8f);
+        g.drawFittedText (stickerLine(), t.toNearestInt(), juce::Justification::topLeft, compact ? 3 : 1, 0.8f);
         if (compact)
         {
             g.setColour (juce::Colour (0xff8a6d1f));
@@ -190,7 +202,7 @@ void RearPanel::paint (juce::Graphics& g)
         g.setColour (kAmber);
         g.setFont (font (15.0f * s, true));
         g.drawText ("LAT " + juce::String (latency ? latency() : 0) + " smp", lp.withTrimmedBottom (lp.getHeight() * 0.45f), juce::Justification::centredBottom);
-        g.setFont (font (10.0f * s));
+        g.setFont (font (kHelpTextPx * s));
         g.setColour (kAmber.withAlpha (0.7f));
         g.drawText ("0/5 V gates", lp.withTrimmedTop (lp.getHeight() * 0.58f), juce::Justification::centredTop);
     }

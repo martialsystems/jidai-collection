@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Martial Systems LLC. All rights reserved.
 
 #include "DeviceBrowser.h"
+#include "RackStyle.h"
 
 using namespace jidai;
 
@@ -9,6 +10,12 @@ namespace {
 const juce::Colour kInk { 0xffe8e2cf };
 const juce::Colour kDim { 0x99dcd6c2 };
 constexpr float kTop = 96.0f, kHeaderH = 24.0f, kRowH = 48.0f, kRowGap = 5.0f, kPad = 8.0f;
+
+juce::String helpText()
+{
+    return juce::String::fromUTF8 ("Drag into the rack \xc2\xb7 Shift = no auto-route. Click a card to add one at the bottom.\n\n"
+                                   "Grab a device by its ear or strip to move it; drag it back here to remove it.");
+}
 
 }
 
@@ -178,7 +185,7 @@ void DeviceBrowser::paint (juce::Graphics& g)
     g.setFont (juce::FontOptions (17.0f, juce::Font::bold));
     g.drawText ("DEVICES", 14, 14, getWidth() - 28, 22, juce::Justification::centredLeft);
     g.setColour (kDim);
-    g.setFont (juce::FontOptions (11.5f));
+    g.setFont (juce::FontOptions (rackstyle::kHelpTextPx));
     g.drawText ("drag into the rack", 14, 36, getWidth() - 28, 16, juce::Justification::centredLeft);
 
     for (auto& h : headers)
@@ -221,12 +228,12 @@ void DeviceBrowser::paint (juce::Graphics& g)
         g.setFont (juce::FontOptions (13.5f, juce::Font::bold));
         g.drawText (juce::String::fromUTF8 (e.name), text.withHeight (30.0f).withRight (pill.getX() - 4.0f), juce::Justification::centredLeft);
         g.setColour (kDim);
-        g.setFont (juce::FontOptions (10.5f));
+        g.setFont (juce::FontOptions (rackstyle::kHelpTextPx));
         g.drawFittedText (juce::String::fromUTF8 (e.line), text.withTrimmedTop (27.0f).withHeight (15.0f).toNearestInt(), juce::Justification::centredLeft, 1, 0.8f);
     }
 
     float y = listBottom + 6.0f;
-    g.setFont (juce::FontOptions (11.5f));
+    g.setFont (juce::FontOptions (rackstyle::kHelpTextPx));
     if (rows.empty())
     {
         g.setColour (kDim);
@@ -234,10 +241,8 @@ void DeviceBrowser::paint (juce::Graphics& g)
         y = kTop + 30.0f;
     }
     g.setColour (dropHover ? juce::Colour (0xffe0675e) : juce::Colour (0x77dcd6c2));
-    g.drawFittedText (dropHover ? juce::String ("Drop here to remove it.")
-                                : juce::String::fromUTF8 ("Drag into the rack \xc2\xb7 Shift = no auto-route. Click a card to add one at the bottom.\n\n"
-                                                "Grab a device by its ear or strip to move it; drag it back here to remove it."),
-                      juce::Rectangle<int> (14, (int) y, getWidth() - 28, 140), juce::Justification::topLeft, 10);
+    helpRect = juce::Rectangle<float> (14.0f, y, (float) getWidth() - 28.0f, 140.0f);
+    g.drawFittedText (dropHover ? juce::String ("Drop here to remove it.") : helpText(), helpRect.toNearestInt(), juce::Justification::topLeft, 10);
 
     if (dropHover)
     {
@@ -316,6 +321,22 @@ void DeviceBrowser::mouseUp (const juce::MouseEvent& e)
     pressed = -1;
     dragged = false;
     repaint();
+}
+
+juce::String DeviceBrowser::getTooltip() { return helpTextAt (getMouseXYRelative().toFloat()); }
+
+juce::String DeviceBrowser::helpTextAt (juce::Point<float> p) const
+{
+    if (closed)
+        return {};
+    if (juce::Rectangle<float> (14.0f, 36.0f, (float) getWidth() - 28.0f, 16.0f).contains (p))
+        return "Drag a device into the rack, or click its card to add one at the bottom";
+    for (size_t i = 0; i < rows.size(); ++i)
+        if (rowRects[i].withTrimmedTop (27.0f).withHeight (15.0f).contains (p))
+            return juce::String::fromUTF8 (rows[i]->name) + juce::String::fromUTF8 (" \xc2\xb7 ") + juce::String::fromUTF8 (rows[i]->line);
+    if (helpRect.contains (p))
+        return helpText().replace ("\n\n", " ");
+    return {};
 }
 
 bool DeviceBrowser::isInterestedInDragSource (const SourceDetails& d) { return d.description.toString().startsWith ("move:"); }

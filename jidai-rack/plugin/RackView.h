@@ -20,7 +20,8 @@
 class RackCableLayer;
 
 class RackView : public juce::Component,
-                 public juce::DragAndDropTarget
+                 public juce::DragAndDropTarget,
+                 public juce::TooltipClient
 {
 public:
     // Design units. Panels are 1600 wide; the cabinet adds a side and a rail each side of them.
@@ -102,6 +103,8 @@ public:
 
     void paint (juce::Graphics&) override;
     void paintOverChildren (juce::Graphics&) override;
+    juce::String getTooltip() override;      // the empty-space hint, enlarged
+    juce::String emptyHint() const;
     void resized() override;
     void mouseDown (const juce::MouseEvent&) override;
 

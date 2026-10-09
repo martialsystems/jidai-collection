@@ -70,6 +70,8 @@ Choose **RACKS ▾ › FX › Filter Fold FX** on an audio track. Your track run
 
 The window has four parts: the **header** along the top, the **cable bar** under it, the **device browser** on the left and the **rack** itself. It opens at 1200 × 672 and can be made as small as 960 × 540. The rack scrolls when it is taller than the window.
 
+Menus and lists use plain type. Hover over a help line (the browser's notes, the hints in the header, the empty rack space, the label on a device's back) for half a second to read it again in large type.
+
 ### 3.2 Header
 
 | Control | What it does |
@@ -79,7 +81,7 @@ The window has four parts: the **header** along the top, the **cable bar** under
 | **FOLD ALL** | Folds every device to its name strip, or unfolds them all. Same as **Shift+F**. |
 | **RACKS ▾** | The starter racks, grouped as INIT, ACID, EDM and FX (section 6). |
 | **LAT** | The rack's total latency in samples, as reported to your DAW. |
-| **Scale (for example 100%)** | Click to step the window size through 75 %, 100 %, 125 %, 150 % and 200 %. |
+| **Scale (for example 100%)** | The window size: 75 %, 100 %, 125 %, 150 % or 200 %. Click for the next size, **Shift**-click for the previous one, or right-click to pick any size from the list. |
 | Notice | After loading a rack saved by an older version, a notice lists what was converted. Click it to dismiss it. |
 
 **Cable bar** (under the header): pick a cable color (or **ANY**) to dim the jacks that can't take it, and read every cable gesture in two help lines. Rest the pointer on them to see them larger.
@@ -153,9 +155,12 @@ The full RONIN panel. Every knob and jack works as in the RONIN plugin. See the 
 The full ORIGAMI panel with its four pages and its jack row. See the ORIGAMI manual for every control. In the rack:
 
 - Every jack in the jack row is live, and four HOST jacks on the back route host audio in and out.
+- **STAGES tab.** Each stage's box has its **STAGE** knob next to the graph, and the graph itself is a control too: drag up or down on it to set how hard that stage folds, and double-click it to reset. For a VC source, click for the next one, **Shift**-click for the previous one, or right-click to pick any source from the list.
 - **Preset box.** In the jack row, between VC 1 and VC 2: the same factory presets as the plugin (INIT and the RONIN, SHOGUN, BUSHIDO and GENERIC banks). The arrows step through them all; click the name for a menu grouped by bank. Loading a preset sets every control except BYPASS. The rack remembers the chosen preset with your project.
 - **Sidechain.** Two back-only jacks, **SIDECHAIN › SC L** and **SC R**, are the plugin's sidechain input. If you patch both, ORIGAMI averages them to mono. Any stage whose VC SOURCE is **SIDECHAIN** follows the signal there. With **VCA SOURCE** on **CV**, a follower on the sidechain (timed by ATTACK and RELEASE) drives the VCA, unless a cable is patched into VCA CV, which then wins. With nothing patched into SC, a SIDECHAIN source is silent. The rack counts a sidechain cable as a signal path into ORIGAMI: if it comes from a delayed device (SHOGUN at 2×, for example), a **Δn** tag on the cables into ORIGAMI shows the difference (see 4.5).
 - Latency is 0 samples at QUALITY 1× and 46 samples at 2×. The rack compensates for either.
+
+![ORIGAMI's STAGES tab in the rack](images/origami_stages_in_rack.png)
 
 ### 3.9 SHOGUN in the rack (5.8 U open, 1 U closed, 4 U back)
 
