@@ -17,6 +17,9 @@ jobs:
           - os: windows-latest
             platform: Windows
     runs-on: ${{ matrix.os }}
+    env:
+      # MSVC: M_PI (used in jidai-rack/tests) needs _USE_MATH_DEFINES. cl.exe reads CL; clang on macOS ignores it.
+      CL: /D_USE_MATH_DEFINES
     steps:
       - uses: actions/checkout@v4
       - name: Configure
