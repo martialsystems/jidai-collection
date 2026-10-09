@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(JidaiCommon VERSION 1.1.2 LANGUAGES CXX)
+project(JidaiCommon VERSION 1.2.0 LANGUAGES CXX)
 
 # Header-only C++17: the Jidai Cable Standard v1.1 helpers and the shared DSP blocks.
 # Other repos vendor include/jidai (copy, subtree or FetchContent) and add include/ to their include path,
@@ -41,4 +41,15 @@ if(JIDAI_COMMON_TESTS)
     target_compile_options(JidaiHeaderHygiene PRIVATE -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wno-sign-conversion -Wfloat-equal -Wdouble-promotion -Werror)
   endif()
   add_test(NAME headers COMMAND JidaiHeaderHygiene)
+endif()
+
+if(JIDAI_COMMON_TESTS)
+  # Cable editing (jidai/ui/CableEdit.h): the gestures every unit and the rack share. Strict set, as the headers test.
+  add_executable(JidaiCableEditTests tests/CableEditTests.cpp)
+  target_link_libraries(JidaiCableEditTests PRIVATE jidai_common)
+  set_target_properties(JidaiCableEditTests PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    target_compile_options(JidaiCableEditTests PRIVATE -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wno-sign-conversion -Wfloat-equal -Wdouble-promotion -Werror)
+  endif()
+  add_test(NAME cables COMMAND JidaiCableEditTests)
 endif()

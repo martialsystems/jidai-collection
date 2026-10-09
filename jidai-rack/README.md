@@ -27,7 +27,7 @@ When you add a device, the rack patches it for you. Audio outputs go to MAIN OUT
 ## Patching
 
 - **Front and back.** The front shows each device's own panel. The back shows a generated rear plate for every device with every jack, including back-only ones. Press Tab to flip.
-- **Making cables.** Drag from one jack to another. Compatible jacks ring green, and an incompatible jack tells you why it can't connect. Drag a plug to move that end, or drop it off any jack to unplug it. Shift-drag stacks another cable on a jack that is already patched. Right-click a jack or cable for Connect to..., Disconnect and Colour.
+- **Making cables.** Drag from an empty jack to another jack. Compatible jacks ring green, the rest are dimmed, and an incompatible jack tells you why it can't connect. Drag a plugged end to reroute that same cable, or drop it in empty space to remove it. Option-drag (Mac) or Alt-drag (Windows) stacks another cable on a jack that is already patched. Click a cable to bring it to the front. Pick a color on the cable bar to dim the jacks that can't take it. Right-click a cable for Remove, Bring to front and Colour, or a jack for Connect to..., Disconnect and Go to. Cmd+Z / Ctrl+Z undoes cable changes.
 - **How signals combine.** One output can feed many inputs. Several cables into one input are summed. The newest cable that closes a loop is delayed by one sample and marked z⁻¹.
 - **Cable views.** Press K to cycle between them.
   - ALL: every cable as a rope.

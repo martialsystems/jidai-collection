@@ -39,8 +39,9 @@ Every recipe has the same parts, in the same order.
 - Patch on the back: press **Tab** to flip the rack. Every jack of every device is there.
 - A jack is named by its section and its label, as printed on the back. *RONIN: VCA 1 ENV* is the ENV jack in RONIN's VCA 1 box.
 - Drag from the first jack to the second. If the second jack already has a cable, the new cable is added to it: two cables into one input are summed.
-- To start a second cable from a jack that's already patched, **Shift-drag** from it. A plain drag from a patched jack picks up its cable and moves it instead.
-- The colour of each cable comes from the jack it starts at: red for audio, blue for pitch, green for gates and clocks, yellow for CV.
+- To start a second cable from a jack that's already patched, **Option-drag** it (Mac) or **Alt-drag** it (Windows). A plain drag from a patched jack picks up its top cable and reroutes it instead.
+- Got one wrong? Drag its end to the right jack (it stays the same cable), or drag the end into empty space to remove it, or press **Cmd+Z** (Mac) or **Ctrl+Z** (Windows) to undo.
+- The colour of each cable comes from its output jack: red for audio, blue for pitch, green for gates and clocks, yellow for CV. To find the jacks for a step quickly, click that colour on the cable bar under the header: the jacks that can't take it are dimmed. Click **ANY** to clear it.
 
 **Knob settings.** Only the settings that matter for the patch. Leave everything else where it is. Knob positions are given as a percentage of the knob's travel, with the value it shows where that helps.
 
@@ -92,7 +93,7 @@ A new RONIN comes with eight cables of its own, its INIT voice. Keep these two:
 - **RONIN: EG 1 OUT A to RONIN: VCA 1 ENV**. The note envelope opens the VCA.
 - **RONIN: VCA 1 OUT to RONIN: OUTPUT WET**. The voice to RONIN's output.
 
-Click each of the other six and press **Delete**:
+Remove each of the other six: click it and press **Delete**, or drag one of its ends into empty space:
 
 - RONIN: EXT IN MONO to RONIN: VCF IN
 - RONIN: VCF OUT to RONIN: VCA 1 IN
@@ -116,7 +117,7 @@ Click each of the other six and press **Delete**:
 #### Gates and filter
 
 5. **From BUSHIDO: OUTPUTS GATE A to RONIN: EG 1 TRIG**. Each step starts the note envelope, which opens VCA 1.
-6. **From BUSHIDO: OUTPUTS GATE A to RONIN: EG 2 TRIG**. Each step also starts EG 2, the filter snap. Shift-drag from GATE A for this second cable.
+6. **From BUSHIDO: OUTPUTS GATE A to RONIN: EG 2 TRIG**. Each step also starts EG 2, the filter snap. Option-drag (Mac) or Alt-drag (Windows) from GATE A for this second cable.
 7. **From RONIN: EG 2 OUT + to RONIN: VCF CUTOFF**. EG 2 sweeps the filter on every note.
 8. **From BUSHIDO: OUTPUTS CV C to RONIN: VCF CUTOFF**. Row C is the accent: it adds to EG 2 on the same jack, so accented steps open the filter further.
 

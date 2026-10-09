@@ -469,6 +469,48 @@ void JidaiProcessor::setCables (const std::vector<jidai::CableSpec>& cables)
     refreshLatency();
 }
 
+void JidaiProcessor::editCables (const std::vector<jidai::CableSpec>& next, const std::string& label)
+{
+    const juce::ScopedLock sl (stateLock_);
+    const auto before = rack_.cables();
+    if (before == next)
+        return;
+    if (! rack_.setCableLooks (next))       // colour or z only: no graph rebuild
+    {
+        rack_.setCables (next);
+        refreshLatency();
+    }
+    cableHistory_.record (before, rack_.cables(), label);
+}
+
+bool JidaiProcessor::undoCables()
+{
+    const juce::ScopedLock sl (stateLock_);
+    auto patch = rack_.cables();
+    if (! cableHistory_.undo (patch))
+        return false;
+    if (! rack_.setCableLooks (patch))
+    {
+        rack_.setCables (patch);
+        refreshLatency();
+    }
+    return true;
+}
+
+bool JidaiProcessor::redoCables()
+{
+    const juce::ScopedLock sl (stateLock_);
+    auto patch = rack_.cables();
+    if (! cableHistory_.redo (patch))
+        return false;
+    if (! rack_.setCableLooks (patch))
+    {
+        rack_.setCables (patch);
+        refreshLatency();
+    }
+    return true;
+}
+
 void JidaiProcessor::loadRoninProgram (RoninDevice* ronin, int index)
 {
     const juce::ScopedLock sl (stateLock_);
@@ -943,6 +985,8 @@ void JidaiProcessor::getStateInformation (juce::MemoryBlock& dest)
             e->setAttribute ("auto", 1);
         if (c.legacyInvert)
             e->setAttribute ("legacyInvert", 1);
+        if (c.z != 0)
+            e->setAttribute ("z", c.z);       // drawing order only; absent = 0, so older racks save unchanged
     }
     copyXmlToBinary (xml, dest);
 }
@@ -1119,6 +1163,7 @@ void JidaiProcessor::restoreFromXml (const juce::XmlElement& xml)
             continue;
         }
         c.age = e->getIntAttribute ("age", (int) cables.size());
+        c.z = e->getIntAttribute ("z", 0);
         if (version >= 3)
         {
             c.color = e->getIntAttribute ("colour", -1);

@@ -18,6 +18,9 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <atomic>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <chrono>
 #include <functional>
 #include <thread>
@@ -66,13 +69,15 @@ void clickAt (juce::Component& root, juce::Point<int> p, bool right = false)
         click (*c, c->getLocalPoint (&root, p).toFloat(), right);
 }
 
-void drag (juce::Component& c, juce::Point<float> from, juce::Point<float> to, bool release = true)
+void drag (juce::Component& c, juce::Point<float> from, juce::Point<float> to, bool release = true,
+           juce::ModifierKeys extra = {})
 {
-    c.mouseDown (mouse (c, from, from, false));
+    const auto mods = juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier | extra.getRawFlags());
+    c.mouseDown (mouse (c, from, from, false, mods));
     for (int i = 1; i <= 10; ++i)
-        c.mouseDrag (mouse (c, from + (to - from) * ((float) i / 10.0f), from, true));
+        c.mouseDrag (mouse (c, from + (to - from) * ((float) i / 10.0f), from, true, mods));
     if (release)
-        c.mouseUp (mouse (c, to, from, true));
+        c.mouseUp (mouse (c, to, from, true, mods));
     pump();
 }
 
@@ -177,6 +182,36 @@ int main (int argc, char** argv)
     std::signal (SIGSEGV, [] (int) { void* b[64]; const int n = backtrace (b, 64); backtrace_symbols_fd (b, n, 2); _exit (3); });
    #endif
     juce::ScopedJuceInitialiser_GUI gui;
+    // JIDAI_HASHES=1: print a hash of every starter rack's render (2 s, mixed block sizes) and of its saved state,
+    // then exit. Two builds that print the same lines sound and save the same.
+    if (std::getenv ("JIDAI_HASHES") != nullptr)
+    {
+        JidaiProcessor probe;
+        for (int prog = 0; prog < probe.getNumPrograms(); ++prog)
+        {
+            int k = 0;
+            const int sizes[] = { 256, 17, 512, 1, 100, 333 };
+            const auto audio = render (prog, 96000, [&] { return sizes[(k++) % 6]; });
+            std::uint64_t h = 1469598103934665603ull;
+            for (float x : audio)
+            {
+                std::uint32_t b;
+                std::memcpy (&b, &x, 4);
+                h = (h ^ b) * 1099511628211ull;
+            }
+            JidaiProcessor p;
+            p.prepareToPlay (48000.0, 256);
+            p.setCurrentProgram (prog);
+            juce::MemoryBlock st;
+            p.getStateInformation (st);
+            std::uint64_t hs = 1469598103934665603ull;
+            for (size_t i = 0; i < st.getSize(); ++i)
+                hs = (hs ^ (std::uint8_t) st[i]) * 1099511628211ull;
+            std::printf ("HASH %2d %-24s audio %016llx state %016llx (%d bytes)\n", prog, p.getProgramName (prog).toRawUTF8(),
+                         (unsigned long long) h, (unsigned long long) hs, (int) st.getSize());
+        }
+        return 0;
+    }
     const auto out = juce::File::getCurrentWorkingDirectory().getChildFile (argc > 1 ? argv[1] : "probe");
     out.createDirectory();
 
@@ -409,6 +444,247 @@ int main (int argc, char** argv)
         }
     }
     snapshot (rack, out.getChildFile ("rack_back.png"));
+
+    // Cable gestures (jidai/ui/CableEdit.h), on the BACK where every jack is shown: reroute, the stack modifier,
+    // drag-off, click to front (saved), palette dimming, the cable menu's Remove, undo / redo of each.
+    {
+        auto cablesNow = [&proc] { return proc.rack().cables(); };
+        auto spotId = [&rack] (const std::string& id) { return rack.spotFor (id); };
+        // A free input on RONIN that `from` may feed (and not `avoid`).
+        auto freeInput = [&] (const std::string& from, const std::string& avoid) -> const RackView::JackSpot*
+        {
+            for (auto& sp : rack.jackSpots())
+                if (! sp.out && sp.id.rfind ("RONIN#1/", 0) == 0 && sp.id != avoid && proc.rack().check (from, sp.id) == jidai::Rack::Check::Ok
+                    && jidai::cable::cablesAt (proc.rack().cables(), sp.id) == 0 && sp.role == jidai::jcs::Role::CV)
+                    return &sp;
+            return nullptr;
+        };
+        // A point at least 40 px from every jack and 12 px from every cable, near p.
+        auto emptyNear = [&] (juce::Point<float> p)
+        {
+            for (float dy = 0.0f; dy < 600.0f; dy += 7.0f)
+                for (float dx : { 0.0f, 37.0f, -37.0f, 81.0f, -81.0f })
+                {
+                    const auto q = p.translated (dx, -40.0f - dy);
+                    bool clear = rack.getLocalBounds().toFloat().reduced (20.0f).contains (q);
+                    for (auto& sp : rack.jackSpots())
+                        clear = clear && sp.p.getDistanceFrom (q) > 40.0f;
+                    for (auto& d : layer.drawn())
+                    {
+                        juce::Point<float> on;
+                        if (! d.path.isEmpty())
+                        {
+                            d.path.getNearestPoint (q, on);
+                            clear = clear && on.getDistanceFrom (q) > 12.0f;
+                        }
+                    }
+                    if (clear)
+                        return q;
+                }
+            return p.translated (0.0f, -300.0f);
+        };
+        const std::string cvA = "BUSHIDO#1/OUTPUTS:CV A", vOct = "RONIN#1/VCO:V/OCT";
+        const int i = cableIndex (proc, cvA, vOct);
+        expect (i >= 0, "cable CV A > V/OCT is patched");
+        layer.setColour (i, 2);
+        const auto start = cablesNow();
+        const auto spec = start[(size_t) i];
+        const auto* targetPtr = freeInput (cvA, vOct);
+        const auto* plugPtr = spotId (vOct);
+        expect (targetPtr != nullptr && plugPtr != nullptr, "a free CV input on RONIN for the reroute");
+        if (targetPtr != nullptr && plugPtr != nullptr)
+        {
+            const auto targetSpot = *targetPtr, plugSpot = *plugPtr;      // copies: the spot list may be rebuilt
+            const auto* target = &targetSpot;
+            const auto* plug = &plugSpot;
+            const auto targetId = target->id;
+            const auto depth = proc.cableHistory().undoDepth();
+            // 1. Reroute: grab the plug on V/OCT (off-centre, on the plug body) and drop it on the free input.
+            drag (layer, plug->p.translated (plug->r * 1.1f, 0.0f), target->p);
+            auto now = cablesNow();
+            expect (now.size() == start.size(), "reroute: no cable created or lost (" + juce::String ((int) now.size()) + ")");
+            const auto& moved = now[(size_t) i];
+            expect ((moved.a == cvA && moved.b == targetId) || (moved.b == cvA && moved.a == targetId),
+                    "reroute: the same cable (same slot) now runs CV A > " + juce::String (targetId));
+            expect (moved.color == 2 && moved.age == spec.age, "reroute keeps the cable's colour and age");
+            expect (cableIndex (proc, cvA, vOct) < 0, "nothing left on V/OCT from CV A");
+            expect (proc.cableHistory().undoDepth() == depth + 1 && proc.cableHistory().undoLabel() == "Move cable", "reroute is one undo step, 'Move cable'");
+            key (*editor, 'Z', juce::ModifierKeys::commandModifier, 'z');
+            expect (cablesNow() == start, "Ctrl/Cmd+Z puts the cable back on V/OCT, exactly");
+            key (*editor, 'Y', juce::ModifierKeys::commandModifier, 'y');
+            expect (cablesNow() == now, "Ctrl+Y redoes the move");
+            key (*editor, 'Z', juce::ModifierKeys::commandModifier | juce::ModifierKeys::shiftModifier, 'Z');
+            expect (cablesNow() == now, "Shift+Cmd+Z redoes too (nothing left to redo: unchanged)");
+            key (*editor, 'Z', juce::ModifierKeys::commandModifier, 'z');
+            expect (cablesNow() == start, "undo again: back to the start");
+
+            // 2. Stack: Option/Alt-drag from the used V/OCT jack adds a second cable there; plain drag would reroute.
+            const auto srcP = spotId (cvA)->p;
+            drag (layer, srcP, target->p, true, juce::ModifierKeys::altModifier);
+            now = cablesNow();
+            expect (now.size() == start.size() + 1 && cableIndex (proc, cvA, vOct) == i && cableIndex (proc, cvA, targetId) >= 0,
+                    "Alt-drag from a used jack stacks a new cable; the old one stays");
+            expect (jidai::cable::topCableAt (now, cvA) == (int) now.size() - 1, "the stacked cable is the top plug");
+            key (*editor, 'Z', juce::ModifierKeys::commandModifier, 'z');
+            expect (cablesNow() == start, "undo removes the stacked cable");
+
+            // 3. Drag a plug off into empty space: removed; undo restores it in the same slot.
+            const auto off = emptyNear (plug->p);
+            drag (layer, plug->p, off);
+            expect (cablesNow().size() == start.size() - 1 && cableIndex (proc, cvA, vOct) < 0, "dragging a plug into empty space removes its cable");
+            key (*editor, 'Z', juce::ModifierKeys::commandModifier, 'z');
+            expect (cablesNow() == start, "undo: the removed cable is back, same slot, colour and age");
+
+            // 4. A click on a jack (no drag) changes nothing.
+            click (layer, plug->p);
+            expect (cablesNow() == start, "a click on a plug only selects the jack (no new cable, no move)");
+        }
+
+        // 5. Click a cable: it comes to the front, and z is saved with the rack.
+        {
+            int raised = -1;
+            for (auto& d : layer.drawn())
+            {
+                if (d.shown != RackCableLayer::Shown::Rope || d.alpha < 0.9f || jidai::cable::isOnTop (cablesNow(), d.index))
+                    continue;
+                for (float t : { 0.5f, 0.35f, 0.65f, 0.2f, 0.8f })
+                {
+                    const auto at = d.path.getPointAlongPath (d.path.getLength() * t);
+                    click (layer, at);
+                    if (layer.selectedCable() >= 0 && jidai::cable::isOnTop (cablesNow(), layer.selectedCable()) && cablesNow()[(size_t) layer.selectedCable()].z > 0)
+                    {
+                        raised = layer.selectedCable();
+                        break;
+                    }
+                }
+                if (raised >= 0)
+                    break;
+            }
+            expect (raised >= 0, "a click on a cable brings it to the front (z " + juce::String (raised >= 0 ? cablesNow()[(size_t) raised].z : -1) + ")");
+            const auto order = jidai::cable::drawOrder (cablesNow());
+            expect (! order.empty() && order.back() == raised, "it draws last");
+            expect (! layer.drawn().empty() && layer.drawn().back().index == raised, "the layer draws it last too");
+            juce::MemoryBlock st;
+            proc.getStateInformation (st);
+            JidaiProcessor copy;
+            copy.prepareToPlay (48000.0, 256);
+            copy.setStateInformation (st.getData(), (int) st.getSize());
+            copy.applyPendingState();
+            expect (copy.rack().cables() == cablesNow(), "z-order survives a save and load (every cable, z included)");
+            expect (proc.cableHistory().undoLabel() == "Bring cable to front", "bring to front is undoable");
+            key (*editor, 'Z', juce::ModifierKeys::commandModifier, 'z');
+            expect (cablesNow() == start, "undo: z back to 0");
+        }
+
+        // 6. Palette: CV picked dims the jacks that cannot take a CV cable, and they refuse new cables.
+        {
+            auto& bar = editor->cableBar();
+            expect (bar.chipCount() == 7 && bar.paletteForChip (0) == jidai::cable::kAnyRole
+                        && bar.paletteForChip (1) == (int) jidai::jcs::Role::Audio && bar.paletteForChip (2) == (int) jidai::jcs::Role::CV
+                        && bar.paletteForChip (6) == (int) jidai::jcs::Role::STrig,
+                    "palette: ANY, AUDIO, CV, GATE/CLK, V/OCT, HZ/V LIN, S-TRIG");
+            clickAt (*editor, bar.chipBounds (2).getCentre().toInt() + bar.getPosition());
+            pump();
+            expect (proc.cablePalette == (int) jidai::jcs::Role::CV, "clicking the CV chip picks CV");
+            auto dimmed = [&] (const std::string& id) { const auto* sp = spotId (id); return sp != nullptr && layer.jackDimmed (*sp); };
+            // Gate-type inputs are dimmed (CV into a gate input is refused); RONIN's S-trig EG TRIG inputs are CV-type
+            // jacks that take CV, so they stay lit.
+            int gateInputs = 0, gateInputsDimmed = 0;
+            for (auto& sp : rack.jackSpots())
+            {
+                jidai::Device* d = nullptr;
+                int jj = -1;
+                if (! sp.out && proc.rack().resolve (sp.id, d, jj) && d->jacks()[(size_t) jj].desc.type == PortType::Gate)
+                {
+                    ++gateInputs;
+                    gateInputsDimmed += layer.jackDimmed (sp) ? 1 : 0;
+                }
+            }
+            expect (gateInputsDimmed == gateInputs, "CV picked: every gate input is dimmed (" + juce::String (gateInputsDimmed) + " of " + juce::String (gateInputs) + ")");
+            expect (! dimmed ("RONIN#1/EG 1:TRIG"), "CV picked: RONIN EG 1 TRIG (takes CV) stays lit");
+            expect (! dimmed ("RONIN#1/VCF:CUTOFF") && ! dimmed (vOct), "CV picked: CV inputs (CUTOFF, V/OCT) are lit");
+            expect (dimmed ("RONIN#1/VCO:SAW") && dimmed ("BUSHIDO#1/OUTPUTS:GATE A"), "CV picked: audio and gate outputs are dimmed");
+            expect (! dimmed ("BUSHIDO#1/OUTPUTS:CV C") && dimmed ("BUSHIDO#1/OUTPUTS:CV B"), "CV picked: CV outputs (CV C) lit, V/OCT outputs (CV B) dimmed");
+            int dimCount = 0;
+            for (auto& sp : rack.jackSpots())
+                dimCount += layer.jackDimmed (sp) ? 1 : 0;
+            expect (dimCount > 0 && dimCount < (int) rack.jackSpots().size(), "some jacks dimmed (" + juce::String (dimCount) + " of " + juce::String ((int) rack.jackSpots().size()) + ")");
+            // Refused: a new cable from a dimmed free jack, and a new CV cable dropped on a dimmed gate input.
+            const auto before = cablesNow();
+            // A free dimmed output (audio) and a free lit CV input it could otherwise feed.
+            int freeDimOut = -1;
+            for (int k = 0; k < (int) rack.jackSpots().size(); ++k)
+            {
+                const auto& sp = rack.jackSpots()[(size_t) k];
+                if (sp.out && sp.role == jidai::jcs::Role::Audio && layer.jackDimmed (sp) && jidai::cable::cablesAt (before, sp.id) == 0)
+                    freeDimOut = k;
+            }
+            const auto* cvBPtr = spotId ("BUSHIDO#1/OUTPUTS:CV C");
+            const RackView::JackSpot* litIn = freeDimOut >= 0 ? freeInput (rack.jackSpots()[(size_t) freeDimOut].id, vOct) : nullptr;
+            expect (freeDimOut >= 0 && litIn != nullptr && cvBPtr != nullptr, "a free dimmed audio output and a free lit input to try");
+            if (freeDimOut >= 0 && litIn != nullptr && cvBPtr != nullptr)
+            {
+                const auto cvBSpot = *cvBPtr, outSpot = rack.jackSpots()[(size_t) freeDimOut], inSpot = *litIn;
+                const auto* cvB = &cvBSpot;
+                const int freeGateIndex = freeDimOut;
+                expect (proc.rack().check (outSpot.id, inSpot.id) == jidai::Rack::Check::Ok, "(audio into that CV input is allowed by the rack)");
+                drag (layer, outSpot.p, inSpot.p);
+                expect (cablesNow() == before, "a new cable cannot start on a dimmed jack (" + juce::String (outSpot.id) + ")");
+                drag (layer, inSpot.p, outSpot.p);
+                expect (cablesNow() == before && layer.lastMessage().contains ("can't take a CV cable"), "a new cable dropped on a dimmed jack is refused and says why");
+                // Mid-drag: the jacks it cannot go to are dimmed (screenshot).
+                drag (layer, cvB->p, cvB->p.translated (140.0f, -60.0f), false);
+                expect (layer.isDragging(), "dragging a new CV cable");
+                expect (! layer.jackTakesDrag (freeGateIndex), "while dragging, the dimmed audio output does not take it");
+                snapshot (*editor, out.getChildFile ("cables_v2_drag_cv.png"));
+                layer.cancelDrag();
+            }
+            snapshot (*editor, out.getChildFile ("cables_v2_back_cv.png"));
+            clickAt (*editor, bar.chipBounds (3).getCentre().toInt() + bar.getPosition());
+            pump();
+            expect (proc.cablePalette == (int) jidai::jcs::Role::GateClk, "GATE/CLK chip");
+            expect (! dimmed ("RONIN#1/EG 1:TRIG") && dimmed ("BUSHIDO#1/OUTPUTS:CV B") && dimmed ("RONIN#1/VCO:SAW") && ! dimmed ("BUSHIDO#1/OUTPUTS:GATE A"),
+                    "GATE/CLK picked: gate outputs and every input lit, CV and audio outputs dimmed");
+            clickAt (*editor, bar.chipBounds (3).getCentre().toInt() + bar.getPosition());
+            pump();
+            expect (proc.cablePalette == jidai::cable::kAnyRole, "clicking the picked chip again clears it");
+            int none = 0;
+            for (auto& sp : rack.jackSpots())
+                none += layer.jackDimmed (sp) ? 1 : 0;
+            expect (none == 0, "ANY: nothing dimmed");
+            // The help lines on the bar, and the hover zoom.
+            const auto rows = bar.helpRows().joinIntoString (" ");
+            expect (rows.contains (juce::String (jidai::cable::stackModifierName()) + "-drag") && rows.contains ("reroute") && rows.contains ("Remove")
+                        && rows.contains ("front") && rows.contains ("dim") && rows.contains ("empty jack"),
+                    "the bar spells out every gesture: " + rows);
+            expect (CableBar::helpFontPx (1.0f) >= 12.0f, "help text at least 12 px (about 9 pt) at 100 %");
+            bar.showZoom (true);
+            pump();
+            expect (bar.zoomShowing(), "hovering the help shows it larger");
+            snapshot (*editor, out.getChildFile ("cables_v2_help_zoom.png"));
+            bar.showZoom (false);
+        }
+
+        // 7. Right-click a cable: the menu has Remove; choosing it removes that cable; undo brings it back.
+        {
+            const int j = cableIndex (proc, cvA, vOct);
+            bool hasRemove = false;
+            const auto menu = layer.cableMenu (j);      // kept alive while the iterator walks it
+            for (juce::PopupMenu::MenuItemIterator it (menu); it.next();)
+                hasRemove = hasRemove || (it.getItem().itemID == RackCableLayer::CableMenuRemove && it.getItem().text == "Remove");
+            expect (hasRemove, "the cable menu has Remove");
+            const auto before = cablesNow();
+            expect (layer.cableMenuResult (before[(size_t) j], RackCableLayer::CableMenuRemove) && cableIndex (proc, cvA, vOct) < 0, "Remove removes it");
+            expect (! layer.cableMenuResult (before[(size_t) j], RackCableLayer::CableMenuRemove), "a stale menu result does nothing");
+            key (*editor, 'Z', juce::ModifierKeys::commandModifier, 'z');
+            expect (cablesNow() == before, "undo brings it back");
+        }
+        layer.setColour (i, -1);
+        key (*editor, 'Z', juce::ModifierKeys::commandModifier, 'z');      // the colour change
+        expect (cablesNow()[(size_t) i].color == 2, "colour changes are undoable");
+        key (*editor, 'Z', juce::ModifierKeys::commandModifier, 'z');
+        expect (cablesNow()[(size_t) i].color == -1, "back to the role colour");
+    }
 
     // Selection, Delete, colour override.
     {
