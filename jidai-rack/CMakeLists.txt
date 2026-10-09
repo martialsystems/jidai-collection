@@ -160,6 +160,7 @@ set(JIDAI_UI_SOURCES
   plugin/RackView.cpp
   plugin/RoninPanel.cpp
   plugin/RackCableLayer.cpp
+  plugin/CableBar.cpp
   plugin/RearPanel.cpp
   plugin/CompactFace.cpp
   plugin/ShogunState.cpp

@@ -213,6 +213,9 @@ JidaiEditor::JidaiEditor (JidaiProcessor& p)
     addAndMakeVisible (*list);
     head = std::make_unique<Header> (*this);
     addAndMakeVisible (*head);
+    bar = std::make_unique<CableBar> (p);
+    bar->onPaletteChanged = [this] { rack.cableLayer().refresh(); };
+    addAndMakeVisible (*bar);
     view.setViewedComponent (&rack, false);
     view.setScrollBarsShown (true, false);
     view.setScrollBarThickness (10);
@@ -329,6 +332,7 @@ void JidaiEditor::resized()
     const float k = uiScale();
     auto r = getLocalBounds();
     head->setBounds (r.removeFromTop ((int) std::round (kHeaderHeight * k)));
+    bar->setBounds (r.removeFromTop ((int) std::round (CableBar::kHeight * k)));
     list->setBounds (r.removeFromLeft (proc.browserOpen ? (int) std::round (kListWidth * k) : DeviceBrowser::kClosedWidth));
     view.setBounds (r);
     layoutRack();
@@ -352,6 +356,14 @@ bool JidaiEditor::keyPressed (const juce::KeyPress& key)
         return false;
     const auto code = key.getKeyCode();
     const bool shift = key.getModifiers().isShiftDown();
+    // Cable undo / redo: Cmd+Z, Shift+Cmd+Z (Mac); Ctrl+Z, Ctrl+Y or Ctrl+Shift+Z (Windows).
+    if (key.getModifiers().isCommandDown() && (code == 'Z' || code == 'z' || code == 'Y' || code == 'y'))
+    {
+        const bool redo = shift || code == 'Y' || code == 'y';
+        if (redo ? rack.cableLayer().redo() : rack.cableLayer().undo())
+            head->repaint();
+        return true;
+    }
     Device* sel = rack.selectedDevice();
     if (code == juce::KeyPress::tabKey)
     {

@@ -90,7 +90,7 @@ void RackCableLayer::compute()
     const bool back = view.showBack();
     Device* sel = view.selectedDevice();
     const std::string selPrefix = sel != nullptr ? sel->rackId() + "/" : std::string();
-    for (int i = 0; i < (int) cables.size(); ++i)
+    for (const int i : cable::drawOrder (cables))      // back to front (z, then list order)
     {
         if (i == moving)
             continue;
@@ -267,6 +267,35 @@ void RackCableLayer::paint (juce::Graphics& g)
         if (d.bVisible) plug (d.b, d.colour, d.alpha, radiusOf (c.b));
     }
 
+    // Dimmed jacks: with a palette colour picked, the jacks that cannot take a cable of that colour; during a drag,
+    // the jacks the cable being drawn cannot go to.
+    {
+        const auto& spots = view.jackSpots();
+        const bool anyPalette = proc.cablePalette != cable::kAnyRole;
+        for (int i = 0; i < (int) spots.size(); ++i)
+        {
+            const auto& sp = spots[(size_t) i];
+            const bool dim = dragging ? (sp.id != dragFrom && sp.id != pressJack && ! jackTakesDrag (i))
+                                      : (anyPalette && jackDimmed (sp));
+            const auto disc = juce::Rectangle<float> (sp.r * 2.9f, sp.r * 2.9f).withCentre (sp.p);
+            if (! dim)
+            {
+                if (anyPalette && ! dragging)            // lit: a ring in the picked colour
+                {
+                    g.setColour (roleColour ((jcs::Role) proc.cablePalette).withAlpha (0.9f));
+                    g.drawEllipse (disc, juce::jmax (1.2f, 1.6f * sc));
+                }
+                continue;
+            }
+            g.setColour (juce::Colour (0xe6101012));
+            g.fillEllipse (disc);
+            g.setColour (juce::Colour (0xff4a4a4e));
+            g.drawEllipse (disc, juce::jmax (1.0f, 1.2f * sc));
+            g.drawLine ({ disc.getX() + disc.getWidth() * 0.25f, disc.getCentreY(), disc.getRight() - disc.getWidth() * 0.25f, disc.getCentreY() },
+                        juce::jmax (1.0f, 1.4f * sc));
+        }
+    }
+
     // Badges.
     const float fs = juce::jmax (9.0f, 11.0f * sc);
     std::vector<juce::Rectangle<float>> placed;
@@ -354,23 +383,30 @@ void RackCableLayer::paint (juce::Graphics& g)
             const auto& sp = spots[(size_t) i];
             if (sp.id == dragFrom)
                 continue;
-            const bool ok = proc.rack().check (dragFrom, sp.id) == Rack::Check::Ok;
+            const bool ok = jackTakesDrag (i);
             if (! ok && i != dragTarget)
                 continue;
             g.setColour (ok ? juce::Colour (0xff3fe06a) : kRefuse);
             g.drawEllipse (juce::Rectangle<float> (sp.r * 2.6f, sp.r * 2.6f).withCentre (sp.p), i == dragTarget ? 3.0f : 1.6f);
         }
-        const auto role = proc.rack().jackRole (dragFrom);
+        // A picked-up cable keeps its own colour; a new one shows its role (the source's, or the palette's).
+        const auto& all = proc.rack().cables();
+        const auto& inf = proc.rack().cableInfo();
+        juce::Colour col = roleColour (proc.rack().jackRole (dragFrom));
+        if (moving >= 0 && moving < (int) all.size())
+            col = cableColour (all[(size_t) moving].color, moving < (int) inf.size() ? inf[(size_t) moving].role : proc.rack().jackRole (dragFrom));
+        else if (proc.cablePalette != cable::kAnyRole)
+            col = roleColour ((jcs::Role) proc.cablePalette);
         const auto end = dragTarget >= 0 ? spots[(size_t) dragTarget].p : dragPos;
-        strokeRope (rope (dragOrigin, end), roleColour (role), 1.0f, false);
-        plug (dragOrigin, roleColour (role), 1.0f, radiusOf (dragFrom));
-        plug (end, roleColour (role), 1.0f, 8.0f * sc);
-        if (dragTarget >= 0)
+        strokeRope (rope (dragOrigin, end), col, 1.0f, false);
+        plug (dragOrigin, col, 1.0f, radiusOf (dragFrom));
+        plug (end, col, 1.0f, 8.0f * sc);
+        if (dragTarget >= 0 && ! jackTakesDrag (dragTarget) && spots[(size_t) dragTarget].id != pressJack)
         {
             const auto c = proc.rack().check (dragFrom, spots[(size_t) dragTarget].id);
-            if (c != Rack::Check::Ok)
             {
-                const auto t = juce::String (Rack::checkText (c));
+                const auto t = c != Rack::Check::Ok ? juce::String (Rack::checkText (c))
+                                                    : "can't take a " + roleName ((jcs::Role) proc.cablePalette) + " cable";
                 paintTag (g, juce::Rectangle<float> (tagWidth (t), fs * 1.7f).withPosition (end.translated (14.0f * sc, -fs * 2.4f)),
                           juce::Colour (0xee2a0c0a), juce::Colour (0xffffb0a8), t, fs, kRefuse);
             }
@@ -420,9 +456,42 @@ void RackCableLayer::paint (juce::Graphics& g)
 
 // ---------------- editing ----------------
 
-void RackCableLayer::commit (const std::vector<CableSpec>& next)
+cable::JackFacts RackCableLayer::factsFor (const RackView::JackSpot& sp) const
 {
-    proc.setCables (next);
+    cable::JackFacts f;
+    f.role = sp.role;
+    f.output = sp.out;
+    f.cls = cable::classOf (sp.role);
+    Device* d = nullptr;
+    int j = -1;
+    if (proc.rack().resolve (sp.id, d, j))
+    {
+        const auto type = d->jacks()[(size_t) j].desc.type;
+        f.cls = type == PortType::Audio ? cable::SignalClass::Audio : type == PortType::Gate ? cable::SignalClass::Gate : cable::SignalClass::CV;
+    }
+    return f;
+}
+
+bool RackCableLayer::jackDimmed (const RackView::JackSpot& sp) const
+{
+    return cable::jackDimmed (proc.cablePalette, factsFor (sp));
+}
+
+bool RackCableLayer::jackTakesDrag (int spot) const
+{
+    const auto& spots = view.jackSpots();
+    if (spot < 0 || spot >= (int) spots.size() || dragFrom.empty())
+        return false;
+    const auto& sp = spots[(size_t) spot];
+    if (proc.rack().check (dragFrom, sp.id) != Rack::Check::Ok)
+        return false;
+    // A picked-up cable keeps its colour, so only the rack's rule applies; a new cable also obeys the palette.
+    return moving >= 0 || ! jackDimmed (sp);
+}
+
+void RackCableLayer::commit (const std::vector<CableSpec>& next, const std::string& label)
+{
+    proc.editCables (next, label);
     view.reloadCables();
 }
 
@@ -436,8 +505,9 @@ Rack::Check RackCableLayer::connect (const std::string& from, const std::string&
     spec.a = from;
     spec.b = to;
     spec.age = maxAge (next) + 1;
+    spec.z = cable::zForNewCable (next);
     next.push_back (spec);
-    commit (next);
+    commit (next, "Patch cable");
     return c;
 }
 
@@ -450,15 +520,47 @@ int RackCableLayer::disconnectAll (const std::string& jack)
     if (n > 0)
     {
         selected = -1;
-        commit (next);
+        commit (next, n > 1 ? "Disconnect cables" : "Remove cable");
     }
     return n;
 }
 
 void RackCableLayer::setColour (int index, int colour)
 {
-    if (proc.setCableColor (index, colour))
-        refresh();
+    auto next = proc.rack().cables();
+    if (index < 0 || index >= (int) next.size())
+        return;
+    next[(size_t) index].color = colour;
+    commit (next, "Cable colour");
+}
+
+bool RackCableLayer::bringToFront (int index)
+{
+    auto next = proc.rack().cables();
+    if (! cable::bringToFront (next, index))
+        return false;
+    commit (next, "Bring cable to front");
+    return true;
+}
+
+bool RackCableLayer::undo()
+{
+    cancelDrag();
+    if (! proc.undoCables())
+        return false;
+    selected = -1;
+    view.reloadCables();
+    return true;
+}
+
+bool RackCableLayer::redo()
+{
+    cancelDrag();
+    if (! proc.redoCables())
+        return false;
+    selected = -1;
+    view.reloadCables();
+    return true;
 }
 
 void RackCableLayer::selectCable (int index)
@@ -474,19 +576,22 @@ bool RackCableLayer::deleteSelected()
     auto next = proc.rack().cables();
     next.erase (next.begin() + selected);
     selected = -1;
-    commit (next);
+    commit (next, "Remove cable");
     return true;
 }
 
 bool RackCableLayer::cancelDrag()
 {
-    if (! dragging)
-        return false;
+    const bool was = dragging || moving >= 0 || pressedOnJack;
     dragging = false;
+    pressedOnJack = false;
     moving = -1;
     dragTarget = -1;
-    refresh();
-    return true;
+    dragFrom.clear();
+    pressJack.clear();
+    if (was)
+        refresh();
+    return was;
 }
 
 void RackCableLayer::mouseMove (const juce::MouseEvent& e)
@@ -512,8 +617,8 @@ void RackCableLayer::mouseExit (const juce::MouseEvent&)
 
 void RackCableLayer::mouseDown (const juce::MouseEvent& e)
 {
+    cancelDrag();
     const int sp = spotAt (e.position);
-    pressedOnJack = sp >= 0;
     if (e.mods.isPopupMenu())
     {
         if (sp >= 0)
@@ -524,49 +629,59 @@ void RackCableLayer::mouseDown (const juce::MouseEvent& e)
     }
     if (sp < 0)
     {
-        selectCable (cableAt (e.position));
+        // A click on a cable selects it and brings it to the front.
+        const int cb = cableAt (e.position);
+        if (cb >= 0)
+            bringToFront (cb);
+        selectCable (cb);
         return;
     }
-    const auto& spot = view.jackSpots()[(size_t) sp];
+    pressedOnJack = true;
+    const auto spot = view.jackSpots()[(size_t) sp];
     // RONIN's meter reads the jack last pressed (as on its own patch bay).
     if (auto* r = dynamic_cast<RoninDevice*> (view.slotDevice (spot.slot)))
         if (spot.jack < kPanelJackCount)
             r->setMeterJack (spot.jack);
 
-    // Pick up the newest cable on this jack, unless Shift (stack a new one) or the jack is free.
+    // The top plug on this jack is picked up (reroute), unless Option/Alt is held (stack a new cable) or the jack is
+    // free. A new cable cannot start on a jack the palette colour dims.
     const auto& cables = proc.rack().cables();
-    int newest = -1;
-    for (int i = 0; i < (int) cables.size(); ++i)
-        if ((cables[(size_t) i].a == spot.id || cables[(size_t) i].b == spot.id) && (newest < 0 || cables[(size_t) i].age >= cables[(size_t) newest].age))
-            newest = i;
-    if (newest >= 0 && ! e.mods.isShiftDown())
+    pressJack = spot.id;
+    press = cable::planPress (cables, spot.id, e.mods.isAltDown(), jackDimmed (spot));
+    if (press.what == cable::Press::PickUp)
     {
-        moving = newest;
-        const auto& c = cables[(size_t) newest];
-        dragFrom = c.a == spot.id ? c.b : c.a;
+        const auto& c = cables[(size_t) press.cable];
+        dragFrom = press.end == 0 ? c.b : c.a;          // the far end stays where it is
         const auto* fixed = view.spotFor (dragFrom);
         dragOrigin = fixed != nullptr ? fixed->p : spot.p.translated (0.0f, 40.0f * s());
     }
     else
     {
-        moving = -1;
-        dragFrom = spot.id;
+        dragFrom = press.what == cable::Press::NewCable ? spot.id : std::string();
         dragOrigin = spot.p;
     }
+    moving = -1;                // set once the drag starts, so a click on a jack only meters it
     dragPos = e.position;
     dragTarget = -1;
-    dragging = false;     // starts after a few pixels, so a click on a jack only meters it
+    dragging = false;
 }
 
 void RackCableLayer::mouseDrag (const juce::MouseEvent& e)
 {
-    if (! pressedOnJack || dragFrom.empty())
+    if (! pressedOnJack)
         return;
     if (! dragging && e.getDistanceFromDragStart() < 4)
         return;
+    if (press.what == cable::Press::Refused)
+    {
+        if (message.isEmpty())
+            say ("can't take a " + roleName ((jcs::Role) proc.cablePalette) + " cable: pick ANY or its colour", e.position);
+        return;
+    }
     if (! dragging)
     {
         dragging = true;
+        moving = press.what == cable::Press::PickUp ? press.cable : -1;
         compute();
     }
     dragPos = e.position;
@@ -580,51 +695,58 @@ void RackCableLayer::mouseUp (const juce::MouseEvent& e)
 {
     if (! dragging)
     {
-        pressedOnJack = false;
-        if (moving >= 0)
-        {
-            moving = -1;
-            refresh();
-        }
+        cancelDrag();
         return;
     }
-    dragging = false;
-    pressedOnJack = false;
     const int target = spotAt (e.position);
-    auto next = proc.rack().cables();
+    const auto spots = view.jackSpots();
+    const bool onJack = target >= 0 && spots[(size_t) target].id != dragFrom;
+    const std::string to = onJack ? spots[(size_t) target].id : std::string();
+    const bool takes = onJack && jackTakesDrag (target);
+    const auto plan = press;
+    const auto from = dragFrom;
+    const auto origin = pressJack;
     const int was = moving;
-    moving = -1;
-    dragTarget = -1;
-    if (target < 0)
+    cancelDrag();
+
+    auto next = proc.rack().cables();
+    switch (cable::planDrop (plan, onJack, to == origin, takes))
     {
-        if (was >= 0)                                          // a plug pulled off every jack: unplugged
+        case cable::Drop::Remove:                                   // a plug pulled off every jack: unplugged
+            if (was >= 0 && was < (int) next.size())
+            {
+                next.erase (next.begin() + was);
+                selected = -1;
+                commit (next, "Remove cable");
+            }
+            break;
+        case cable::Drop::Reroute:
+            if (was >= 0 && was < (int) next.size())
+            {
+                cable::reroute (next, was, plan.end, to);
+                auto& spec = next[(size_t) was];
+                spec.autoRouted = false;
+                spec.legacyInvert = proc.rack().legacyInversionDiffers (spec.a, spec.b) && spec.legacyInvert;
+                selected = was;
+                commit (next, "Move cable");
+            }
+            break;
+        case cable::Drop::Connect:
+            if (connect (from, to) == Rack::Check::Ok)
+                selected = (int) proc.rack().cables().size() - 1;
+            break;
+        case cable::Drop::Refused:
         {
-            next.erase (next.begin() + was);
-            selected = -1;
-            commit (next);
+            const auto c = proc.rack().check (from, to);
+            say (c != Rack::Check::Ok ? juce::String (Rack::checkText (c))
+                                      : "can't take a " + roleName ((jcs::Role) proc.cablePalette) + " cable", e.position);
+            break;
         }
-        else
-            refresh();
-        return;
+        case cable::Drop::Return:
+        case cable::Drop::Nothing:
+            break;
     }
-    const auto& to = view.jackSpots()[(size_t) target].id;
-    const auto c = proc.rack().check (dragFrom, to);
-    if (c != Rack::Check::Ok)
-    {
-        say (Rack::checkText (c), e.position);
-        refresh();
-        return;
-    }
-    if (was >= 0)
-    {
-        auto& spec = next[(size_t) was];
-        if (spec.a == dragFrom) spec.b = to; else spec.a = to;
-        spec.autoRouted = false;
-        spec.legacyInvert = proc.rack().legacyInversionDiffers (spec.a, spec.b) && spec.legacyInvert;
-        commit (next);
-    }
-    else
-        connect (dragFrom, to);
+    refresh();
 }
 
 // ---------------- menus ----------------
@@ -661,6 +783,17 @@ void RackCableLayer::showJackMenu (int spotIndex)
         if (rack.cables()[(size_t) i].a == spot.id || rack.cables()[(size_t) i].b == spot.id)
             mine.push_back (i);
     menu.addItem (1, "Disconnect" + (mine.size() > 1 ? " all (" + juce::String ((int) mine.size()) + ")" : juce::String()), ! mine.empty());
+    if (mine.size() > 1)                                  // stacked plugs: choose which one is on top
+    {
+        juce::PopupMenu front;
+        const int top = cable::topCableAt (rack.cables(), spot.id);
+        for (int i : mine)
+        {
+            const auto& c = rack.cables()[(size_t) i];
+            front.addItem (3000 + i, "#" + juce::String (i + 1) + juce::String::fromUTF8 (" â ") + farName (c.a == spot.id ? c.b : c.a), true, i == top);
+        }
+        menu.addSubMenu ("Bring to front", front);
+    }
     juce::PopupMenu colours;
     colours.addItem (100, "Role colour");
     for (int k = 0; k < kSwatchCount; ++k)
@@ -685,6 +818,8 @@ void RackCableLayer::showJackMenu (int spotIndex)
                 sp->setColour (i, r - 101);
         else if (r >= 1000 && r < 2000 && r - 1000 < (int) targets.size())
             sp->connect (spot.id, targets[(size_t) (r - 1000)]);
+        else if (r >= 3000)
+            sp->bringToFront (r - 3000);
         else if (r >= 2000)
         {
             const int i = r - 2000;
@@ -700,29 +835,52 @@ void RackCableLayer::showJackMenu (int spotIndex)
     });
 }
 
-void RackCableLayer::showCableMenu (int cable)
+juce::PopupMenu RackCableLayer::cableMenu (int index) const
 {
-    selectCable (cable);
-    const auto c = proc.rack().cables()[(size_t) cable];
+    const auto c = proc.rack().cables()[(size_t) index];
     juce::PopupMenu menu;
-    menu.addSectionHeader ("#" + juce::String (cable + 1) + "  " + jackLabel (c.a) + juce::String::fromUTF8 (" \xe2\x86\x94 ") + jackLabel (c.b));
+    menu.addSectionHeader ("#" + juce::String (index + 1) + "  " + jackLabel (c.a) + juce::String::fromUTF8 (" \xe2\x86\x94 ") + jackLabel (c.b));
     juce::PopupMenu colours;
     colours.addItem (100, "Role colour", true, c.color < 0);
     for (int k = 0; k < kSwatchCount; ++k)
         colours.addColouredItem (101 + k, swatchName (k), swatchColour (k), true, c.color == k);
+    menu.addItem (CableMenuRemove, "Remove");
+    menu.addItem (CableMenuFront, "Bring to front", ! cable::isOnTop (proc.rack().cables(), index));
     menu.addSubMenu ("Colour", colours);
-    menu.addItem (1, "Delete cable");
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
-                        [sp = juce::Component::SafePointer<RackCableLayer> (this), cable] (int r)
+    return menu;
+}
+
+bool RackCableLayer::cableMenuResult (const CableSpec& c, int r)
+{
+    // The patch may have changed while the menu was open: act on this cable only if it is still there.
+    const auto& now = proc.rack().cables();
+    const auto it = std::find (now.begin(), now.end(), c);
+    if (r == 0 || it == now.end())
+        return false;
+    const int i = (int) (it - now.begin());
+    if (r == CableMenuRemove)
     {
-        if (sp == nullptr || r == 0)
-            return;
-        if (r == 1)
-        {
-            sp->selected = cable;
-            sp->deleteSelected();
-        }
-        else if (r >= 100)
-            sp->setColour (cable, r - 101);
+        selected = i;
+        return deleteSelected();
+    }
+    if (r == CableMenuFront)
+        return bringToFront (i);
+    if (r >= 100 && r < 101 + kSwatchCount)
+    {
+        setColour (i, r - 101);
+        return true;
+    }
+    return false;
+}
+
+void RackCableLayer::showCableMenu (int index)
+{
+    selectCable (index);
+    const auto c = proc.rack().cables()[(size_t) index];
+    cableMenu (index).showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
+                                     [sp = juce::Component::SafePointer<RackCableLayer> (this), c] (int r)
+    {
+        if (sp != nullptr)
+            sp->cableMenuResult (c, r);
     });
 }

@@ -7,12 +7,14 @@
 // 960 x 540 at the smallest; the rack scrolls.
 // Keys: Tab flips FRONT/BACK; K cycles the cable mode; F folds the selected device, Shift+F folds or opens every
 // device; C opens or closes the selected device; Esc cancels a cable drag (or clears the selection); Delete removes
-// the selected cable.
+// the selected cable; Cmd+Z / Shift+Cmd+Z (Mac) or Ctrl+Z / Ctrl+Y (Windows) undo and redo cable edits.
+// Under the header, the cable bar (CableBar): the cable colour palette and the cable gestures in plain words.
 
 #include "JidaiProcessor.h"
 #include "RackLookAndFeel.h"
 #include "DeviceBrowser.h"
 #include "RackView.h"
+#include "CableBar.h"
 
 class JidaiEditor : public juce::AudioProcessorEditor,
                     public juce::DragAndDropContainer,
@@ -33,6 +35,7 @@ public:
     juce::Component& deviceList();
     DeviceBrowser& browser() { return *list; }
     juce::Component& header();
+    CableBar& cableBar() { return *bar; }
     void setBrowserOpen (bool);
     void setScalePercent (int);
     float uiScale() const { return (float) proc.scalePercent / 100.0f; }
@@ -66,6 +69,7 @@ private:
     RackLookAndFeel laf;                     // sans menus, enlarged tooltips; outlives every child
     std::unique_ptr<DeviceBrowser> list;
     std::unique_ptr<Header> head;
+    std::unique_ptr<CableBar> bar;
     juce::Viewport view;
     RackView rack;
     bool dropLanded = false;

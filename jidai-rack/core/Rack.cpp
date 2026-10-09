@@ -455,6 +455,27 @@ bool Rack::setCableColor (int index, int color)
     return true;
 }
 
+bool Rack::setCableLooks (const std::vector<CableSpec>& cables)
+{
+    std::lock_guard<std::mutex> g (lock_);
+    if (cables.size() != cables_.size())
+        return false;
+    for (size_t i = 0; i < cables.size(); ++i)
+    {
+        auto same = cables[i];
+        same.color = cables_[i].color;
+        same.z = cables_[i].z;
+        if (! (same == cables_[i]))
+            return false;
+    }
+    for (size_t i = 0; i < cables.size(); ++i)
+    {
+        cables_[i].color = cables[i].color;     // colour and z never change sound: no rebuild
+        cables_[i].z = cables[i].z;
+    }
+    return true;
+}
+
 bool Rack::legacyInversionDiffers (const std::string& a, const std::string& b) const
 {
     Device* da = nullptr;

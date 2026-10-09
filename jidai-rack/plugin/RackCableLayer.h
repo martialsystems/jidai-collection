@@ -13,10 +13,16 @@
 // A cable whose other end is not on show (a back-only jack on the FRONT, a CLOSED or folded device, another tab) is a
 // stub with a tag saying where the far end is. Badges: +n comp (R11) on MAIN OUT cables, delta-n skew, the R4.3 / 3.9
 // warnings, and a z^-1 mark on feedback cables (R9).
-// Editing: drag from a jack to patch (compatible jacks ring green, refusals say why); drag a plug to move a cable end
-// (off every jack to unplug it); Shift-drag stacks a new cable on a patched jack; click a cable to select it (Delete
-// removes it); right-click a jack or cable for Connect to..., Disconnect, Colour. The layer only takes the mouse on
-// jacks and cables, so the panels under it keep theirs.
+// Editing (the shared gestures of jidai/ui/CableEdit.h, the same on every unit's back panel):
+//   drag a plugged end to another jack: reroute (the same cable keeps its colour and age; one undo step);
+//   drag from an empty jack: a new cable (jacks that take it ring green, the rest are dimmed; refusals say why);
+//   Option-drag (Mac) / Alt-drag from a used jack: stack another cable on it;
+//   click a cable: select it and bring it to the front (z, saved with the rack); Delete removes it;
+//   palette colour (proc.cablePalette): jacks that cannot take a cable of that colour are dimmed and refuse new cables;
+//   drag an end into empty space, or right-click a cable > Remove: remove it;
+//   right-click a jack: Connect to..., Bring to front, Disconnect, Cable colour.
+// Every edit goes through JidaiProcessor::editCables (undo / redo). The layer only takes the mouse on jacks and
+// cables, so the panels under it keep theirs.
 
 #include "RackView.h"
 
@@ -46,6 +52,15 @@ public:
     void selectCable (int index);
     int selectedCable() const { return selected; }
     bool deleteSelected();
+    bool bringToFront (int index);       // false if it already was in front
+    bool undo();
+    bool redo();
+    bool jackDimmed (const RackView::JackSpot&) const;     // by the palette colour
+    bool jackTakesDrag (int spot) const;                   // during a drag: the cable being drawn can go there
+    // Right-click on a cable: Remove, Bring to front, Colour. The result acts on that cable if it is still patched.
+    enum { CableMenuRemove = 1, CableMenuFront = 2 };
+    juce::PopupMenu cableMenu (int index) const;
+    bool cableMenuResult (const jidai::CableSpec& cable, int result);
     bool cancelDrag();
     bool isDragging() const { return dragging; }
     jidai::Rack::Check connect (const std::string& from, const std::string& to);
@@ -68,9 +83,10 @@ private:
     int spotAt (juce::Point<float>) const;
     int cableAt (juce::Point<float>) const;
     juce::String farName (const std::string& id) const;
-    void commit (const std::vector<jidai::CableSpec>&);
+    void commit (const std::vector<jidai::CableSpec>&, const std::string& label);
+    jidai::cable::JackFacts factsFor (const RackView::JackSpot&) const;
     void showJackMenu (int spot);
-    void showCableMenu (int cable);
+    void showCableMenu (int index);
     void say (const juce::String& text, juce::Point<float> where);
     juce::Path rope (juce::Point<float> a, juce::Point<float> b) const;
     juce::Path stub (juce::Point<float> a) const;
@@ -82,6 +98,8 @@ private:
     int selected = -1, hoverSpot = -1, hoverCable = -1;
     bool dragging = false, pressedOnJack = false;
     std::string dragFrom;                // the fixed end of the cable being drawn
+    std::string pressJack;               // the jack the press started on
+    jidai::cable::PressPlan press;       // what the press does (pick up, new cable, refused)
     int moving = -1;                     // cable whose end is picked up, or -1 for a new cable
     juce::Point<float> dragOrigin, dragPos;
     int dragTarget = -1;

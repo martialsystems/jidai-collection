@@ -8,6 +8,7 @@
 // hears what is patched into MAIN OUT. The reported latency is the rack's path latency (JCS R11).
 
 #include "core/Rack.h"
+#include "jidai/ui/CableEdit.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -62,6 +63,12 @@ public:
     void moveDevice (jidai::Device* device, int position);
     void setCables (const std::vector<jidai::CableSpec>& cables);
     bool setCableColor (int index, int color);
+    // A cable edit made by the user (patch, reroute, remove, colour, bring to front): one undo step named `label`.
+    // Colour and z alone never rebuild the graph.
+    void editCables (const std::vector<jidai::CableSpec>& next, const std::string& label);
+    bool undoCables();               // false when there is nothing to undo or the patch changed some other way since
+    bool redoCables();
+    const jidai::cable::History<jidai::CableSpec>& cableHistory() const { return cableHistory_; }
     void loadRoninProgram (jidai::RoninDevice* ronin, int index);   // factory program on this RONIN only; the screen shows it on bank A
     void resetToDefaultRack();       // RACK I/O only: the INIT starter rack
     // Message thread: picks up device latency changes (ORIGAMI 2x) and reports the rack's latency to the host.
@@ -81,6 +88,9 @@ public:
     int cableModeFront = CablesHidePassThru;
     int cableModeBack = CablesAll;
     int scalePercent = 100;
+    // Not saved: the colour picked on the cable bar (jidai::cable::kAnyRole or a jcs::Role index). Jacks that cannot
+    // take a cable of that colour are dimmed and refuse new cables.
+    int cablePalette = jidai::cable::kAnyRole;
     juce::String migrationNotice;    // set when an older rack was migrated ("N cables kept their old S-trig inversion")
     static constexpr int kStateVersion = 3;
 
@@ -153,6 +163,7 @@ private:
     jidai::BushidoDevice* firstBushido() const;
 
     jidai::Rack rack_;
+    jidai::cable::History<jidai::CableSpec> cableHistory_;
     std::atomic<int> currentProgram_ { 0 };
     // Held by every change to the rack's devices and cables (message thread) and by getStateInformation, so a state
     // saved on another thread is never half a rack. Recursive.
