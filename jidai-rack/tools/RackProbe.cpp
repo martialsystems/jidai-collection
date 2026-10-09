@@ -669,7 +669,8 @@ int main (int argc, char** argv)
         {
             const int j = cableIndex (proc, cvA, vOct);
             bool hasRemove = false;
-            for (juce::PopupMenu::MenuItemIterator it (layer.cableMenu (j)); it.next();)
+            const auto menu = layer.cableMenu (j);      // kept alive while the iterator walks it
+            for (juce::PopupMenu::MenuItemIterator it (menu); it.next();)
                 hasRemove = hasRemove || (it.getItem().itemID == RackCableLayer::CableMenuRemove && it.getItem().text == "Remove");
             expect (hasRemove, "the cable menu has Remove");
             const auto before = cablesNow();
