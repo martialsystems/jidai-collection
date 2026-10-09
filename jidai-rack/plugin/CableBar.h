@@ -9,6 +9,7 @@
 // on it for half a second shows it larger.
 
 #include "JidaiProcessor.h"
+#include "RackStyle.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -29,7 +30,7 @@ public:
     bool zoomShowing() const;
     void showZoom (bool show);
     juce::StringArray helpRows() const;                        // the two rows shown on the bar
-    static float helpFontPx (float k) { return juce::jmax (kHelpTextPx, 12.5f) * k; }
+    static float helpFontPx (float k) { return juce::jmax (rackstyle::kHelpTextPx, 12.5f) * k; }
 
     void paint (juce::Graphics&) override;
     void mouseMove (const juce::MouseEvent&) override;
