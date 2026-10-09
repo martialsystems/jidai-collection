@@ -4,6 +4,7 @@
 #include "jidai/CableStandard.h"
 #include "jidai/dsp/Halfband.h"
 #include "jidai/dsp/TripleShaper.h"
+#include "jidai/ui/CableEdit.h"
 
 int main()
 {
