@@ -38,6 +38,9 @@ struct CableSpec {
     int age = 0;                // larger = patched later; R9 walks cables oldest -> newest
     bool autoRouted = false;    // made by auto-route on insert (saved as auto="1")
     bool legacyInvert = false;  // M3: keeps the v2 S-15 inversion on this one cable
+    int z = 0;                  // drawing order, visual only (saved as z="n" when not 0): higher is in front;
+                                // equal z draws in list order. Never changes sound.
+    bool operator== (const CableSpec&) const = default;
 };
 
 // What the rack worked out for one cable (index-aligned with cables()). Message thread.
@@ -102,6 +105,9 @@ public:
     Check check (const std::string& jackA, const std::string& jackB) const;
     Check connect (const std::string& jackA, const std::string& jackB, int color = -1);    // appends as the newest
     bool setCableColor (int index, int color);
+    // Colour and z of every cable at once (same cables, same order): visual only, no graph rebuild. False if the
+    // list does not match the patch in anything but colour and z.
+    bool setCableLooks (const std::vector<CableSpec>& cables);
     bool disconnect (const std::string& jackA, const std::string& jackB);
     // Replaces the cables that have both ends on this device. Cables to other devices stay.
     void replaceInternalCables (Device* device, const std::vector<CableSpec>& cables);

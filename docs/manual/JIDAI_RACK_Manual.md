@@ -68,7 +68,7 @@ Choose **RACKS ▾ › FX › Filter Fold FX** on an audio track. Your track run
 
 ### 3.1 The window
 
-The window has three parts: the **header** along the top, the **device browser** on the left and the **rack** itself. It opens at 1200 × 672 and can be made as small as 960 × 540. The rack scrolls when it is taller than the window.
+The window has four parts: the **header** along the top, the **cable bar** under it, the **device browser** on the left and the **rack** itself. It opens at 1200 × 672 and can be made as small as 960 × 540. The rack scrolls when it is taller than the window.
 
 ### 3.2 Header
 
@@ -81,6 +81,8 @@ The window has three parts: the **header** along the top, the **device browser**
 | **LAT** | The rack's total latency in samples, as reported to your DAW. |
 | **Scale (for example 100%)** | Click to step the window size through 75 %, 100 %, 125 %, 150 % and 200 %. |
 | Notice | After loading a rack saved by an older version, a notice lists what was converted. Click it to dismiss it. |
+
+**Cable bar** (under the header): pick a cable color (or **ANY**) to dim the jacks that can't take it, and read every cable gesture in two help lines. Rest the pointer on them to see them larger.
 
 ### 3.3 Device browser
 
@@ -248,7 +250,8 @@ When closed, SHOGUN is a 1 U strip. On the back, its 151 jacks fill a 4 U plate.
 | **F** | Fold or unfold the selected device. **Shift+F** folds or unfolds all devices. |
 | **C** | Open or close the selected device. |
 | **Esc** | Cancel a cable drag, or clear the selection. |
-| **Delete / Backspace** | Delete the selected cable. |
+| **Delete / Backspace** | Remove the selected cable. |
+| **Cmd+Z / Shift+Cmd+Z** (Mac), **Ctrl+Z / Ctrl+Y** (Windows) | Undo or redo the last cable change: a new cable, a move, a removal, a color or bringing a cable to the front. A move undoes in one step. |
 
 ---
 
@@ -256,12 +259,15 @@ When closed, SHOGUN is a 1 U strip. On the back, its 151 jacks fill a 4 U plate.
 
 ### 4.1 Making cables
 
-- **Drag** from one jack to another to connect them. While you drag, jacks that can take the cable ring green. A jack that can't tells you why (for example, two outputs).
-- **Drag a plug** to move that end of a cable. Drop it away from any jack to unplug it.
-- **Shift-drag** from a jack that is already patched to stack another cable on it.
-- **Right-click a jack** for: *Connect to…* (a menu of every compatible jack in the rack, by device), *Disconnect* (or *Disconnect all*), *Cable colour*, and *Go to →* for each cable on that jack.
-- **Right-click a cable** for its *Colour* and *Delete cable*.
-- **Click a cable** to select it. **Delete** removes it.
+- **Reroute:** drag a plugged cable end to another jack. It is the same cable, with the same color, and the other end stays where it is. Dropping it back on its own jack changes nothing.
+- **New cable:** drag from an empty jack to another jack. While you drag, the jacks that can take the cable ring green and the rest are dimmed. A jack that can't take it tells you why (for example, two outputs).
+- **Stack:** **Option-drag** (Mac) or **Alt-drag** (Windows) from a jack that already has a cable to start another cable from it. A plain drag on that jack picks up the cable on top instead.
+- **Bring to front:** click a cable. It is drawn over the others, and its plug is the one you pick up where cables share a jack. The order is saved with the rack. To choose which stacked cable is on top at a jack, right-click the jack and use *Bring to front*.
+- **Pick a color:** click a color on the cable bar. The jacks that can't take a cable of that color are dimmed and refuse a new cable. Cables already patched can still be moved.
+- **Remove:** drag a cable end into empty space, or right-click the cable and choose *Remove*. Or click it and press **Delete**.
+- **Undo:** **Cmd+Z** (Mac) or **Ctrl+Z** (Windows) undoes any of these. Redo with **Shift+Cmd+Z** or **Ctrl+Y**.
+- **Right-click a jack** for: *Connect to…* (a menu of every compatible jack in the rack, by device), *Bring to front* (when cables share the jack), *Disconnect* (or *Disconnect all*), *Cable colour*, and *Go to →* for each cable on that jack.
+- **Right-click a cable** for *Remove*, *Bring to front* and its *Colour*.
 
 You can patch on the front, where a device's panel shows jacks, or on the back, where every jack of every device is available.
 
@@ -283,6 +289,8 @@ Every jack has a signal type, shown by the colour of its ring. A new cable takes
 | Green | **Gate / clock** | 0 V off, 5 V on. Read as on above 1.0 V and off below 0.5 V. |
 | Yellow | **CV** | modulation voltages |
 | Purple | **S-trigger** (RONIN's envelope TRIG inputs) | Gates are converted for you |
+
+Picking a color on the cable bar dims the jacks that can't take it: outputs of other colors, and gate inputs for audio or CV.
 
 You can give any cable another colour (red, yellow, green, blue, white or orange) from its menu. Colour never changes the sound.
 
