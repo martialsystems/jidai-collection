@@ -1,16 +1,17 @@
-## Download: 
-- [Mac](https://github.com/martialsystems/jidai-collection/releases/latest/download/JIDAI-RACK-macOS.zip)
-- [Windows](https://github.com/martialsystems/jidai-collection/releases/latest/download/JIDAI-RACK-Windows.zip)
 
-> **Found a bug?** Please [open a GitHub issue](https://github.com/martialsystems/jidai-collection/issues/new/choose) and fill in the bug report form.
-
----
 
 # The Jidai Collection
 
 **Patchable instruments and effects from Martial Systems, and one rack to hold them all.**
 
 JIDAI RACK is the plugin to install. BUSHIDO, RONIN, ORIGAMI and SHOGUN are already in it. Every jack takes a cable, and a cable runs from any device to any other, so a sequence from BUSHIDO drives a voice in RONIN with one drag. The separate plugins are one device at a time: BUSHIDO sending MIDI to other instruments, RONIN as one voice on a track, SHOGUN as a drum machine, and ORIGAMI as an insert.
+
+## Download: 
+
+- [Mac](https://github.com/martialsystems/jidai-collection/releases/latest/download/JIDAI-RACK-macOS.zip)
+- [Windows](https://github.com/martialsystems/jidai-collection/releases/latest/download/JIDAI-RACK-Windows.zip)
+
+**Found a bug?** Please [open a GitHub issue](https://github.com/martialsystems/jidai-collection/issues/new/choose) and fill in the bug report form.
 
 ## The devices
 
