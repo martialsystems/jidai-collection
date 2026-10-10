@@ -1,10 +1,14 @@
+Download: [Mac](https://github.com/martialsystems/jidai-collection/releases/latest/download/JIDAI-RACK-macOS.zip), [Windows](https://github.com/martialsystems/jidai-collection/releases/latest/download/JIDAI-RACK-Windows.zip).
+
+One device on its own: [BUSHIDO](https://github.com/martialsystems/bushido), [RONIN](https://github.com/martialsystems/Ronin), [SHOGUN](https://github.com/martialsystems/shogun), [ORIGAMI](https://github.com/martialsystems/origami).
+
 > **Found a bug?** Please [open a GitHub issue](https://github.com/martialsystems/jidai-collection/issues/new/choose) and fill in the bug report form.
 
 # The Jidai Collection
 
 **Patchable instruments and effects from Martial Systems, and one rack to hold them all.**
 
-The Jidai Collection is a family of plugins built like modular hardware. Every device has jacks, every jack takes a cable, and every device follows the same patching rules, so a sequence from one drives a voice in another with a single drag. Use each one on its own in your DAW, or put them together in the JIDAI RACK and patch across all of them.
+JIDAI RACK is the plugin to install. BUSHIDO, RONIN, ORIGAMI and SHOGUN are already in it. Every jack takes a cable, and a cable runs from any device to any other, so a sequence from BUSHIDO drives a voice in RONIN with one drag. The separate plugins are one device at a time: BUSHIDO sending MIDI to other instruments, RONIN as one voice on a track, SHOGUN as a drum machine, and ORIGAMI as an insert.
 
 ## The devices
 
@@ -56,7 +60,7 @@ JIDAI RACK is a rack cabinet in a plugin window. Drag devices in from the browse
 
 ## Quick start
 
-1. Build the rack (see Build). Copy `JIDAI RACK.vst3` into your VST3 folder (`~/Library/Audio/Plug-Ins/VST3/` on macOS, `~/.vst3/` on Linux), or run the standalone app.
+1. Download JIDAI RACK above and copy `JIDAI RACK.vst3` into your VST3 folder (`~/Library/Audio/Plug-Ins/VST3/` on macOS, `C:\Program Files\Common Files\VST3` on Windows), or run the standalone app. To build it yourself, see Build.
 2. In your DAW, insert JIDAI RACK as an effect on a track. Send it MIDI to use RACK I/O's MIDI jacks.
 3. Click BUSHIDO, then RONIN, in the browser. RONIN lands under BUSHIDO already patched for pitch and gate, with its output going to MAIN OUT.
 4. Press Tab to flip to the back and start patching.
@@ -92,7 +96,7 @@ On Linux, run it under `xvfb-run -a` for the UI tests.
 
 - **Jidai Cable Standard v1.1.** Every device shares the same rules: ±5 V audio, 0/5 V gates read with a Schmitt trigger (high above 1.0 V, low below 0.5 V), role colours, and stable jack names.
 - **Pitch.** 1 V/oct with C3 = 130.81 Hz at 0 V. RONIN's linear HZ/V input has its own jack, and RACK I/O provides both.
-- **Formats.** JIDAI RACK is a VST3 effect with MIDI input, plus a standalone app, for macOS and Linux.
+- **Formats.** JIDAI RACK is a VST3 effect with MIDI input, plus a standalone app. The release zips are macOS and Windows. The same CMake project builds on Linux.
 - **RONIN in the rack** runs at its standard rate, so its jacks stay sample-accurate with the other devices. The standalone RONIN plugin keeps its 2x HQ mode.
 
 ## In this repository

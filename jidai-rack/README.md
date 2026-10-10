@@ -1,3 +1,5 @@
+Download: [Mac](https://github.com/martialsystems/jidai-collection/releases/latest/download/JIDAI-RACK-macOS.zip), [Windows](https://github.com/martialsystems/jidai-collection/releases/latest/download/JIDAI-RACK-Windows.zip).
+
 # JIDAI RACK
 
 **BUSHIDO, RONIN, ORIGAMI and SHOGUN in one rack, in one plugin.**
