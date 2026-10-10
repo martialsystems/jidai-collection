@@ -4,7 +4,7 @@
 
 > **Found a bug?** Please [open a GitHub issue](https://github.com/martialsystems/jidai-collection/issues/new/choose) and fill in the bug report form.
 
---
+---
 
 # The Jidai Collection
 
