@@ -4,7 +4,11 @@
 
 **Patchable instruments and effects from Martial Systems, and one rack to hold them all.**
 
-JIDAI RACK is the plugin to install. BUSHIDO, RONIN, ORIGAMI and SHOGUN are already in it. Every jack takes a cable, and a cable runs from any device to any other, so a sequence from BUSHIDO drives a voice in RONIN with one drag. The separate plugins are one device at a time: BUSHIDO sending MIDI to other instruments, RONIN as one voice on a track, SHOGUN as a drum machine, and ORIGAMI as an insert.
+BUSHIDO: a 3 × 12 analog-style step sequencer.
+RONIN: the semi-modular synthesizer and effect.
+SHOGUN: a 16-voice analog-style drum machine with a full patch bay.
+Origami the triple wave folder, available as a standalone effect and as a rack device.
+JIDAI: the rack that hosts the collection side by side.
 
 ## Download: 
 
