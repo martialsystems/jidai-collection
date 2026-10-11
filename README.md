@@ -4,11 +4,11 @@
 
 **Patchable instruments and effects from Martial Systems, and one rack to hold them all.**
 
-BUSHIDO: a 3 × 12 analog-style step sequencer.
-RONIN: the semi-modular synthesizer and effect.
-SHOGUN: a 16-voice analog-style drum machine with a full patch bay.
-Origami the triple wave folder, available as a standalone effect and as a rack device.
-JIDAI: the rack that hosts the collection side by side.
+- BUSHIDO: a 3 × 12 analog-style step sequencer.
+- RONIN: the semi-modular synthesizer and effect.
+- SHOGUN: a 16-voice analog-style drum machine with a full patch bay.
+- ORIGAMI: the triple wave folder, available as a standalone effect and as a rack device.
+- JIDAI: the rack that hosts the collection side by side.
 
 ## Download: 
 
