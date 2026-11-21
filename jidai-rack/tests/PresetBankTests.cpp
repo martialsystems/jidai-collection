@@ -13,6 +13,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <memory>
 #include <string>
 
@@ -480,10 +481,12 @@ void testEditor()
 void runRackStateTests (int& checks, int& failures);
 void runStarterRackTests (int& checks, int& failures);
 void runShogunStateTests (int& checks, int& failures);
+void runRenderSmokeTests (int& checks, int& failures);
 
-int main()
+int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI gui;
+    const bool smokeOnly = argc > 1 && std::strcmp (argv[1], "--smoke") == 0;
     const auto support = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory);
     const auto bushidoDir = support.getChildFile ("BUSHIDO");
     const auto roninDir = support.getChildFile ("RONIN");
@@ -508,6 +511,15 @@ int main()
                 std::printf ("FAIL user store leaked into %s\n", roninDir.getFullPathName().toRawUTF8());
         }
     } guard { temp, bushidoExisted, roninExisted, bushidoDir, roninDir };
+
+    if (smokeOnly)
+    {
+        JidaiProcessor::setUserStoreRootForTest (temp);
+        runRenderSmokeTests (checks, failures);
+        std::printf ("%d checks, %d failed\n", checks, failures);
+        std::printf (failures == 0 ? "SMOKE PASS\n" : "SMOKE FAIL\n");
+        return failures == 0 ? 0 : 1;
+    }
 
     testCompiledBanks (temp.getChildFile ("compiled"));
 

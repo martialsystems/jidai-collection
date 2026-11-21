@@ -60,20 +60,26 @@ Racks saved by earlier versions load and convert automatically. The old host rou
 
 Needs CMake 3.22 or later and a C++20 compiler. JUCE 8.0.4 and the BUSHIDO, RONIN, ORIGAMI and SHOGUN sources are downloaded at pinned commits during configure.
 
+From the repository root (presets are in this folder's `CMakePresets.json`):
+
 ```sh
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-ctest --test-dir build --output-on-failure    # on Linux: xvfb-run -a ctest ...
+cmake -S jidai-rack --preset linux-dev    # mac-dev or windows-dev on those machines
+cmake --build build/linux-dev
+ctest --test-dir build/linux-dev -L fast --output-on-failure
 ```
 
-| Target | What it is |
-|---|---|
-| `JidaiRack_VST3`, `JidaiRack_Standalone` | The plugin and the standalone app. |
-| `JidaiRackTests` (`rack`) | Rack unit tests: graph, devices, cables, feedback and latency. |
-| `JidaiRackProbe` (`rack_ui`) | Drives the window offscreen with mouse and keys and writes screenshots to `rack-shots/`. |
-| `JidaiPresetTests` (`presets`) | Factory banks, saved patches, rack state and loading older versions. |
-| `JidaiCommonTests`, `JidaiDspTests`, `JidaiHeaderHygiene` (`common`, `dsp`, `headers`) | The shared jidai-common library. |
-| `OrigamiTests`, `OrigamiPluginTests` (`origami`, `origami_plugin`) | ORIGAMI, built from its own repository. |
+Or, from this folder: `cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release`, then `cmake --build build` and `ctest --test-dir build --output-on-failure`. On Linux, run the UI tests under `xvfb-run -a`. `ctest -L fast` is the short loop; `render` and `slow` are the longer tiers (`docs/FAST_TESTS.md`).
+
+| Target | Label | What it is |
+|---|---|---|
+| `JidaiRack_VST3`, `JidaiRack_Standalone` |  | The plugin and the standalone app. |
+| `JidaiRackTests` (`rack`) | fast | Rack unit tests: graph, devices, cables, feedback and latency. |
+| `JidaiPresetTests --smoke` (`smoke`) | fast | 1 s offline render check for NaN, denormals, peaks and silence on the processor audio path. |
+| `JidaiCommonTests`, `JidaiDspTests`, `JidaiHeaderHygiene`, `JidaiCableEditTests` (`common`, `dsp`, `headers`, `cables`) | fast | The shared jidai-common library. |
+| `OrigamiTests` (`origami`) | fast | ORIGAMI's DSP core, built from its own repository. |
+| `JidaiPresetTests` (`presets`) | render | Factory banks, saved patches, rack state and loading older versions. |
+| `OrigamiPluginTests` (`origami_plugin`) | render | ORIGAMI's plugin tests. |
+| `JidaiRackProbe` (`rack_ui`) | slow | Drives the window offscreen with mouse and keys and writes screenshots to `rack-shots/`. |
 
 To build against local checkouts, pass `-DFETCHCONTENT_SOURCE_DIR_JUCE=…`, `-DFETCHCONTENT_SOURCE_DIR_BUSHIDO=…`, `-DFETCHCONTENT_SOURCE_DIR_RONIN=…`, `-DFETCHCONTENT_SOURCE_DIR_ORIGAMI=…` and `-DFETCHCONTENT_SOURCE_DIR_SHOGUN=…`.
 

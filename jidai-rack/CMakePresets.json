@@ -1,0 +1,225 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 22,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/../build/${presetName}",
+      "cacheVariables": {
+        "JIDAI_USE_CCACHE": "ON"
+      }
+    },
+    {
+      "name": "linux-dev",
+      "displayName": "Linux Ninja (dev, RelWithDebInfo)",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/../build/linux-dev",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "linux-ci",
+      "displayName": "Linux Ninja (CI Release, GitHub Actions ubuntu-latest)",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/../build/linux-ci",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "mac-dev",
+      "displayName": "macOS Ninja (dev, native arch)",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/../build/mac-dev",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    },
+    {
+      "name": "mac-release",
+      "displayName": "macOS Ninja (universal release, same flags as release.yml)",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/../build/mac-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_OSX_ARCHITECTURES": "arm64;x86_64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "11.0"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    },
+    {
+      "name": "windows-dev",
+      "displayName": "Windows Ninja + MSVC (cl). Run from a VS Developer shell, or let tools/test_watch.ps1 import it.",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/../build/windows-dev",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "toolset": {
+        "value": "host=x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "windows-clangcl",
+      "displayName": "Windows Ninja + clang-cl (alternative to cl)",
+      "inherits": "windows-dev",
+      "binaryDir": "${sourceDir}/../build/windows-clangcl",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang-cl",
+        "CMAKE_CXX_COMPILER": "clang-cl"
+      }
+    },
+    {
+      "name": "windows-release",
+      "displayName": "Windows Ninja (release)",
+      "inherits": "windows-dev",
+      "binaryDir": "${sourceDir}/../build/windows-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "linux-dev",
+      "configurePreset": "linux-dev"
+    },
+    {
+      "name": "linux-ci",
+      "configurePreset": "linux-ci"
+    },
+    {
+      "name": "mac-dev",
+      "configurePreset": "mac-dev"
+    },
+    {
+      "name": "mac-release",
+      "configurePreset": "mac-release"
+    },
+    {
+      "name": "windows-dev",
+      "configurePreset": "windows-dev"
+    },
+    {
+      "name": "windows-clangcl",
+      "configurePreset": "windows-clangcl"
+    },
+    {
+      "name": "windows-release",
+      "configurePreset": "windows-release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "fast-base",
+      "hidden": true,
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "jobs": 2
+      }
+    },
+    {
+      "name": "fast-linux-dev",
+      "inherits": "fast-base",
+      "configurePreset": "linux-dev",
+      "filter": {
+        "include": {
+          "label": "fast"
+        }
+      }
+    },
+    {
+      "name": "fast",
+      "inherits": "fast-base",
+      "configurePreset": "linux-ci",
+      "displayName": "fast tier",
+      "filter": {
+        "include": {
+          "label": "fast"
+        }
+      }
+    },
+    {
+      "name": "render",
+      "inherits": "fast-base",
+      "configurePreset": "linux-ci",
+      "displayName": "render tier",
+      "filter": {
+        "include": {
+          "label": "render"
+        }
+      }
+    },
+    {
+      "name": "slow",
+      "inherits": "fast-base",
+      "configurePreset": "linux-ci",
+      "displayName": "slow tests (one at a time)",
+      "filter": {
+        "include": {
+          "label": "slow"
+        }
+      }
+    },
+    {
+      "name": "fast-mac-dev",
+      "inherits": "fast-base",
+      "configurePreset": "mac-dev",
+      "filter": {
+        "include": {
+          "label": "fast"
+        }
+      }
+    },
+    {
+      "name": "fast-windows",
+      "inherits": "fast-base",
+      "configurePreset": "windows-dev",
+      "filter": {
+        "include": {
+          "label": "fast"
+        }
+      }
+    }
+  ]
+}

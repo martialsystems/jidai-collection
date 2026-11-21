@@ -1,4 +1,9 @@
 cmake_minimum_required(VERSION 3.22)
+# When this folder is the top-level project, pick up the optional compiler cache.
+# As a subdirectory of jidai-rack the parent already included it before project().
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/JidaiCompilerCache.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/JidaiCompilerCache.cmake")
+endif()
 project(JidaiCommon VERSION 1.2.0 LANGUAGES CXX)
 
 # Header-only C++17: the Jidai Cable Standard v1.1 helpers and the shared DSP blocks.
@@ -20,6 +25,7 @@ if(JIDAI_COMMON_TESTS)
     target_compile_options(JidaiCommonTests PRIVATE -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wno-sign-conversion -Werror)
   endif()
   add_test(NAME common COMMAND JidaiCommonTests)
+  set_tests_properties(common PROPERTIES LABELS fast TIMEOUT 60)
 endif()
 
 if(JIDAI_COMMON_TESTS)
@@ -30,6 +36,7 @@ if(JIDAI_COMMON_TESTS)
     target_compile_options(JidaiDspTests PRIVATE -O2 -Wall -Wextra -Wpedantic -Wshadow -Werror)
   endif()
   add_test(NAME dsp COMMAND JidaiDspTests)
+  set_tests_properties(dsp PROPERTIES LABELS fast TIMEOUT 60)
 endif()
 
 if(JIDAI_COMMON_TESTS)
@@ -41,6 +48,7 @@ if(JIDAI_COMMON_TESTS)
     target_compile_options(JidaiHeaderHygiene PRIVATE -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wno-sign-conversion -Wfloat-equal -Wdouble-promotion -Werror)
   endif()
   add_test(NAME headers COMMAND JidaiHeaderHygiene)
+  set_tests_properties(headers PROPERTIES LABELS fast TIMEOUT 60)
 endif()
 
 if(JIDAI_COMMON_TESTS)
@@ -52,4 +60,5 @@ if(JIDAI_COMMON_TESTS)
     target_compile_options(JidaiCableEditTests PRIVATE -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wno-sign-conversion -Wfloat-equal -Wdouble-promotion -Werror)
   endif()
   add_test(NAME cables COMMAND JidaiCableEditTests)
+  set_tests_properties(cables PROPERTIES LABELS fast TIMEOUT 60)
 endif()

@@ -1,4 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/JidaiCompilerCache.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/JidaiCompilerCache.cmake")
+endif()
 project(JidaiRack VERSION 0.1.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -145,6 +148,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(JidaiRackTests PRIVATE -Wall -Wextra)
 endif()
 add_test(NAME rack COMMAND JidaiRackTests)
+# Labels are applied at the end of this file (fast / render / slow).
 
 # ---- panel art: each instrument's own vector panel and layout ----
 juce_add_binary_data(JidaiPanels
@@ -226,7 +230,7 @@ add_test(NAME rack_ui COMMAND JidaiRackProbe ${CMAKE_BINARY_DIR}/rack-shots)
 
 # Preset banks: factory lists, the compiled rack patches, and a temp user-file directory.
 juce_add_console_app(JidaiPresetTests PRODUCT_NAME "JidaiPresetTests")
-target_sources(JidaiPresetTests PRIVATE tests/PresetBankTests.cpp tests/RackStateTests.cpp tests/StarterRackTests.cpp tests/ShogunStateTests.cpp ${JIDAI_UI_SOURCES})
+target_sources(JidaiPresetTests PRIVATE tests/PresetBankTests.cpp tests/RackStateTests.cpp tests/StarterRackTests.cpp tests/ShogunStateTests.cpp tests/RenderSmokeTests.cpp ${JIDAI_UI_SOURCES})
 target_compile_definitions(JidaiPresetTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JIDAI_NO_PLUGIN_ENTRY=1 JIDAI_PRESET_TEST=1)
 target_link_libraries(JidaiPresetTests PRIVATE
   jidai_core
@@ -235,3 +239,46 @@ target_link_libraries(JidaiPresetTests PRIVATE
   juce::juce_audio_utils
   juce::juce_recommended_config_flags)
 add_test(NAME presets COMMAND JidaiPresetTests)
+# Offline render smoke (~1 s): NaN, denormals, peaks and silence on the processor audio path.
+add_test(NAME smoke COMMAND JidaiPresetTests --smoke)
+
+# ---- ctest labels (ctest -L <label>). Timings: see docs/FAST_TESTS.md ----
+#   fast   : unit/math checks and the offline render smoke test; each well under ~5 s
+#   render : short plugin / preset renders, typically 5-30 s
+#   slow   : heavy tests. They share a RESOURCE_LOCK and never run at the same time,
+#            even with ctest -j.
+set(JIDAI_SLOW_TESTS rack_ui)
+set(JIDAI_RENDER_TESTS presets origami_plugin)
+
+# set_tests_properties only sees tests added in the current directory. Use
+# set_property(TEST ... DIRECTORY) so labels can be applied to jidai-common and ORIGAMI.
+function(jidai_label_test name dir)
+  if(name IN_LIST JIDAI_SLOW_TESTS)
+    set_property(TEST ${name} DIRECTORY "${dir}" PROPERTY LABELS slow)
+    set_property(TEST ${name} DIRECTORY "${dir}" PROPERTY RESOURCE_LOCK jidai_heavy)
+    set_property(TEST ${name} DIRECTORY "${dir}" PROPERTY TIMEOUT 3600)
+  elseif(name IN_LIST JIDAI_RENDER_TESTS)
+    set_property(TEST ${name} DIRECTORY "${dir}" PROPERTY LABELS render)
+    set_property(TEST ${name} DIRECTORY "${dir}" PROPERTY TIMEOUT 300)
+  else()
+    set_property(TEST ${name} DIRECTORY "${dir}" PROPERTY LABELS fast)
+    set_property(TEST ${name} DIRECTORY "${dir}" PROPERTY TIMEOUT 60)
+  endif()
+endfunction()
+
+function(jidai_label_directory dir)
+  if(NOT IS_DIRECTORY "${dir}")
+    return()
+  endif()
+  get_property(_tests DIRECTORY "${dir}" PROPERTY TESTS)
+  foreach(t ${_tests})
+    jidai_label_test(${t} "${dir}")
+  endforeach()
+endfunction()
+
+jidai_label_directory("${CMAKE_CURRENT_SOURCE_DIR}")
+jidai_label_directory("${CMAKE_CURRENT_SOURCE_DIR}/../jidai-common")
+if(DEFINED origami_SOURCE_DIR)
+  jidai_label_directory("${origami_SOURCE_DIR}")
+endif()
+
