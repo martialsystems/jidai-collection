@@ -2,6 +2,7 @@ name: Release
 # Push a tag like v0.1.0 to build macOS + Windows and attach zips to a DRAFT release.
 # Asset names stay JIDAI-RACK-macOS.zip and JIDAI-RACK-Windows.zip so the README download links keep working on later tags.
 # Builds are unsigned: code signing / notarization is a follow-up.
+# CI on pull requests and main is Ubuntu-only; this workflow is still the Mac and Windows plugin build.
 on:
   push:
     tags: ['v*']
@@ -21,6 +22,19 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Cache FetchContent (JUCE and plugins)
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: fetchcontent-release-${{ matrix.os }}-${{ hashFiles('jidai-rack/CMakeLists.txt') }}
+          restore-keys: fetchcontent-release-${{ matrix.os }}-
+      - name: Cache ccache
+        if: runner.os == 'macOS'
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-release-${{ matrix.os }}-${{ hashFiles('jidai-rack/CMakeLists.txt') }}
+          restore-keys: ccache-release-${{ matrix.os }}-
       - name: Configure
         shell: bash
         run: cmake -S jidai-rack -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0

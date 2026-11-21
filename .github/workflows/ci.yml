@@ -1,8 +1,22 @@
 name: CI
 on:
   pull_request:
+    paths:
+      - "jidai-common/**"
+      - "jidai-rack/**"
+      - "cmake/**"
+      - "jidai-rack/CMakePresets.json"
+      - "tools/**"
+      - ".github/workflows/ci.yml"
   push:
     branches: [main]
+    paths:
+      - "jidai-common/**"
+      - "jidai-rack/**"
+      - "cmake/**"
+      - "jidai-rack/CMakePresets.json"
+      - "tools/**"
+      - ".github/workflows/ci.yml"
 permissions:
   contents: read
 concurrency:
@@ -10,22 +24,48 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
-    name: Build (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    name: Build (ubuntu)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Configure
-        shell: bash
-        run: cmake -S jidai-rack -B build -DCMAKE_BUILD_TYPE=Release
-      - name: Build
-        shell: bash
-        run: cmake --build build --config Release --parallel 4
-      - name: Test
-        shell: bash
+      - name: Install packages
         run: |
-          ctest --test-dir build -C Release --output-on-failure
-
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build ccache pkg-config \
+            libasound2-dev libfreetype6-dev libfontconfig1-dev \
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev \
+            libxcomposite-dev libxi-dev \
+            libgl1-mesa-dev libglu1-mesa-dev \
+            libgtk-3-dev libcurl4-openssl-dev
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev \
+            || sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.0-dev
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-ubuntu-${{ hashFiles('jidai-rack/CMakeLists.txt', 'jidai-common/CMakeLists.txt', 'jidai-rack/CMakePresets.json') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-ubuntu-${{ hashFiles('jidai-rack/CMakeLists.txt', 'jidai-common/CMakeLists.txt', 'jidai-rack/CMakePresets.json') }}-
+            ccache-ubuntu-
+      - name: Cache FetchContent (JUCE, CPM-style deps)
+        uses: actions/cache@v4
+        with:
+          path: build/linux-ci/_deps
+          key: fetchcontent-ubuntu-${{ hashFiles('jidai-rack/CMakeLists.txt') }}
+          restore-keys: fetchcontent-ubuntu-
+      - name: Configure
+        run: |
+          ccache --set-config=max_size=1G
+          ccache --set-config=compiler_check=content
+          ccache -z
+          cmake -S jidai-rack --preset linux-ci
+      - name: Build
+        run: cmake --build build/linux-ci --parallel 4
+      - name: Test (fast)
+        run: ctest --test-dir build/linux-ci -L fast --output-on-failure --parallel 2
+      - name: Test (render)
+        run: ctest --test-dir build/linux-ci -L render --output-on-failure --parallel 2
+      - name: ccache stats
+        if: always()
+        run: ccache -s

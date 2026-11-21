@@ -77,27 +77,29 @@ JIDAI RACK is a rack cabinet in a plugin window. Drag devices in from the browse
 Needs CMake 3.22 or later and a C++20 compiler. JUCE 8.0.4 and the BUSHIDO, RONIN, ORIGAMI and SHOGUN sources are downloaded at pinned commits during configure.
 
 ```sh
-cmake -S jidai-rack -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build
+cmake -S jidai-rack --preset linux-dev    # mac-dev or windows-dev on those machines
+cmake --build build/linux-dev
 ```
 
-The plugin lands in `build/JidaiRack_artefacts/Release/`, in `VST3/JIDAI RACK.vst3` and `Standalone/`. See [`jidai-rack/README.md`](jidai-rack/README.md) for every target and for building against local checkouts.
+Or, equivalently: `cmake -S jidai-rack -B build -G Ninja -DCMAKE_BUILD_TYPE=Release` and `cmake --build build`. If `sccache` or `ccache` is on your `PATH`, the Ninja presets use it as the compiler launcher. The plugin lands in `build/<preset>/JidaiRack_artefacts/`, in `VST3/JIDAI RACK.vst3` and `Standalone/`. See [`jidai-rack/README.md`](jidai-rack/README.md) for every target and for building against local checkouts. Windows presets need a Visual Studio Developer environment so `cl` and Ninja are on `PATH`.
 
 ## Tests
 
 ```sh
-ctest --test-dir build --output-on-failure
+ctest --test-dir build/linux-dev -L fast --output-on-failure
 ```
 
-On Linux, run it under `xvfb-run -a` for the UI tests.
+`fast` is the short loop (unit tests plus a 1 s offline render smoke test). `render` covers the preset and ORIGAMI plugin tests. `slow` is the UI probe; those tests share a lock so only one runs at a time. On Linux, run the UI tests under `xvfb-run -a`. `tools/test_watch.sh` and `tools/test_watch.ps1` rebuild and re-run `ctest -L fast` when sources change. See [`docs/FAST_TESTS.md`](docs/FAST_TESTS.md).
 
-| Test | What it covers |
-|---|---|
-| `rack` | The rack graph, devices, cables, feedback, latency compensation and the cable standard rules. |
-| `rack_ui` | Drives the rack window offscreen with mouse and keys, and writes screenshots. |
-| `presets` | Factory banks, saved patches and rack state, including loading older versions. |
-| `common`, `dsp`, `headers` | The shared jidai-common library: the cable standard, the shared DSP, and header hygiene. |
-| `origami`, `origami_plugin` | ORIGAMI's DSP core and plugin. |
+| Test | Label | What it covers |
+|---|---|---|
+| `rack` | fast | The rack graph, devices, cables, feedback, latency compensation and the cable standard rules. |
+| `smoke` | fast | 1 s offline through JidaiProcessor: NaN, denormals, peaks and silence. Separate from the standalone `"JIDAI RACK" --smoke` device check. |
+| `common`, `dsp`, `headers`, `cables` | fast | The shared jidai-common library: the cable standard, the shared DSP, header hygiene and cable editing. |
+| `origami` | fast | ORIGAMI's DSP core. |
+| `presets` | render | Factory banks, saved patches and rack state, including loading older versions. |
+| `origami_plugin` | render | ORIGAMI's plugin tests. |
+| `rack_ui` | slow | Drives the rack window offscreen with mouse and keys, and writes screenshots. |
 
 ## Compatibility
 
