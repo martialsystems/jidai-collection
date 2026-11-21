@@ -17,6 +17,12 @@
 #include <memory>
 #include <string>
 
+#if defined(_MSC_VER)
+#define JIDAI_NOINLINE __declspec(noinline)
+#else
+#define JIDAI_NOINLINE __attribute__((noinline))
+#endif
+
 namespace {
 
 int failures = 0;
@@ -167,10 +173,21 @@ void expectDefault (JidaiProcessor& p)
 
 // The compiled banks: INIT on both bank A screens, an empty rack patch list, and the INIT pattern holds
 // no cables. Bank B then holds user entries from index 0.
-void testCompiledBanks (const juce::File& store)
+//
+// GCC 14 at RelWithDebInfo inlined testCompiledBanks into main and dropped the
+// follow-up setUserStoreRootForTest(temp). An empty reset at the end of that
+// function was then the last store-root write, so later tests used Application
+// Support (~/.config on Linux). The noinline helper plus restoring the caller's
+// root here keeps that write in the binary.
+JIDAI_NOINLINE void useUserStoreRoot (const juce::File& root)
+{
+    JidaiProcessor::setUserStoreRootForTest (root);
+}
+
+void testCompiledBanks (const juce::File& store, const juce::File& restoreTo)
 {
     JidaiProcessor::setRackPatchesForTest ({});
-    JidaiProcessor::setUserStoreRootForTest (store);
+    useUserStoreRoot (store);
     auto proc = makeClassic();
     expectInitBanks (*proc, 0);
     expectDefault (*proc);
@@ -198,7 +215,7 @@ void testCompiledBanks (const juce::File& store)
     check (proc->saveRoninPreset (r, 0, "R AFTER") == kFactoryPresetCount, "a Ronin bank A save follows the factory list");
     proc.reset();
 
-    JidaiProcessor::setUserStoreRootForTest ({});
+    useUserStoreRoot (restoreTo);
 }
 
 void expectLoopBass (JidaiProcessor& p)
@@ -514,16 +531,16 @@ int main (int argc, char** argv)
 
     if (smokeOnly)
     {
-        JidaiProcessor::setUserStoreRootForTest (temp);
+        useUserStoreRoot (temp);
         runRenderSmokeTests (checks, failures);
         std::printf ("%d checks, %d failed\n", checks, failures);
         std::printf (failures == 0 ? "SMOKE PASS\n" : "SMOKE FAIL\n");
         return failures == 0 ? 0 : 1;
     }
 
-    testCompiledBanks (temp.getChildFile ("compiled"));
-
-    JidaiProcessor::setUserStoreRootForTest (temp);
+    useUserStoreRoot (temp);
+    testCompiledBanks (temp.getChildFile ("compiled"), temp);
+    useUserStoreRoot (temp);
     JidaiProcessor::setRackPatchesForTest (kFixturePatches);
     testLoopBassThenFactory();
     testRingSeed();
